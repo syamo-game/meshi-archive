@@ -48,6 +48,22 @@ async def on_message(message: discord.Message):
             await sync_history(client, message)
             return
             
+        if content.lower() == "reset_sync":
+            db = SessionLocal()
+            try:
+                # Delete only message records to allow re-scanning, 
+                # but keep shops to avoid deleting actually saved places if any
+                db.query(Message).delete()
+                db.commit()
+                await message.reply("🔄 Sync history cleared. You can now run `sync` again to rescan all messages.")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to reset sync history: {e}")
+                await message.reply("❌ Failed to clear sync history.")
+            finally:
+                db.close()
+            return
+            
         # Real-time processing
         await message.add_reaction("⏳") # Add hourglass reaction while processing
         
