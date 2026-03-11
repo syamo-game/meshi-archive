@@ -116,26 +116,13 @@ try:
 
         df = pd.DataFrame(data)
 
-        # Render interactive data table
+        # Display table: hide _id, @timestamp, message_id (kept in CSV only)
+        display_df = df.drop(columns=["_id", "@timestamp", "message_id"])
         st.dataframe(
-            df,
+            display_df,
             use_container_width=True,
             hide_index=True,
             column_config={
-                "_id": st.column_config.NumberColumn(
-                    "ID",
-                    help="Internal database row ID",
-                    width="small"
-                ),
-                "@timestamp": st.column_config.DatetimeColumn(
-                    "@timestamp",
-                    format="YYYY-MM-DD HH:mm:ss",
-                    width="medium"
-                ),
-                "message_id": st.column_config.TextColumn(
-                    "message_id",
-                    width="small"
-                ),
                 "shop.name": st.column_config.TextColumn(
                     "shop.name",
                     width="medium"
@@ -162,6 +149,7 @@ try:
                 )
             }
         )
+
 
         # Optional: Display raw JSON view of the latest document like Kibana
         if len(shops) > 0:
