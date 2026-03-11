@@ -194,7 +194,20 @@ uploaded_file = st.sidebar.file_uploader(
 if uploaded_file is not None:
     if st.sidebar.button("🔄 Run Import", type="primary"):
         try:
-            csv_df = pd.read_csv(io.StringIO(uploaded_file.read().decode('utf-8-sig')))
+            csv_df = pd.read_csv(
+                io.StringIO(uploaded_file.read().decode('utf-8-sig')),
+                dtype={"message_id": str}  # Prevent pandas from converting large IDs to float
+            )
+
+            def normalize_message_id(val: str) -> str:
+                """Convert scientific notation ID (e.g. '1.47725e+18') to full integer string."""
+                s = str(val).strip()
+                if 'e' in s.lower() or (s.replace('.', '', 1).isdigit() and '.' in s):
+                    try:
+                        return str(int(float(s)))
+                    except ValueError:
+                        pass
+                return s
 
             # Validate required columns
             required_cols = {"message_id", "shop.name"}
@@ -207,7 +220,9 @@ if uploaded_file is not None:
                         lambda v: str(v).strip().lower() in ("true", "1", "yes")
                     )
 
-                csv_message_ids = set(csv_df["message_id"].astype(str).tolist())
+                csv_message_ids = set(
+                    normalize_message_id(v) for v in csv_df["message_id"].astype(str)
+                )
 
                 import_db = SessionLocal()
                 try:
@@ -216,7 +231,7 @@ if uploaded_file is not None:
                     deleted = 0
 
                     for _, row in csv_df.iterrows():
-                        mid = str(row["message_id"]).strip()
+                        mid = normalize_message_id(str(row["message_id"]))
 
                         # Ensure matching Message row exists (FK requirement)
                         existing_msg = import_db.query(Message).filter_by(message_id=mid).first()
