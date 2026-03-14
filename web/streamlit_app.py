@@ -34,23 +34,8 @@ header[data-testid="stHeader"] {
 </style>
 """, unsafe_allow_html=True)
 
-# Authentication gate (protects all pages)
-WEB_PASSWORD = os.getenv("WEB_PASSWORD")
-if WEB_PASSWORD:
-    if not st.session_state.get("authenticated", False):
-        st.title("Login")
-        pwd = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if pwd == WEB_PASSWORD:
-                st.session_state["authenticated"] = True
-                st.rerun()
-            else:
-                st.error("Incorrect password")
-        st.stop()
-
-# Navigation
 pg = st.navigation([
-    st.Page("pages/home.py", title="Meshi Archive"),
-    st.Page("pages/admin.py", title="Admin"),
+    st.Page("_pages/home.py", title="Meshi Archive"),
+    st.Page("_pages/admin.py", title="Admin"),
 ])
 pg.run()
