@@ -1,24 +1,13 @@
 import re
+import os
 import streamlit as st
 import pandas as pd
 import io
 
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
-from db.database import SessionLocal, init_db
+from db.database import SessionLocal
 from db.models import Shop, Message
 
-init_db()
-
-st.set_page_config(
-    page_title="Meshi Archive - Admin",
-    page_icon="🔎",
-    layout="wide",
-)
-
-# Admin auth (separate from WEB_PASSWORD)
+# Admin requires a separate password on top of WEB_PASSWORD
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 if not ADMIN_PASSWORD:
     st.error("ADMIN_PASSWORD is not configured. Admin page is disabled.")
