@@ -28,9 +28,6 @@ header[data-testid="stHeader"] {
 [data-testid="stDataFrame"] > div {
     width: 100% !important;
 }
-[data-testid="stDataFrame"] iframe {
-    min-height: 600px !important;
-}
 </style>
 """, unsafe_allow_html=True)
 
