@@ -9,7 +9,7 @@
 ## 1. システム概要
 
 **Meshi Archive** は、Discordチャンネルに投稿された飲食店情報を自動収集・管理するシステムです。
-Discordボットがメッセージを監視し、OpenAI GPT-4o-mini によるAI解析で店舗情報を抽出、PostgreSQLデータベースに保存します。
+Discordボットがメッセージを監視し、OpenAI GPT-4.1 によるAI解析で店舗情報を抽出、PostgreSQLデータベースに保存します。
 Streamlit製のWebダッシュボードで一覧閲覧・フィルタリング・CSV入出力が可能です。
 
 ---
@@ -40,7 +40,7 @@ Discord
 |---|---|---|
 | 言語 | Python | 3.11.9 |
 | Discord ライブラリ | discord.py | >=2.3.2 |
-| AI / LLM | OpenAI API (GPT-4o-mini) | >=1.14.0 |
+| AI / LLM | OpenAI API (GPT-4.1) | >=1.14.0 |
 | ORM | SQLAlchemy | >=2.0.30 |
 | Web UI | Streamlit | >=1.36.0 |
 | データ処理 | Pandas | >=2.2.2 |
@@ -64,7 +64,10 @@ meshi-archive/
 │   ├── database.py             # SQLAlchemy エンジン・セッション管理
 │   └── models.py               # ORM モデル定義
 ├── web/
-│   └── streamlit_app.py        # Streamlit ダッシュボード
+│   ├── streamlit_app.py        # Streamlit ルーター・認証ゲート
+│   └── pages/
+│       ├── home.py             # 店舗一覧・フィルター・CSV ダウンロード
+│       └── admin.py            # 管理ページ（CSV インポート）
 ├── docs/
 │   └── specification.md        # 本仕様書
 ├── render.yaml                 # Render.com デプロイ設定
@@ -83,7 +86,6 @@ Discordメッセージの処理履歴を管理します。
 | カラム名 | 型 | 制約 | 説明 |
 |---|---|---|---|
 | message_id | String | PK | Discord メッセージ ID |
-| processed_at | DateTime | default: utcnow | 処理日時 |
 | is_target | Boolean | default: True | 飲食店情報として対象か否か |
 
 ### 5-2. shops テーブル
@@ -177,30 +179,39 @@ Discordメッセージの処理履歴を管理します。
 
 ### 6-3. Web ダッシュボード
 
-**ファイル:** `web/streamlit_app.py`
-**フレームワーク:** Streamlit
+**エントリポイント:** `web/streamlit_app.py`（ルーター）
+**フレームワーク:** Streamlit >=1.36（`st.navigation()` 使用）
 **デフォルトポート:** 8501（本番は `$PORT` 環境変数で動的指定）
 
-#### 認証
-- `WEB_PASSWORD` 環境変数が設定されている場合、ログインフォームを表示
-- セッション単位で認証状態を管理
+#### ページ構成
 
-#### サイドバー機能
+| ページ | ファイル | 説明 |
+|---|---|---|
+| Meshi Archive | `pages/home.py` | 店舗一覧・フィルター・CSV ダウンロード |
+| Admin | `pages/admin.py` | CSV マスターインポート（管理者専用） |
+
+#### 認証（2段階）
+
+| 層 | 変数 | 対象 |
+|---|---|---|
+| 第1層 | `WEB_PASSWORD` | 全ページ（ルーターで制御） |
+| 第2層 | `ADMIN_PASSWORD` | Admin ページのみ |
+
+#### サイドバー機能（home ページ）
 
 | 機能 | 説明 |
 |---|---|
 | エリアフィルター | ドロップダウンでエリア絞り込み |
-| 訪問状況フィルター | All / 未訪問 / 訪問済み |
+| 訪問状況フィルター | All / Unvisited / Visited |
 | CSV ダウンロード | フィルタ結果を UTF-8 BOM CSV でエクスポート |
-| CSV インポート（マスター同期） | アップロードCSVをマスターとしてDB全件同期 |
 
-#### メインパネル機能
+#### メインパネル機能（home ページ）
 
 | 機能 | 説明 |
 |---|---|
-| 店舗一覧テーブル | shop.name / shop.area / shop.category / status.is_visited / url を表示 |
+| 店舗一覧テーブル | Name / Area / Category / Visited / URL を表示 |
 | URL リンク | url カラムはクリッカブルリンクとして表示 |
-| JSON プレビュー | 最新レコードを Kibana 風の JSON ビューで表示 |
+| JSON プレビュー | 最新レコードを JSON ビューで表示 |
 
 #### 表示カラム仕様
 
@@ -215,13 +226,19 @@ Discordメッセージの処理履歴を管理します。
 | status.is_visited | 表示（チェックボックス） | 含む |
 | url | 表示（リンク） | 含む |
 
-#### CSV インポート仕様
+#### CSV インポート仕様（Admin ページ）
 - 必須カラム: `message_id`, `shop.name`
 - message_id の科学的記数法（例: `1.47725e+18`）を自動的に整数文字列へ変換
-- インポートロジック:
+- セキュリティ対策:
+  - ファイルサイズ上限: 5 MB
+  - 行数上限: 5,000 行
+  - CSV インジェクション対策: フィールド先頭の `=` `+` `-` `@` `\t` `\r` を除去
+  - URL バリデーション: `http://` または `https://` 以外は無効化
+- インポートロジック（マスター同期）:
   - CSVに存在するレコード → 更新（Update）
   - CSVにない既存レコード → 削除（Delete）
   - CSVに新規レコード → 挿入（Insert）
+  - 実行前に確認ステップあり（破壊的操作のため）
 
 ---
 
@@ -233,7 +250,8 @@ Discordメッセージの処理履歴を管理します。
 | DISCORD_TOKEN | 必須 | Discord ボットトークン |
 | OPENAI_API_KEY | 必須 | OpenAI API キー |
 | ADMIN_USER_ID | 推奨 | ボット操作を許可する Discord ユーザー ID |
-| WEB_PASSWORD | 推奨 | Web ダッシュボード認証パスワード |
+| WEB_PASSWORD | 推奨 | Web ダッシュボード認証パスワード（全ページ共通） |
+| ADMIN_PASSWORD | 推奨 | 管理ページ専用パスワード（未設定時は Admin ページ無効） |
 | PORT | 本番自動 | Streamlit 起動ポート（Render.com が自動設定） |
 
 ---
@@ -247,6 +265,7 @@ Discordメッセージの処理履歴を管理します。
    - `OPENAI_API_KEY`
    - `ADMIN_USER_ID`
    - `WEB_PASSWORD`
+   - `ADMIN_PASSWORD`
 4. `DATABASE_URL` は PostgreSQL サービスから自動注入される
 
 ---
