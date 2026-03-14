@@ -7,7 +7,6 @@ import io
 from db.database import SessionLocal
 from db.models import Shop, Message
 
-# Admin requires a separate password on top of WEB_PASSWORD
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 if not ADMIN_PASSWORD:
     st.error("ADMIN_PASSWORD is not configured. Admin page is disabled.")

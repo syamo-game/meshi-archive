@@ -30,7 +30,6 @@ try:
     shops = query.order_by(Shop.created_at.desc()).all()
 
     # -- MAIN PANEL --
-    st.markdown("## Meshi Archive")
     st.caption(f"{len(shops)} shops")
 
     if not shops:
@@ -54,7 +53,7 @@ try:
 
         row_height = 35
         header_height = 38
-        max_height = 720
+        max_height = 1200
         table_height = min(len(display_df) * row_height + header_height, max_height)
 
         st.dataframe(
