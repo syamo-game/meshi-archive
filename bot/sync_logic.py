@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 
 import discord
 
@@ -8,6 +9,16 @@ from db.models import Message, Shop
 from bot.restaurant_extractor import parse_restaurant_info
 
 logger = logging.getLogger(__name__)
+
+
+def _build_text_to_parse(msg: discord.Message) -> str:
+    text = msg.content
+    for embed in msg.embeds:
+        if embed.title:
+            text += f"\n[Embed Title] {embed.title}"
+        if embed.description:
+            text += f"\n[Embed Description] {embed.description}"
+    return text
 
 
 async def sync_history(client: discord.Client, message: discord.Message) -> None:
@@ -47,12 +58,7 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
             # Process with AI
             logger.info(f"Processing historical message: {hist_msg.id}")
 
-            text_to_parse = hist_msg.content
-            for embed in hist_msg.embeds:
-                if embed.title:
-                    text_to_parse += f"\n[Embed Title] {embed.title}"
-                if embed.description:
-                    text_to_parse += f"\n[Embed Description] {embed.description}"
+            text_to_parse = _build_text_to_parse(hist_msg)
 
             result = await parse_restaurant_info(text_to_parse)
             logger.info(f"AI Parse Result for {hist_msg.id}: {result}")
@@ -61,13 +67,13 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
 
             if result is None:
                 # API error or parse failure. Stop syncing to prevent marking items as skipped.
-                await channel.send("Sync paused: Gemini API error (Rate limit or API issue). Please try again later.")
+                await channel.send("Sync paused: OpenAI API error. Please try again later.")
                 break
 
             db_msg = Message(message_id=str(hist_msg.id))
             synced_count += 1
 
-            if not result.get("ignore", True):
+            if result and not result.get("ignore", True):
                 db_msg.is_target = True
                 new_shop = Shop(
                     message_id=str(hist_msg.id),
@@ -99,7 +105,5 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
 
 
 def _extract_url(text: str) -> str | None:
-    # A simple fallback URL extraction if AI misses it
-    import re
     urls = re.findall(r'(https?://[^\s]+)', text)
     return urls[0] if urls else None

@@ -58,7 +58,7 @@ async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
 
     try:
         response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": text}

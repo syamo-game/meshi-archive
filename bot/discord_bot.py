@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from db.database import init_db, SessionLocal
 from db.models import Message, Shop
 from bot.restaurant_extractor import parse_restaurant_info
-from bot.sync_logic import sync_history
+from bot.sync_logic import sync_history, _extract_url, _build_text_to_parse
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -48,22 +48,6 @@ async def on_message(message: discord.Message):
             await sync_history(client, message)
             return
             
-        if content.lower() == "reset_sync":
-            db = SessionLocal()
-            try:
-                # Delete only message records to allow re-scanning, 
-                # but keep shops to avoid deleting actually saved places if any
-                db.query(Message).delete()
-                db.commit()
-                await message.reply("🔄 Sync history cleared. You can now run `sync` again to rescan all messages.")
-            except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to reset sync history: {e}")
-                await message.reply("❌ Failed to clear sync history.")
-            finally:
-                db.close()
-            return
-            
         # Real-time processing
         await message.add_reaction("⏳") # Add hourglass reaction while processing
         
@@ -76,22 +60,12 @@ async def on_message(message: discord.Message):
                 await message.remove_reaction("⏳", client.user)
                 return
 
-            text_to_parse = message.content
-            for embed in message.embeds:
-                if embed.title:
-                    text_to_parse += f"\n[Embed Title] {embed.title}"
-                if embed.description:
-                    text_to_parse += f"\n[Embed Description] {embed.description}"
+            result = await parse_restaurant_info(_build_text_to_parse(message))
 
-            result = await parse_restaurant_info(text_to_parse)
-            
             db_msg = Message(message_id=str(message.id))
-            
+
             if result and not result.get("ignore", True):
                 db_msg.is_target = True
-                
-                # Try to get URL from AI result, fallback to simple parse, fallback to None
-                from bot.sync_logic import _extract_url
                 url = result.get("url") or _extract_url(message.content)
 
                 new_shop = Shop(
