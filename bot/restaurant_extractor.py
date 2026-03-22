@@ -102,9 +102,9 @@ _URL_CONTENT_MAX_CHARS = 4000
 
 async def _fetch_url_content(url: str) -> Optional[str]:
     """
-    URLのページ内容をテキストとして取得する。
-    HTMLタグを除去し、最大 _URL_CONTENT_MAX_CHARS 文字に切り詰めて返す。
-    取得失敗時は None を返す。
+    Fetch URL page content as plain text.
+    Strips HTML tags and truncates to _URL_CONTENT_MAX_CHARS.
+    Returns None on failure.
     """
     try:
         headers = {
@@ -119,7 +119,7 @@ async def _fetch_url_content(url: str) -> Optional[str]:
             response.raise_for_status()
             html = response.text
 
-        # HTMLタグを除去して可読テキストに変換
+        # Strip script/style blocks and HTML tags
         text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<[^>]+>", " ", text)
@@ -136,10 +136,10 @@ async def _fetch_url_content(url: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
     """
-    Discordメッセージテキストから飲食店情報を2段階で抽出する。
+    Extract restaurant info from a Discord message in two steps.
 
-    Step1: テキスト・Embed情報から基本情報を抽出
-    Step2: URLが存在する場合、URL先のページ内容で補完・修正
+    Step1: Extract basic info from text/embed content.
+    Step2: If a URL is present, enrich/correct using the page content.
 
     Returns a dict with keys: ignore, shop_name, area, category, url
     Returns None if an API error occurs.
@@ -151,7 +151,7 @@ async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
     # --- Step 1 ---
     try:
         step1_response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": STEP1_SYSTEM_PROMPT},
                 {"role": "user", "content": text}
@@ -163,20 +163,20 @@ async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
         logger.error(f"Step1 OpenAI API error: {e}")
         return None
 
-    # 対象外なら即返却
+    # Return immediately if not a target
     if step1_result.get("ignore", True):
         return {"ignore": True}
 
-    # URLがなければStep1の結果をそのまま返す
+    # Return Step1 result if no URL to enrich from
     url = step1_result.get("url")
     if not url:
         step1_result["ignore"] = False
         return step1_result
 
-    # --- URL取得 ---
+    # --- URL fetch ---
     url_content = await _fetch_url_content(url)
     if not url_content:
-        # URL取得失敗 → Step1の結果をそのまま使う（安全なフォールバック）
+        # Safe fallback: use Step1 result as-is
         logger.info(f"URL content unavailable for {url}, using Step1 result as-is.")
         step1_result["ignore"] = False
         return step1_result
@@ -194,7 +194,7 @@ async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
         }, ensure_ascii=False)
 
         step2_response = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1",
             messages=[
                 {"role": "system", "content": STEP2_SYSTEM_PROMPT},
                 {"role": "user", "content": step2_input}
@@ -207,6 +207,6 @@ async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
 
     except Exception as e:
         logger.error(f"Step2 OpenAI API error: {e}")
-        # Step2失敗時はStep1の結果をフォールバックとして返す
+        # Fallback to Step1 result on Step2 failure
         step1_result["ignore"] = False
         return step1_result

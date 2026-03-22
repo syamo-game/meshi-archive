@@ -9,7 +9,6 @@ class Message(Base):
     
     # Using String for message_id since Discord IDs can be large and are best handled as strings or BigIntegers.
     message_id = Column(String, primary_key=True)
-    processed_at = Column(DateTime, default=datetime.utcnow)
     is_target = Column(Boolean, default=True, comment="True if it was a restaurant, False if ignored")
 
 class Shop(Base):

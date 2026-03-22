@@ -19,7 +19,9 @@ services:
           property: connectionString
       - key: WEB_PASSWORD
         sync: false
-        
+      - key: ADMIN_PASSWORD
+        sync: false
+
   - type: worker
     name: meshi-archive-bot
     env: python
