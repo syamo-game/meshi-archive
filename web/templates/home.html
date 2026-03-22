@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+
+{% block title %}一覧 — Meshi Database{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">Meshi Database</h1>
+  <p class="page-subtitle">Discord Meshi チャンネルから収集した飲食店の一覧です。</p>
+</div>
+
+<!-- Filter form -->
+<section class="filter-section" aria-label="絞り込み">
+  <form id="filter-form" method="get" action="/" class="filter-form">
+    <div class="filter-form__fields">
+
+      <div class="form-group">
+        <label for="area-select" class="form-label">エリア</label>
+        <select id="area-select" name="area" class="form-select">
+          <option value="">すべてのエリア</option>
+          {% for area in all_areas %}
+          <option value="{{ area }}"
+            {% if area == selected_area %}selected{% endif %}>
+            {{ area }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <fieldset class="form-group form-fieldset">
+        <legend class="form-label">訪問状況</legend>
+        <div class="radio-group">
+          <label class="radio-label">
+            <input type="radio" name="status" value=""
+              {% if selected_status == "" %}checked{% endif %}>
+            すべて
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="status" value="unvisited"
+              {% if selected_status == "unvisited" %}checked{% endif %}>
+            未訪問
+          </label>
+          <label class="radio-label">
+            <input type="radio" name="status" value="visited"
+              {% if selected_status == "visited" %}checked{% endif %}>
+            訪問済み
+          </label>
+        </div>
+      </fieldset>
+
+    </div>
+
+    <div class="filter-form__actions">
+      <button type="submit" class="btn btn--primary">絞り込む</button>
+      {% if selected_area or selected_status %}
+      <a href="/" class="btn btn--ghost">リセット</a>
+      {% endif %}
+    </div>
+  </form>
+</section>
+
+<!-- Results -->
+<section aria-label="検索結果">
+  <div class="result-bar">
+    <p class="result-count">
+      <strong>{{ shops|length }}</strong> 件の結果
+    </p>
+    {% if shops %}
+    <a href="/export.csv?area={{ selected_area }}&status={{ selected_status }}"
+       class="btn btn--secondary btn--sm"
+       aria-label="現在の絞り込み結果を CSV でダウンロード">
+      CSV でダウンロード
+    </a>
+    {% endif %}
+  </div>
+
+  {% if not shops %}
+  <div class="empty-state" role="status">
+    <p>絞り込み条件に一致するデータがありません。</p>
+    <p><a href="/">条件をリセットする</a></p>
+  </div>
+  {% else %}
+  <div class="table-wrapper" tabindex="0" role="region" aria-label="飲食店一覧テーブル（横スクロール可）">
+    <table class="data-table">
+      <caption class="visually-hidden">飲食店一覧</caption>
+      <thead>
+        <tr>
+          <th scope="col">店名</th>
+          <th scope="col">エリア</th>
+          <th scope="col">カテゴリ</th>
+          <th scope="col">訪問済み</th>
+          <th scope="col">URL</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for shop in shops %}
+        <tr>
+          <td class="td--name">{{ shop.shop_name }}</td>
+          <td class="td--area">{{ shop.area or "—" }}</td>
+          <td class="td--category">{{ shop.category or "—" }}</td>
+          <td class="td--visited">
+            {% if shop.is_visited %}
+            <span class="badge badge--visited" aria-label="訪問済み">訪問済み</span>
+            {% else %}
+            <span class="badge badge--unvisited" aria-label="未訪問">未訪問</span>
+            {% endif %}
+          </td>
+          <td class="td--url">
+            {% if shop.url %}
+            <a href="{{ shop.url }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="table-link">
+              リンク<span class="visually-hidden">（外部リンク、新しいタブで開きます）</span>
+            </a>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

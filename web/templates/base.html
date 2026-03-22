@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Meshi Database{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Skip navigation for keyboard / screen reader users -->
+  <a href="#main-content" class="skip-link">メインコンテンツへスキップ</a>
+
+  <header class="site-header" role="banner">
+    <div class="container site-header__inner">
+      <a href="/" class="site-header__logo" aria-label="Meshi Database トップページへ">
+        Meshi Database
+      </a>
+      <nav class="site-nav" aria-label="サイトナビゲーション">
+        <ul role="list">
+          <li>
+            <a href="/"
+               {% if request.url.path == "/" %}aria-current="page"{% endif %}>
+              一覧
+            </a>
+          </li>
+          <li>
+            <a href="/admin"
+               {% if request.url.path.startswith("/admin") %}aria-current="page"{% endif %}>
+              管理
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content" class="main-content">
+    <div class="container">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <footer class="site-footer" role="contentinfo">
+    <div class="container site-footer__inner">
+      <p class="site-footer__text">Meshi Database — Discord Meshi チャンネルのアーカイブ</p>
+    </div>
+  </footer>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

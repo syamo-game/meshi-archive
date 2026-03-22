@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}管理 — Meshi Database{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">管理</h1>
+  <a href="/admin/logout" class="btn btn--ghost btn--sm">ログアウト</a>
+</div>
+
+{% if disabled %}
+<div class="alert alert--error" role="alert">
+  <span class="alert__icon" aria-hidden="true">⚠</span>
+  ADMIN_PASSWORD が設定されていません。管理ページは無効です。
+</div>
+
+{% else %}
+
+{% if result %}
+<div class="alert alert--success" role="status">
+  <span class="alert__icon" aria-hidden="true">✓</span>
+  インポート完了:
+  <strong>{{ result.updated }}</strong> 件更新、
+  <strong>{{ result.inserted }}</strong> 件追加、
+  <strong>{{ result.deleted }}</strong> 件削除
+</div>
+{% endif %}
+
+{% if errors %}
+{% for error in errors %}
+<div class="alert alert--error" role="alert">
+  <span class="alert__icon" aria-hidden="true">⚠</span>
+  {{ error }}
+</div>
+{% endfor %}
+{% endif %}
+
+<section class="card" aria-labelledby="import-heading">
+  <h2 id="import-heading" class="card__title">CSV インポート（マスター同期）</h2>
+  <p class="card__desc">
+    アップロードした CSV をマスターとして扱います。<br>
+    既存レコードは更新され、CSV に存在しないレコードはデータベースから<strong>削除</strong>されます。
+  </p>
+
+  <div class="alert alert--warning" role="note">
+    <span class="alert__icon" aria-hidden="true">⚠</span>
+    この操作は元に戻せません。インポート前に現在のデータをエクスポートしてバックアップすることを推奨します。
+  </div>
+
+  <form id="import-form"
+        method="post"
+        action="/admin/import"
+        enctype="multipart/form-data"
+        novalidate>
+
+    <div class="form-group">
+      <label for="file-input" class="form-label">
+        CSV ファイル
+        <span class="form-label__note">（最大 5 MB、5,000 行）</span>
+      </label>
+      <input
+        id="file-input"
+        type="file"
+        name="file"
+        class="form-file"
+        accept=".csv"
+        required
+        aria-describedby="file-hint">
+      <p id="file-hint" class="form-hint">
+        必須列: <code>message_id</code>、<code>shop.name</code>
+      </p>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn--danger" id="import-btn">
+        インポートを実行
+      </button>
+    </div>
+  </form>
+</section>
+
+{% endif %}
+{% endblock %}

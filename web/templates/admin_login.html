@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}管理者ログイン — Meshi Database{% endblock %}
+
+{% block content %}
+<div class="auth-layout">
+  <div class="auth-card">
+    <h1 class="auth-card__title">管理者ログイン</h1>
+    <p class="auth-card__desc">管理ページにアクセスするには管理者パスワードが必要です。</p>
+
+    {% if error %}
+    <div class="alert alert--error" role="alert">
+      <span class="alert__icon" aria-hidden="true">⚠</span>
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/admin/login" novalidate>
+      <div class="form-group">
+        <label for="password" class="form-label">管理者パスワード</label>
+        <input
+          id="password"
+          type="password"
+          name="password"
+          class="form-input"
+          placeholder="パスワードを入力してください"
+          autocomplete="current-password"
+          required
+          autofocus>
+      </div>
+      <button type="submit" class="btn btn--primary btn--full">ログイン</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

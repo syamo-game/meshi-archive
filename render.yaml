@@ -9,7 +9,7 @@ services:
     name: meshi-archive-web
     env: python
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "streamlit run web/streamlit_app.py --server.port $PORT"
+    startCommand: "uvicorn web.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
@@ -21,6 +21,8 @@ services:
         sync: false
       - key: ADMIN_PASSWORD
         sync: false
+      - key: SECRET_KEY
+        generateValue: true
 
   - type: worker
     name: meshi-archive-bot
