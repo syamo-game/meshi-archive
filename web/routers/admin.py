@@ -153,9 +153,10 @@ async def import_csv(
             elif len(rows) > _MAX_ROWS:
                 errors.append(f"行数が上限を超えています（最大 {_MAX_ROWS:,} 行）。")
             else:
-                csv_ids = {_normalize_message_id(r["message_id"]) for r in rows}
                 updated = inserted = deleted = 0
                 try:
+                    touched_ids: set[int] = set()
+
                     for row in rows:
                         mid = _normalize_message_id(row["message_id"])
                         shop_name = _sanitize_text(row.get("shop.name")) or "Unknown"
@@ -167,32 +168,48 @@ async def import_csv(
                             in ("true", "1", "yes")
                         )
 
+                        # Ensure parent Message row exists
                         if not db.query(Message).filter_by(message_id=mid).first():
                             db.add(Message(message_id=mid, is_target=True))
 
-                        existing = db.query(Shop).filter_by(message_id=mid).first()
+                        # Upsert: prefer matching by _id, fall back to (message_id, shop_name)
+                        existing: Optional[Shop] = None
+                        raw_id = str(row.get("_id", "")).strip()
+                        if raw_id.isdigit():
+                            existing = db.query(Shop).filter_by(id=int(raw_id)).first()
+                        if existing is None:
+                            existing = (
+                                db.query(Shop)
+                                .filter_by(message_id=mid, shop_name=shop_name)
+                                .first()
+                            )
+
                         if existing:
                             existing.shop_name = shop_name
                             existing.area = area
                             existing.category = category
                             existing.url = url
                             existing.is_visited = is_visited
+                            db.flush()
+                            touched_ids.add(existing.id)
                             updated += 1
                         else:
-                            db.add(
-                                Shop(
-                                    message_id=mid,
-                                    shop_name=shop_name,
-                                    area=area,
-                                    category=category,
-                                    url=url,
-                                    is_visited=is_visited,
-                                )
+                            new_shop = Shop(
+                                message_id=mid,
+                                shop_name=shop_name,
+                                area=area,
+                                category=category,
+                                url=url,
+                                is_visited=is_visited,
                             )
+                            db.add(new_shop)
+                            db.flush()
+                            touched_ids.add(new_shop.id)
                             inserted += 1
 
+                    # Delete shops that were not present in the CSV
                     for shop in db.query(Shop).all():
-                        if shop.message_id not in csv_ids:
+                        if shop.id not in touched_ids:
                             db.delete(shop)
                             deleted += 1
 

@@ -60,40 +60,47 @@ async def on_message(message: discord.Message):
                 await message.remove_reaction("⏳", client.user)
                 return
 
-            result = await parse_restaurant_info(_build_text_to_parse(message))
+            shops = await parse_restaurant_info(_build_text_to_parse(message))
 
             db_msg = Message(message_id=str(message.id))
 
-            if result and not result.get("ignore", True):
-                db_msg.is_target = True
-                url = result.get("url") or _extract_url(message.content)
-
-                new_shop = Shop(
-                    message_id=str(message.id),
-                    shop_name=result.get("shop_name", "Unknown"),
-                    area=result.get("area"),
-                    category=result.get("category"),
-                    url=url,
-                    is_visited=False
-                )
-                db.add(new_shop)
-                db.add(db_msg)
-                db.commit()
-                
-                area_text = new_shop.area if new_shop.area else "Unknown Area"
-                cat_text = new_shop.category if new_shop.category else "Unknown Category"
-                await message.reply(f"🍽️ Registered 【{new_shop.shop_name}】!\n📍 {area_text} | 🏷️ {cat_text}")
-                await message.add_reaction("✅")
-            elif result and result.get("ignore"):
+            if shops is None:
+                # API error — do not mark as processed so it can be retried
                 db_msg.is_target = False
                 db.add(db_msg)
                 db.commit()
-                await message.add_reaction("⏭️") # Skipped
+                await message.add_reaction("❌")
+            elif len(shops) == 0:
+                # Not a restaurant message
+                db_msg.is_target = False
+                db.add(db_msg)
+                db.commit()
+                await message.add_reaction("⏭️")
             else:
-                db_msg.is_target = False
+                db_msg.is_target = True
                 db.add(db_msg)
+                added: list[Shop] = []
+                for shop_info in shops:
+                    url = shop_info.get("url") or _extract_url(message.content)
+                    new_shop = Shop(
+                        message_id=str(message.id),
+                        shop_name=shop_info.get("shop_name") or "Unknown",
+                        area=shop_info.get("area"),
+                        category=shop_info.get("category"),
+                        url=url,
+                        is_visited=False,
+                    )
+                    db.add(new_shop)
+                    added.append(new_shop)
                 db.commit()
-                await message.add_reaction("❌") # Error/Failed parsing
+
+                lines = [f"🍽️ Registered {len(added)} shop(s)!"]
+                for s in added:
+                    area_text = s.area or "Unknown Area"
+                    cat_text = s.category or "Unknown Category"
+                    lines.append(f"  【{s.shop_name}】 📍 {area_text} | 🏷️ {cat_text}")
+                await message.reply("\n".join(lines))
+                await message.add_reaction("✅")
                 
         except Exception as e:
             logger.error(f"Error handling message {message.id}: {e}")

@@ -60,32 +60,33 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
 
             text_to_parse = _build_text_to_parse(hist_msg)
 
-            result = await parse_restaurant_info(text_to_parse)
-            logger.info(f"AI Parse Result for {hist_msg.id}: {result}")
+            shops = await parse_restaurant_info(text_to_parse)
+            logger.info("AI parse result for %s: %s", hist_msg.id, shops)
 
             await asyncio.sleep(4)
 
-            if result is None:
-                # API error or parse failure. Stop syncing to prevent marking items as skipped.
+            if shops is None:
+                # API error — stop syncing to avoid marking messages as skipped
                 await channel.send("Sync paused: OpenAI API error. Please try again later.")
                 break
 
             db_msg = Message(message_id=str(hist_msg.id))
             synced_count += 1
 
-            if result and not result.get("ignore", True):
+            if shops:
                 db_msg.is_target = True
-                new_shop = Shop(
-                    message_id=str(hist_msg.id),
-                    shop_name=result.get("shop_name") or "Unknown",
-                    area=result.get("area"),
-                    category=result.get("category"),
-                    url=result.get("url") or _extract_url(hist_msg.content),
-                    is_visited=False
-                )
                 db.add(db_msg)
-                db.add(new_shop)
-                added_shops += 1
+                for shop_info in shops:
+                    url = shop_info.get("url") or _extract_url(hist_msg.content)
+                    db.add(Shop(
+                        message_id=str(hist_msg.id),
+                        shop_name=shop_info.get("shop_name") or "Unknown",
+                        area=shop_info.get("area"),
+                        category=shop_info.get("category"),
+                        url=url,
+                        is_visited=False,
+                    ))
+                    added_shops += 1
             else:
                 db_msg.is_target = False
                 db.add(db_msg)

@@ -1,14 +1,16 @@
-import os
+import asyncio
 import json
 import logging
+import os
 import re
+from typing import Any, Dict, List, Optional
+
 import httpx
 from openai import AsyncOpenAI
-from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Initialize OpenAI Key
+# Initialize OpenAI client
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if OPENAI_API_KEY:
     openai_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
@@ -17,7 +19,7 @@ else:
     openai_client = None
 
 # ---------------------------------------------------------------------------
-# Step 1: Discord本文・Embed情報から基本情報を抽出する
+# Step 1: Extract basic info from Discord text / embeds
 # ---------------------------------------------------------------------------
 STEP1_SYSTEM_PROMPT = """
 あなたはDiscordに投稿されたテキストやURL、埋め込み(Embed)情報から、飲食店の情報を抽出するアシスタントです。
@@ -29,18 +31,19 @@ STEP1_SYSTEM_PROMPT = """
 - 単なる会話・相槌、または食べ物と無関係な話題のみの場合は対象外（ignore: true）。
 
 # 抽出ルール（ignore: false の場合）
+- 1つのメッセージに複数の店舗が含まれる場合は、すべてを shops 配列に含める。
 - `shop_name`: 単一店舗として識別できる正式店舗名。チェーン名のみ・施設名のみ・人物名・SNS名・YouTube名の場合は null。
 - `area`: 最寄り駅名・街区・街レベルの地名（例: 浅草、神田、荻窪、蔵前）。都道府県名・区全体・商業施設名だけの場合は null。本文やURL内の文字列から読み取れる場合のみ入れる。
 - `category`: 店の主業態・料理ジャンル（例: 寿司、ラーメン、居酒屋、焼肉、カフェ、ベーカリー）。メニュー名・食材名・看板商品名は不可。不明な場合は null。
-- `url`: 本文中に含まれるURL（食べログ・YouTube・X等）。複数ある場合は最も店舗情報に近いものを1つ。なければ null。
+- `url`: 本文中に含まれるURL（食べログ・YouTube・X等）。複数ある場合はその店舗情報に最も近いものを1つ。なければ null。
 
 # 出力フォーマット（対象の場合）
 {
     "ignore": false,
-    "shop_name": "天よし",
-    "area": "浅草",
-    "category": "天ぷら",
-    "url": "https://..."
+    "shops": [
+        { "shop_name": "天よし", "area": "浅草", "category": "天ぷら", "url": "https://..." },
+        { "shop_name": "神田まつや", "area": "神田", "category": "そば", "url": null }
+    ]
 }
 
 # 出力フォーマット（対象外の場合）
@@ -50,11 +53,11 @@ STEP1_SYSTEM_PROMPT = """
 """
 
 # ---------------------------------------------------------------------------
-# Step 2: URL先の内容を使って、Step1の結果を補完・修正する
+# Step 2: Enrich a single shop using its URL page content
 # ---------------------------------------------------------------------------
 STEP2_SYSTEM_PROMPT = """
 あなたは飲食店データの補完・修正アシスタントです。
-Step1で抽出された飲食店情報と、URLから取得したページ内容を照合し、情報を補完・修正してください。
+Step1で抽出された1店舗の情報と、URLから取得したページ内容を照合し、情報を補完・修正してください。
 必ず指定されたJSONフォーマットでのみ回答してください。
 
 # 作業内容
@@ -86,7 +89,6 @@ Step1で抽出された飲食店情報と、URLから取得したページ内容
 
 # 出力フォーマット（Step1と同じ構造で返す）
 {
-    "ignore": false,
     "shop_name": "天よし 浅草本店",
     "area": "浅草",
     "category": "天ぷら",
@@ -95,17 +97,14 @@ Step1で抽出された飲食店情報と、URLから取得したページ内容
 """
 
 # ---------------------------------------------------------------------------
-# URL取得ヘルパー
+# URL fetch helper
 # ---------------------------------------------------------------------------
-_URL_FETCH_TIMEOUT = 6.0  # seconds
+_URL_FETCH_TIMEOUT = 6.0        # seconds per request
 _URL_CONTENT_MAX_CHARS = 4000
 
+
 async def _fetch_url_content(url: str) -> Optional[str]:
-    """
-    Fetch URL page content as plain text.
-    Strips HTML tags and truncates to _URL_CONTENT_MAX_CHARS.
-    Returns None on failure.
-    """
+    """Fetch URL as plain text, stripping HTML tags. Returns None on failure."""
     try:
         headers = {
             "User-Agent": (
@@ -119,7 +118,6 @@ async def _fetch_url_content(url: str) -> Optional[str]:
             response.raise_for_status()
             html = response.text
 
-        # Strip script/style blocks and HTML tags
         text = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<style[^>]*>.*?</style>", "", text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r"<[^>]+>", " ", text)
@@ -127,86 +125,90 @@ async def _fetch_url_content(url: str) -> Optional[str]:
         return text[:_URL_CONTENT_MAX_CHARS]
 
     except Exception as e:
-        logger.warning(f"URL fetch failed for {url}: {e}")
+        logger.warning("URL fetch failed for %s: %s", url, e)
         return None
 
 
 # ---------------------------------------------------------------------------
-# メインのパース関数
+# Step 2 enrichment for a single shop dict
 # ---------------------------------------------------------------------------
-async def parse_restaurant_info(text: str) -> Optional[Dict[str, Any]]:
+async def _enrich_shop(shop: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Run Step2 enrichment for a single shop that has a URL.
+    Returns the enriched shop dict (falls back to original on error).
+    """
+    url = shop.get("url")
+    if not url:
+        return shop
+
+    url_content = await _fetch_url_content(url)
+    if not url_content:
+        logger.info("URL content unavailable for %s, using Step1 result as-is.", url)
+        return shop
+
+    try:
+        step2_input = json.dumps(
+            {"step1_result": shop, "url_content": url_content},
+            ensure_ascii=False,
+        )
+        response = await openai_client.chat.completions.create(
+            model="gpt-4.1",
+            messages=[
+                {"role": "system", "content": STEP2_SYSTEM_PROMPT},
+                {"role": "user", "content": step2_input},
+            ],
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        # Preserve url field if Step2 dropped it
+        if "url" not in result:
+            result["url"] = url
+        return result
+    except Exception as e:
+        logger.error("Step2 OpenAI API error for %s: %s", url, e)
+        return shop  # Fall back to Step1 result
+
+
+# ---------------------------------------------------------------------------
+# Main entry point
+# ---------------------------------------------------------------------------
+async def parse_restaurant_info(text: str) -> Optional[List[Dict[str, Any]]]:
     """
     Extract restaurant info from a Discord message in two steps.
 
-    Step1: Extract basic info from text/embed content.
-    Step2: If a URL is present, enrich/correct using the page content.
+    Returns:
+        None            — API error (caller should not mark message as processed)
+        []              — Not a restaurant message (ignore)
+        [dict, ...]     — One or more shops extracted from the message
 
-    Returns a dict with keys: ignore, shop_name, area, category, url
-    Returns None if an API error occurs.
+    Each shop dict contains: shop_name, area, category, url
     """
     if not openai_client:
         logger.error("OPENAI_API_KEY is missing.")
         return None
 
-    # --- Step 1 ---
+    # --- Step 1: extract from text ---
     try:
         step1_response = await openai_client.chat.completions.create(
             model="gpt-4.1",
             messages=[
                 {"role": "system", "content": STEP1_SYSTEM_PROMPT},
-                {"role": "user", "content": text}
+                {"role": "user", "content": text},
             ],
-            response_format={"type": "json_object"}
+            response_format={"type": "json_object"},
         )
         step1_result = json.loads(step1_response.choices[0].message.content)
     except Exception as e:
-        logger.error(f"Step1 OpenAI API error: {e}")
+        logger.error("Step1 OpenAI API error: %s", e)
         return None
 
-    # Return immediately if not a target
     if step1_result.get("ignore", True):
-        return {"ignore": True}
+        return []
 
-    # Return Step1 result if no URL to enrich from
-    url = step1_result.get("url")
-    if not url:
-        step1_result["ignore"] = False
-        return step1_result
+    shops: List[Dict[str, Any]] = step1_result.get("shops", [])
+    if not shops:
+        return []
 
-    # --- URL fetch ---
-    url_content = await _fetch_url_content(url)
-    if not url_content:
-        # Safe fallback: use Step1 result as-is
-        logger.info(f"URL content unavailable for {url}, using Step1 result as-is.")
-        step1_result["ignore"] = False
-        return step1_result
-
-    # --- Step 2 ---
-    try:
-        step2_input = json.dumps({
-            "step1_result": {
-                "shop_name": step1_result.get("shop_name"),
-                "area": step1_result.get("area"),
-                "category": step1_result.get("category"),
-                "url": url,
-            },
-            "url_content": url_content,
-        }, ensure_ascii=False)
-
-        step2_response = await openai_client.chat.completions.create(
-            model="gpt-4.1",
-            messages=[
-                {"role": "system", "content": STEP2_SYSTEM_PROMPT},
-                {"role": "user", "content": step2_input}
-            ],
-            response_format={"type": "json_object"}
-        )
-        step2_result = json.loads(step2_response.choices[0].message.content)
-        step2_result["ignore"] = False
-        return step2_result
-
-    except Exception as e:
-        logger.error(f"Step2 OpenAI API error: {e}")
-        # Fallback to Step1 result on Step2 failure
-        step1_result["ignore"] = False
-        return step1_result
+    # --- Step 2: enrich all shops in parallel ---
+    enriched = await asyncio.gather(*(_enrich_shop(s) for s in shops))
+    return list(enriched)
