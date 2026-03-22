@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from db.database import init_db, SessionLocal
 from db.models import Message, Shop
 from bot.restaurant_extractor import parse_restaurant_info
-from bot.sync_logic import sync_history, _extract_url, _build_text_to_parse
+from bot.sync_logic import find_duplicate_shop, sync_history, _extract_url, _build_text_to_parse
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -80,7 +80,16 @@ async def on_message(message: discord.Message):
                 db_msg.is_target = True
                 db.add(db_msg)
                 added: list[Shop] = []
+                skipped: list[str] = []
                 for shop_info in shops:
+                    dup = find_duplicate_shop(db, shop_info)
+                    if dup:
+                        logger.info(
+                            "Duplicate shop skipped (existing id=%s): %s",
+                            dup.id, shop_info.get("shop_name"),
+                        )
+                        skipped.append(dup.shop_name)
+                        continue
                     url = shop_info.get("url") or _extract_url(message.content)
                     new_shop = Shop(
                         message_id=str(message.id),
@@ -94,13 +103,21 @@ async def on_message(message: discord.Message):
                     added.append(new_shop)
                 db.commit()
 
-                lines = [f"🍽️ Registered {len(added)} shop(s)!"]
-                for s in added:
-                    area_text = s.area or "Unknown Area"
-                    cat_text = s.category or "Unknown Category"
-                    lines.append(f"  【{s.shop_name}】 📍 {area_text} | 🏷️ {cat_text}")
-                await message.reply("\n".join(lines))
-                await message.add_reaction("✅")
+                if not added and skipped:
+                    await message.reply(
+                        f"👀 Already registered: {', '.join(f'【{n}】' for n in skipped)}"
+                    )
+                    await message.add_reaction("👀")
+                else:
+                    lines = [f"🍽️ Registered {len(added)} shop(s)!"]
+                    for s in added:
+                        area_text = s.area or "Unknown Area"
+                        cat_text = s.category or "Unknown Category"
+                        lines.append(f"  【{s.shop_name}】 📍 {area_text} | 🏷️ {cat_text}")
+                    if skipped:
+                        lines.append(f"  ⏭️ Skipped (duplicate): {', '.join(f'【{n}】' for n in skipped)}")
+                    await message.reply("\n".join(lines))
+                    await message.add_reaction("✅")
                 
         except Exception as e:
             logger.error(f"Error handling message {message.id}: {e}")

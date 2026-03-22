@@ -1,14 +1,47 @@
 import asyncio
 import logging
 import re
+from typing import Any, Dict, Optional
 
 import discord
+from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
 from db.models import Message, Shop
 from bot.restaurant_extractor import parse_restaurant_info
 
 logger = logging.getLogger(__name__)
+
+
+def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optional[Shop]:
+    """
+    Return an existing Shop that is a duplicate of shop_info, or None.
+
+    Priority:
+      1. Same URL (if present) — URLs are definitive identifiers.
+      2. Same shop_name + area (case-insensitive, stripped).
+    """
+    url = (shop_info.get("url") or "").strip()
+    if url:
+        existing = db.query(Shop).filter(Shop.url == url).first()
+        if existing:
+            return existing
+
+    name = (shop_info.get("shop_name") or "").strip().lower()
+    area = (shop_info.get("area") or "").strip().lower()
+    if name and area:
+        existing = (
+            db.query(Shop)
+            .filter(
+                Shop.shop_name.ilike(name),
+                Shop.area.ilike(area),
+            )
+            .first()
+        )
+        if existing:
+            return existing
+
+    return None
 
 
 def _build_text_to_parse(msg: discord.Message) -> str:
@@ -77,6 +110,13 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
                 db_msg.is_target = True
                 db.add(db_msg)
                 for shop_info in shops:
+                    dup = find_duplicate_shop(db, shop_info)
+                    if dup:
+                        logger.info(
+                            "Duplicate shop skipped during sync (existing id=%s): %s",
+                            dup.id, shop_info.get("shop_name"),
+                        )
+                        continue
                     url = shop_info.get("url") or _extract_url(hist_msg.content)
                     db.add(Shop(
                         message_id=str(hist_msg.id),
