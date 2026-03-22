@@ -181,6 +181,64 @@ async def _enrich_shop(shop: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Duplicate check via AI
+# ---------------------------------------------------------------------------
+_DEDUP_SYSTEM_PROMPT = """
+あなたは飲食店データベースの重複チェックアシスタントです。
+新規登録しようとしている店舗が、既存のリストに既に登録されているかどうかを判定してください。
+
+# 重複とみなす基準
+- 同じ店舗を指していれば重複（表記ゆれ・支店名の有無・略称は許容する）
+  例: "天よし" と "天よし 浅草本店" → 重複
+  例: "スタバ" と "スターバックス" → 重複
+- URLが一致する場合は必ず重複
+- 同名でもエリアが明確に異なる場合は別店舗
+  例: "天一" 渋谷 と "天一" 新宿 → 別店舗
+
+# 出力フォーマット
+重複あり:  { "duplicate": true,  "matched_id": <既存店舗のid> }
+重複なし:  { "duplicate": false }
+"""
+
+
+async def check_duplicate_shop_ai(
+    new_shop: Dict[str, Any],
+    existing_shops: List[Dict[str, Any]],
+) -> Optional[int]:
+    """
+    Ask the AI whether new_shop is already in existing_shops.
+
+    Returns the matched Shop.id if a duplicate is found, else None.
+    Returns None also on API error (fail open — allow insertion).
+    """
+    if not openai_client:
+        return None
+    if not existing_shops:
+        return None
+
+    user_content = json.dumps(
+        {"new_shop": new_shop, "existing_shops": existing_shops},
+        ensure_ascii=False,
+    )
+    try:
+        response = await openai_client.chat.completions.create(
+            model="gpt-4.1-mini",  # cheap model — simple binary judgment
+            messages=[
+                {"role": "system", "content": _DEDUP_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            response_format={"type": "json_object"},
+        )
+        result = json.loads(response.choices[0].message.content)
+        if result.get("duplicate") and result.get("matched_id") is not None:
+            return int(result["matched_id"])
+        return None
+    except Exception as e:
+        logger.error("Dedup AI error: %s", e)
+        return None  # Fail open: allow insertion rather than blocking
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 async def parse_restaurant_info(text: str) -> Optional[List[Dict[str, Any]]]:

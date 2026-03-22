@@ -4,67 +4,42 @@ import re
 from typing import Any, Dict, Optional
 
 import discord
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
 from db.models import Message, Shop
-from bot.restaurant_extractor import parse_restaurant_info
+from bot.restaurant_extractor import check_duplicate_shop_ai, parse_restaurant_info
 
 logger = logging.getLogger(__name__)
 
 
-def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optional[Shop]:
+async def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optional[Shop]:
     """
     Return an existing Shop that is a duplicate of shop_info, or None.
 
-    Priority:
-      1. Same URL (if present) — URLs are definitive identifiers.
-      2. Same shop_name + area, including prefix matches for branch names
-         (e.g. "天よし" matches "天よし 浅草本店" and vice versa).
-         Uses space as a branch separator to avoid false positives like
-         "天よし" matching "天よし食堂".
+    Delegates the judgment to the AI so that name variations, abbreviations,
+    and branch name differences are handled correctly.
+    Falls back to None (allow insertion) on API error.
     """
-    url = (shop_info.get("url") or "").strip()
-    if url:
-        existing = db.query(Shop).filter(Shop.url == url).first()
-        if existing:
-            return existing
-
-    name = (shop_info.get("shop_name") or "").strip()
-    area = (shop_info.get("area") or "").strip()
-    if not name or not area:
+    all_shops = db.query(Shop).all()
+    if not all_shops:
         return None
 
-    # Match exact name, or existing shop whose name starts with "name "
-    # (branch suffix pattern), or new name starts with existing name + " ".
-    existing = (
-        db.query(Shop)
-        .filter(
-            Shop.area.ilike(area),
-            or_(
-                Shop.shop_name.ilike(name),           # exact
-                Shop.shop_name.ilike(f"{name} %"),    # existing has branch suffix
-                Shop.shop_name.ilike(f"{name}\u3000%"), # full-width space variant
-            ),
-        )
-        .first()
-    )
-    if existing:
-        return existing
+    existing_shops = [
+        {
+            "id": s.id,
+            "shop_name": s.shop_name,
+            "area": s.area or "",
+            "url": s.url or "",
+        }
+        for s in all_shops
+    ]
 
-    # Also check if new name is an extension of a shorter existing name
-    # (e.g. inserting "天よし 浅草本店" when "天よし" already exists).
-    # Fetch candidates with same area and check Python-side to avoid
-    # complex SQL substring logic.
-    name_lower = name.lower()
-    candidates = db.query(Shop).filter(Shop.area.ilike(area)).all()
-    for candidate in candidates:
-        base = candidate.shop_name.strip().lower()
-        if name_lower.startswith(base + " ") or name_lower.startswith(base + "\u3000"):
-            return candidate
+    matched_id = await check_duplicate_shop_ai(shop_info, existing_shops)
+    if matched_id is None:
+        return None
 
-    return None
+    return db.query(Shop).filter(Shop.id == matched_id).first()
 
 
 def _build_text_to_parse(msg: discord.Message) -> str:
@@ -133,7 +108,7 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
                 db_msg.is_target = True
                 db.add(db_msg)
                 for shop_info in shops:
-                    dup = find_duplicate_shop(db, shop_info)
+                    dup = await find_duplicate_shop(db, shop_info)
                     if dup:
                         logger.info(
                             "Duplicate shop skipped during sync (existing id=%s): %s",

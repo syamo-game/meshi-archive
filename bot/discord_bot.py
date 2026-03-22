@@ -82,7 +82,7 @@ async def on_message(message: discord.Message):
                 added: list[Shop] = []
                 skipped: list[str] = []
                 for shop_info in shops:
-                    dup = find_duplicate_shop(db, shop_info)
+                    dup = await find_duplicate_shop(db, shop_info)
                     if dup:
                         logger.info(
                             "Duplicate shop skipped (existing id=%s): %s",
