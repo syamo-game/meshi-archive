@@ -34,8 +34,15 @@ def _is_authenticated(request: Request) -> bool:
     return bool(request.session.get("authenticated"))
 
 
-def _build_shop_query(db: Session, area: Optional[str], status: Optional[str]):
+def _build_shop_query(
+    db: Session,
+    area: Optional[str],
+    status: Optional[str],
+    q: Optional[str] = None,
+):
     query = db.query(Shop)
+    if q:
+        query = query.filter(Shop.shop_name.ilike(f"%{q.strip()}%"))
     if area:
         query = query.filter(Shop.area == area)
     if status == "unvisited":
@@ -54,6 +61,7 @@ def home(
     request: Request,
     area: Optional[str] = None,
     status: Optional[str] = None,
+    q: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     if not _is_authenticated(request):
@@ -64,7 +72,7 @@ def home(
         for a in db.query(Shop.area).filter(Shop.area.isnot(None)).distinct().all()
         if a[0]
     )
-    shops = _build_shop_query(db, area, status).all()
+    shops = _build_shop_query(db, area, status, q).all()
 
     return templates.TemplateResponse(
         "home.html",
@@ -74,6 +82,7 @@ def home(
             "all_areas": areas,
             "selected_area": area or "",
             "selected_status": status or "",
+            "selected_q": q or "",
         },
     )
 
@@ -118,12 +127,13 @@ def export_csv(
     request: Request,
     area: Optional[str] = None,
     status: Optional[str] = None,
+    q: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     if not _is_authenticated(request):
         return RedirectResponse("/login", status_code=302)
 
-    shops = _build_shop_query(db, area, status).all()
+    shops = _build_shop_query(db, area, status, q).all()
 
     buf = io.StringIO()
     writer = csv.writer(buf)

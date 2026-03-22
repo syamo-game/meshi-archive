@@ -14,6 +14,14 @@
     <div class="filter-form__fields">
 
       <div class="form-group">
+        <label for="q-input" class="form-label">店名</label>
+        <input id="q-input" type="search" name="q" class="form-input"
+               placeholder="キーワードで検索"
+               value="{{ selected_q }}"
+               autocomplete="off">
+      </div>
+
+      <div class="form-group">
         <label for="area-select" class="form-label">エリア</label>
         <select id="area-select" name="area" class="form-select">
           <option value="">すべてのエリア</option>
@@ -51,7 +59,7 @@
 
     <div class="filter-form__actions">
       <button type="submit" class="btn btn--primary">絞り込む</button>
-      {% if selected_area or selected_status %}
+      {% if selected_area or selected_status or selected_q %}
       <a href="/" class="btn btn--ghost">リセット</a>
       {% endif %}
     </div>
@@ -65,7 +73,7 @@
       <strong>{{ shops|length }}</strong> 件の結果
     </p>
     {% if shops %}
-    <a href="/export.csv?area={{ selected_area }}&status={{ selected_status }}"
+    <a href="/export.csv?area={{ selected_area }}&status={{ selected_status }}&q={{ selected_q }}"
        class="btn btn--secondary btn--sm"
        aria-label="現在の絞り込み結果を CSV でダウンロード">
       CSV でダウンロード
