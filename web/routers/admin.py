@@ -1,8 +1,12 @@
 import csv
+import hmac
 import io
+import logging
 import os
 import re
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import RedirectResponse
@@ -94,7 +98,7 @@ def admin_login_page(request: Request):
 
 @router.post("/login")
 def admin_login(request: Request, password: str = Form(...)):
-    if password == ADMIN_PASSWORD:
+    if ADMIN_PASSWORD and hmac.compare_digest(password, ADMIN_PASSWORD):
         request.session["admin_authenticated"] = True
         return RedirectResponse("/admin", status_code=302)
     return templates.TemplateResponse(
@@ -131,7 +135,10 @@ async def import_csv(
         errors.append(
             f"ファイルサイズが上限を超えています（最大 {_MAX_FILE_BYTES // 1024 // 1024} MB）。"
         )
-    elif not (file.filename or "").lower().endswith(".csv"):
+    elif not (file.filename or "").lower().endswith(".csv") or (
+        file.content_type
+        and file.content_type not in ("text/csv", "application/csv", "application/octet-stream", "text/plain")
+    ):
         errors.append("CSV ファイルのみアップロードできます。")
     else:
         try:
@@ -193,9 +200,11 @@ async def import_csv(
                     result = {"updated": updated, "inserted": inserted, "deleted": deleted}
                 except Exception as e:
                     db.rollback()
-                    errors.append(f"インポートに失敗しました: {e}")
+                    logger.error("CSV import DB error: %s", e)
+                    errors.append("インポート中にエラーが発生しました。管理者に連絡してください。")
         except Exception as e:
-            errors.append(f"CSV の読み込みに失敗しました: {e}")
+            logger.error("CSV parse error: %s", e)
+            errors.append("CSV ファイルの読み込みに失敗しました。ファイル形式を確認してください。")
 
     return templates.TemplateResponse(
         "admin.html",

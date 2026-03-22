@@ -1,4 +1,5 @@
 import csv
+import hmac
 import io
 import os
 from typing import Optional
@@ -10,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
 from db.models import Shop
+
+_CSV_INJECT_CHARS = frozenset("=+-@\t\r")
 
 router = APIRouter()
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "..", "templates"))
@@ -90,7 +93,7 @@ def login_page(request: Request):
 
 @router.post("/login")
 def login(request: Request, password: str = Form(...)):
-    if password == WEB_PASSWORD:
+    if WEB_PASSWORD and hmac.compare_digest(password, WEB_PASSWORD):
         request.session["authenticated"] = True
         return RedirectResponse("/", status_code=302)
     return templates.TemplateResponse(
@@ -128,16 +131,23 @@ def export_csv(
         "_id", "@timestamp", "message_id",
         "shop.name", "shop.area", "shop.category", "status.is_visited", "url",
     ])
+    def _safe(val: Optional[str]) -> str:
+        """Strip CSV injection prefix characters from exported text values."""
+        s = (val or "").strip()
+        while s and s[0] in _CSV_INJECT_CHARS:
+            s = s[1:].strip()
+        return s
+
     for s in shops:
         writer.writerow([
             s.id,
             s.created_at.strftime("%Y-%m-%d %H:%M:%S") if s.created_at else "",
             s.message_id,
-            s.shop_name,
-            s.area or "",
-            s.category or "",
+            _safe(s.shop_name),
+            _safe(s.area),
+            _safe(s.category),
             s.is_visited,
-            s.url or "",
+            _safe(s.url),
         ])
 
     # UTF-8 BOM so Excel opens it correctly

@@ -23,6 +23,8 @@ services:
         sync: false
       - key: SECRET_KEY
         generateValue: true
+      - key: HTTPS_ONLY
+        value: true
 
   - type: worker
     name: meshi-archive-bot
