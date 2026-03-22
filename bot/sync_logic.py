@@ -4,6 +4,7 @@ import re
 from typing import Any, Dict, Optional
 
 import discord
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
@@ -19,7 +20,10 @@ def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optional[Shop
 
     Priority:
       1. Same URL (if present) — URLs are definitive identifiers.
-      2. Same shop_name + area (case-insensitive, stripped).
+      2. Same shop_name + area, including prefix matches for branch names
+         (e.g. "天よし" matches "天よし 浅草本店" and vice versa).
+         Uses space as a branch separator to avoid false positives like
+         "天よし" matching "天よし食堂".
     """
     url = (shop_info.get("url") or "").strip()
     if url:
@@ -27,19 +31,38 @@ def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optional[Shop
         if existing:
             return existing
 
-    name = (shop_info.get("shop_name") or "").strip().lower()
-    area = (shop_info.get("area") or "").strip().lower()
-    if name and area:
-        existing = (
-            db.query(Shop)
-            .filter(
-                Shop.shop_name.ilike(name),
-                Shop.area.ilike(area),
-            )
-            .first()
+    name = (shop_info.get("shop_name") or "").strip()
+    area = (shop_info.get("area") or "").strip()
+    if not name or not area:
+        return None
+
+    # Match exact name, or existing shop whose name starts with "name "
+    # (branch suffix pattern), or new name starts with existing name + " ".
+    existing = (
+        db.query(Shop)
+        .filter(
+            Shop.area.ilike(area),
+            or_(
+                Shop.shop_name.ilike(name),           # exact
+                Shop.shop_name.ilike(f"{name} %"),    # existing has branch suffix
+                Shop.shop_name.ilike(f"{name}\u3000%"), # full-width space variant
+            ),
         )
-        if existing:
-            return existing
+        .first()
+    )
+    if existing:
+        return existing
+
+    # Also check if new name is an extension of a shorter existing name
+    # (e.g. inserting "天よし 浅草本店" when "天よし" already exists).
+    # Fetch candidates with same area and check Python-side to avoid
+    # complex SQL substring logic.
+    name_lower = name.lower()
+    candidates = db.query(Shop).filter(Shop.area.ilike(area)).all()
+    for candidate in candidates:
+        base = candidate.shop_name.strip().lower()
+        if name_lower.startswith(base + " ") or name_lower.startswith(base + "\u3000"):
+            return candidate
 
     return None
 
