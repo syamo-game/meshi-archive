@@ -39,6 +39,7 @@ def _build_shop_query(
     area: Optional[str],
     status: Optional[str],
     q: Optional[str] = None,
+    category: Optional[str] = None,
 ):
     query = db.query(Shop)
     if q:
@@ -47,6 +48,8 @@ def _build_shop_query(
         query = query.filter(Shop.area.is_(None))
     elif area:
         query = query.filter(Shop.area == area)
+    if category:
+        query = query.filter(Shop.category == category)
     if status == "unvisited":
         query = query.filter(Shop.is_visited == False)  # noqa: E712
     elif status == "visited":
@@ -64,6 +67,7 @@ def home(
     area: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
+    category: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     if not _is_authenticated(request):
@@ -74,7 +78,12 @@ def home(
         for a in db.query(Shop.area).filter(Shop.area.isnot(None)).distinct().all()
         if a[0]
     )
-    shops = _build_shop_query(db, area, status, q).all()
+    categories = sorted(
+        c[0]
+        for c in db.query(Shop.category).filter(Shop.category.isnot(None)).distinct().all()
+        if c[0]
+    )
+    shops = _build_shop_query(db, area, status, q, category).all()
 
     return templates.TemplateResponse(
         request=request,
@@ -82,9 +91,11 @@ def home(
         context={
             "shops": shops,
             "all_areas": areas,
+            "all_categories": categories,
             "selected_area": area or "",
             "selected_status": status or "",
             "selected_q": q or "",
+            "selected_category": category or "",
         },
     )
 
@@ -131,12 +142,13 @@ def export_csv(
     area: Optional[str] = None,
     status: Optional[str] = None,
     q: Optional[str] = None,
+    category: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
     if not _is_authenticated(request):
         return RedirectResponse("/login", status_code=302)
 
-    shops = _build_shop_query(db, area, status, q).all()
+    shops = _build_shop_query(db, area, status, q, category).all()
 
     buf = io.StringIO()
     writer = csv.writer(buf)

@@ -131,8 +131,8 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
                 db_msg.is_target = True
                 db.add(db_msg)
 
-                # C-7: only fall back to raw URL extraction when there is exactly one shop
-                url_fallback = _extract_url(hist_msg.content) if len(shops) == 1 else None
+                # Apply message URL as fallback for any shop that has no URL
+                url_fallback = _extract_url(hist_msg.content)
 
                 for shop_info in shops:
                     # B-2: skip shops with no identifiable name

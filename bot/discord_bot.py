@@ -80,8 +80,8 @@ async def on_message(message: discord.Message):
                 db_msg.is_target = True
                 db.add(db_msg)
 
-                # C-7: only fall back to raw URL extraction when there is exactly one shop
-                url_fallback = _extract_url(message.content) if len(shops) == 1 else None
+                # Apply message URL as fallback for any shop that has no URL
+                url_fallback = _extract_url(message.content)
 
                 added: list[Shop] = []
                 skipped: list[str] = []
