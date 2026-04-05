@@ -40,17 +40,17 @@ async def on_message(message: discord.Message):
         if ADMIN_USER_ID and str(message.author.id) != ADMIN_USER_ID:
             logger.warning(f"Unauthorized access attempt by {message.author.name} (ID: {message.author.id})")
             return
-            
+
         content = message.content.replace(f'<@{client.user.id}>', '').strip()
-        
+
         # Check command
         if content.lower() == "sync":
             await sync_history(client, message)
             return
-            
+
         # Real-time processing
         await message.add_reaction("⏳") # Add hourglass reaction while processing
-        
+
         db = SessionLocal()
         try:
             # Check if already processed
@@ -62,15 +62,15 @@ async def on_message(message: discord.Message):
 
             shops = await parse_restaurant_info(_build_text_to_parse(message))
 
+            if shops is None:
+                # C-2: API error — do NOT save to DB so the message can be retried later
+                logger.error("API error for message %s — not marking as processed.", message.id)
+                await message.add_reaction("❌")
+                return
+
             db_msg = Message(message_id=str(message.id))
 
-            if shops is None:
-                # API error — do not mark as processed so it can be retried
-                db_msg.is_target = False
-                db.add(db_msg)
-                db.commit()
-                await message.add_reaction("❌")
-            elif len(shops) == 0:
+            if len(shops) == 0:
                 # Not a restaurant message
                 db_msg.is_target = False
                 db.add(db_msg)
@@ -79,9 +79,17 @@ async def on_message(message: discord.Message):
             else:
                 db_msg.is_target = True
                 db.add(db_msg)
+
+                # C-7: only fall back to raw URL extraction when there is exactly one shop
+                url_fallback = _extract_url(message.content) if len(shops) == 1 else None
+
                 added: list[Shop] = []
                 skipped: list[str] = []
                 for shop_info in shops:
+                    # B-2: skip shops with no identifiable name
+                    if not shop_info.get("shop_name"):
+                        logger.info("Skipping shop with no name from message %s.", message.id)
+                        continue
                     dup = await find_duplicate_shop(db, shop_info)
                     if dup:
                         logger.info(
@@ -90,10 +98,10 @@ async def on_message(message: discord.Message):
                         )
                         skipped.append(dup.shop_name)
                         continue
-                    url = shop_info.get("url") or _extract_url(message.content)
+                    url = shop_info.get("url") or url_fallback
                     new_shop = Shop(
                         message_id=str(message.id),
-                        shop_name=shop_info.get("shop_name") or "Unknown",
+                        shop_name=shop_info["shop_name"],
                         area=shop_info.get("area"),
                         category=shop_info.get("category"),
                         url=url,
@@ -105,23 +113,22 @@ async def on_message(message: discord.Message):
 
                 if not added and skipped:
                     await message.reply(
-                        f"👀 Already registered: {', '.join(f'【{n}】' for n in skipped)}"
+                        f"👀 登録済みのため追加をスキップしました: {', '.join(f'【{n}】' for n in skipped)}"
                     )
                     await message.add_reaction("👀")
                 else:
-                    lines = [f"🍽️ Registered {len(added)} shop(s)!"]
+                    lines = [f"🍽️ {len(added)} 件登録しました！"]
                     for s in added:
-                        area_text = s.area or "Unknown Area"
-                        cat_text = s.category or "Unknown Category"
+                        area_text = s.area or "エリア不明"
+                        cat_text = s.category or "カテゴリ不明"
                         lines.append(f"  【{s.shop_name}】 📍 {area_text} | 🏷️ {cat_text}")
                     if skipped:
-                        lines.append(f"  ⏭️ Skipped (duplicate): {', '.join(f'【{n}】' for n in skipped)}")
+                        lines.append(f"  ⏭️ 重複のためスキップ: {', '.join(f'【{n}】' for n in skipped)}")
                     await message.reply("\n".join(lines))
                     await message.add_reaction("✅")
-                
+
         except Exception as e:
             logger.error(f"Error handling message {message.id}: {e}")
-            await message.remove_reaction("⏳", client.user)
             await message.add_reaction("⚠️")
         finally:
             db.close()

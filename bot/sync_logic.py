@@ -4,6 +4,7 @@ import re
 from typing import Any, Dict, Optional
 
 import discord
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from db.database import SessionLocal
@@ -12,17 +13,34 @@ from bot.restaurant_extractor import check_duplicate_shop_ai, parse_restaurant_i
 
 logger = logging.getLogger(__name__)
 
+# Max number of candidate shops to send to the AI for dedup judgment (C-4)
+_DEDUP_CANDIDATE_LIMIT = 100
+
 
 async def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optional[Shop]:
     """
     Return an existing Shop that is a duplicate of shop_info, or None.
 
-    Delegates the judgment to the AI so that name variations, abbreviations,
-    and branch name differences are handled correctly.
+    C-4: Pre-filters candidates by URL (exact match, no AI needed) and area
+    to keep the AI prompt small as the dataset grows.
     Falls back to None (allow insertion) on API error.
     """
-    all_shops = db.query(Shop).all()
-    if not all_shops:
+    # Step 1: URL exact match — no AI call required
+    shop_url = shop_info.get("url")
+    if shop_url:
+        url_match = db.query(Shop).filter(Shop.url == shop_url).first()
+        if url_match:
+            return url_match
+
+    # Step 2: narrow candidates by area before calling AI
+    area = shop_info.get("area")
+    query = db.query(Shop)
+    if area:
+        # Same area or area unknown (null) — cast a wider net to catch ambiguous cases
+        query = query.filter(or_(Shop.area == area, Shop.area.is_(None)))
+
+    candidates = query.limit(_DEDUP_CANDIDATE_LIMIT).all()
+    if not candidates:
         return None
 
     existing_shops = [
@@ -32,7 +50,7 @@ async def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optiona
             "area": s.area or "",
             "url": s.url or "",
         }
-        for s in all_shops
+        for s in candidates
     ]
 
     matched_id = await check_duplicate_shop_ai(shop_info, existing_shops)
@@ -43,12 +61,17 @@ async def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optiona
 
 
 def _build_text_to_parse(msg: discord.Message) -> str:
+    """Build a text string from a Discord message, including embed content (C-5)."""
     text = msg.content
     for embed in msg.embeds:
+        if embed.url:
+            text += f"\n[Embed URL] {embed.url}"
         if embed.title:
             text += f"\n[Embed Title] {embed.title}"
         if embed.description:
             text += f"\n[Embed Description] {embed.description}"
+        for field in embed.fields:
+            text += f"\n[Embed Field: {field.name}] {field.value}"
     return text
 
 
@@ -57,7 +80,7 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
     Syncs history of messages in the channel where the command was called.
     """
     channel = message.channel
-    await channel.send("Starting historical sync...")
+    await channel.send("過去メッセージの同期を開始します...")
 
     db = SessionLocal()
     try:
@@ -98,7 +121,7 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
 
             if shops is None:
                 # API error — stop syncing to avoid marking messages as skipped
-                await channel.send("Sync paused: OpenAI API error. Please try again later.")
+                await channel.send("同期を一時停止しました: OpenAI API エラーが発生しました。後ほど再試行してください。")
                 break
 
             db_msg = Message(message_id=str(hist_msg.id))
@@ -107,7 +130,17 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
             if shops:
                 db_msg.is_target = True
                 db.add(db_msg)
+
+                # C-7: only fall back to raw URL extraction when there is exactly one shop
+                url_fallback = _extract_url(hist_msg.content) if len(shops) == 1 else None
+
                 for shop_info in shops:
+                    # B-2: skip shops with no identifiable name
+                    if not shop_info.get("shop_name"):
+                        logger.info(
+                            "Skipping shop with no name from historical message %s.", hist_msg.id
+                        )
+                        continue
                     dup = await find_duplicate_shop(db, shop_info)
                     if dup:
                         logger.info(
@@ -115,10 +148,10 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
                             dup.id, shop_info.get("shop_name"),
                         )
                         continue
-                    url = shop_info.get("url") or _extract_url(hist_msg.content)
+                    url = shop_info.get("url") or url_fallback
                     db.add(Shop(
                         message_id=str(hist_msg.id),
-                        shop_name=shop_info.get("shop_name") or "Unknown",
+                        shop_name=shop_info["shop_name"],
                         area=shop_info.get("area"),
                         category=shop_info.get("category"),
                         url=url,
@@ -132,13 +165,13 @@ async def sync_history(client: discord.Client, message: discord.Message) -> None
             db.commit()
 
         await channel.send(
-            f"Sync complete! Processed {synced_count} messages and registered {added_shops} new shops."
+            f"同期が完了しました！{synced_count} 件のメッセージを処理し、{added_shops} 件の店舗を登録しました。"
         )
 
     except Exception as e:
         db.rollback()
         logger.exception(f"Error during sync: {e}")
-        await channel.send("An error occurred during synchronization.")
+        await channel.send("同期中にエラーが発生しました。")
     finally:
         db.close()
 

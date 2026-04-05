@@ -43,7 +43,9 @@ def _build_shop_query(
     query = db.query(Shop)
     if q:
         query = query.filter(Shop.shop_name.ilike(f"%{q.strip()}%"))
-    if area:
+    if area == "__none__":
+        query = query.filter(Shop.area.is_(None))
+    elif area:
         query = query.filter(Shop.area == area)
     if status == "unvisited":
         query = query.filter(Shop.is_visited == False)  # noqa: E712

@@ -25,6 +25,10 @@
         <label for="area-select" class="form-label">エリア</label>
         <select id="area-select" name="area" class="form-select">
           <option value="">すべてのエリア</option>
+          <option value="__none__"
+            {% if selected_area == "__none__" %}selected{% endif %}>
+            エリア未設定
+          </option>
           {% for area in all_areas %}
           <option value="{{ area }}"
             {% if area == selected_area %}selected{% endif %}>
@@ -95,7 +99,7 @@
           <th scope="col">店名</th>
           <th scope="col">エリア</th>
           <th scope="col">カテゴリ</th>
-          <th scope="col">訪問済み</th>
+          <th scope="col">訪問状況</th>
           <th scope="col">URL</th>
         </tr>
       </thead>
@@ -114,11 +118,12 @@
           </td>
           <td class="td--url">
             {% if shop.url %}
+            {% set domain = shop.url.replace("https://", "").replace("http://", "").split("/")[0] %}
             <a href="{{ shop.url }}"
                target="_blank"
                rel="noopener noreferrer"
                class="table-link">
-              リンク<span class="visually-hidden">（外部リンク、新しいタブで開きます）</span>
+              {{ domain }}<span class="visually-hidden">（外部リンク、新しいタブで開きます）</span>
             </a>
             {% else %}
             <span class="text-muted">—</span>

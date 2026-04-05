@@ -4,6 +4,7 @@ import io
 import logging
 import os
 import re
+from datetime import datetime, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -64,6 +65,17 @@ def _normalize_message_id(val: str) -> str:
         except ValueError:
             pass
     return s
+
+
+def _parse_timestamp(val: str) -> Optional[datetime]:
+    """Parse @timestamp string to timezone-aware datetime. Returns None on failure."""
+    s = val.strip()
+    if not s:
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+    except ValueError:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -163,10 +175,11 @@ async def import_csv(
                         area = _sanitize_text(row.get("shop.area"))
                         category = _sanitize_text(row.get("shop.category"))
                         url = _sanitize_url(row.get("url"))
-                        is_visited = (
-                            str(row.get("status.is_visited", "")).strip().lower()
-                            in ("true", "1", "yes")
-                        )
+                        # B-3: parse @timestamp to restore created_at when available
+                        created_at = _parse_timestamp(row.get("@timestamp", ""))
+                        # B-5: empty is_visited string keeps the existing value (resolved per branch)
+                        raw_visited = str(row.get("status.is_visited", "")).strip().lower()
+                        is_visited_explicit = raw_visited in ("true", "1", "yes") if raw_visited else None
 
                         # Ensure parent Message row exists
                         if not db.query(Message).filter_by(message_id=mid).first():
@@ -189,7 +202,12 @@ async def import_csv(
                             existing.area = area
                             existing.category = category
                             existing.url = url
-                            existing.is_visited = is_visited
+                            # B-5: only update is_visited when the CSV value is explicit
+                            if is_visited_explicit is not None:
+                                existing.is_visited = is_visited_explicit
+                            # B-3: only update created_at when the CSV value is valid
+                            if created_at is not None:
+                                existing.created_at = created_at
                             db.flush()
                             touched_ids.add(existing.id)
                             updated += 1
@@ -200,8 +218,12 @@ async def import_csv(
                                 area=area,
                                 category=category,
                                 url=url,
-                                is_visited=is_visited,
+                                # B-5: default False for new records when field is absent
+                                is_visited=is_visited_explicit if is_visited_explicit is not None else False,
                             )
+                            # B-3: set created_at only when explicitly provided; let the model default handle otherwise
+                            if created_at is not None:
+                                new_shop.created_at = created_at
                             db.add(new_shop)
                             db.flush()
                             touched_ids.add(new_shop.id)
