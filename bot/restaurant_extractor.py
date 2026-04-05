@@ -79,6 +79,35 @@ STEP1_SYSTEM_PROMPT = f"""
 """
 
 # ---------------------------------------------------------------------------
+# Web search fallback: find area/category when URL is unavailable
+# ---------------------------------------------------------------------------
+_SEARCH_SYSTEM_PROMPT = f"""
+あなたは飲食店データの補完アシスタントです。
+店舗名からWeb検索を行い、その店舗のエリア（最寄り駅名・街名）とカテゴリを特定してください。
+必ず指定されたJSONフォーマットでのみ回答してください。
+
+# area のルール（最重要）
+- 必ず「最寄り駅名・街名・街区レベル」に統一する。
+- 良い例: 浅草、神田、荻窪、蔵前、中目黒、恵比寿、押上、銀座
+- 悪い例（絶対に使わない）:
+  - 都道府県・区レベル: 東京都、台東区、渋谷区、東京、関東
+  - 商業施設・ビル・タワー名: 渋谷ヒカリエ、六本木ヒルズ、新宿タカシマヤ、東京スカイツリー、銀座SIX、表参道ヒルズ、ミッドタウン
+  - ホテル名・百貨店名: 帝国ホテル、三越、伊勢丹、高島屋
+- 施設名が手がかりになる場合は最寄り駅名・街名に変換する（例: 渋谷ヒカリエ→渋谷、六本木ヒルズ→六本木）
+- 特定できない場合は null。
+
+# category のルール
+- 必ず以下のリストから最も近いものを1つ選ぶ。どれにも当てはまらない場合は「その他」。
+  {_CATEGORY_LIST}
+
+# 出力フォーマット
+{{
+    "area": "浅草",
+    "category": "天ぷら"
+}}
+"""
+
+# ---------------------------------------------------------------------------
 # Step 2: Enrich a single shop using its URL page content
 # ---------------------------------------------------------------------------
 STEP2_SYSTEM_PROMPT = f"""
@@ -169,21 +198,66 @@ async def _fetch_url_content(url: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
+# Web search fallback helper
+# ---------------------------------------------------------------------------
+async def _search_shop_info(shop: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Use OpenAI web_search_preview to fill missing area/category.
+    Only overwrites null fields; existing values are preserved.
+    """
+    shop_name = shop.get("shop_name")
+    if not shop_name or not openai_client:
+        return shop
+    # Only search when at least one field is missing
+    if shop.get("area") and shop.get("category"):
+        return shop
+
+    area_hint = shop.get("area")
+    query = f"店舗名: {shop_name}"
+    if area_hint:
+        query += f"\nエリア候補: {area_hint}"
+
+    try:
+        response = await openai_client.responses.create(
+            model="gpt-4.1",
+            tools=[{"type": "web_search_preview"}],
+            instructions=_SEARCH_SYSTEM_PROMPT,
+            input=query,
+        )
+        raw = response.output_text
+        # Strip markdown code fences if model wraps output
+        raw = re.sub(r"```(?:json)?", "", raw).strip()
+        result = json.loads(raw)
+
+        updated = dict(shop)
+        if not updated.get("area") and result.get("area"):
+            updated["area"] = result["area"]
+            logger.info("Web search filled area=%s for %s", result["area"], shop_name)
+        if not updated.get("category") and result.get("category"):
+            updated["category"] = result["category"]
+        return updated
+    except Exception as e:
+        logger.warning("Web search fallback failed for %s: %s", shop_name, e)
+        return shop
+
+
+# ---------------------------------------------------------------------------
 # Step 2 enrichment for a single shop dict
 # ---------------------------------------------------------------------------
 async def _enrich_shop(shop: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Run Step2 enrichment for a single shop that has a URL.
-    Returns the enriched shop dict (falls back to original on error).
+    Run Step2 enrichment for a single shop.
+    Falls back to web search when URL content is unavailable.
     """
     url = shop.get("url")
     if not url:
-        return shop
+        # No URL: fill missing area/category via web search
+        return await _search_shop_info(shop)
 
     url_content = await _fetch_url_content(url)
     if not url_content:
-        logger.info("URL content unavailable for %s, using Step1 result as-is.", url)
-        return shop
+        logger.info("URL content unavailable for %s, trying web search fallback.", url)
+        return await _search_shop_info(shop)
 
     try:
         step2_input = json.dumps(
