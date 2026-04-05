@@ -1,4 +1,4 @@
-// Meshi Database — minimal progressive enhancement
+// Meshi Archive — minimal progressive enhancement
 // All features work without JS. JS adds convenience only.
 
 (function () {

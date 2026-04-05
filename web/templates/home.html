@@ -1,11 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}一覧 — Meshi Database{% endblock %}
+{% block title %}一覧 — Meshi Archive{% endblock %}
 
 {% block content %}
 <div class="page-header">
-  <h1 class="page-title">Meshi Database</h1>
-  <p class="page-subtitle">Discord Meshi チャンネルから収集した飲食店の一覧です。</p>
+  <div>
+    <h1 class="page-title">飲食店一覧</h1>
+    <p class="page-subtitle">Discord Meshi チャンネルから収集した飲食店のアーカイブです。</p>
+  </div>
 </div>
 
 <!-- Filter form -->
@@ -62,9 +64,9 @@
     </div>
 
     <div class="filter-form__actions">
-      <button type="submit" class="btn btn--primary">絞り込む</button>
+      <button type="submit" class="btn btn--primary btn--sm">絞り込む</button>
       {% if selected_area or selected_status or selected_q %}
-      <a href="/" class="btn btn--ghost">リセット</a>
+      <a href="/" class="btn btn--ghost btn--sm">リセット</a>
       {% endif %}
     </div>
   </form>
@@ -74,7 +76,7 @@
 <section aria-label="検索結果">
   <div class="result-bar">
     <p class="result-count">
-      <strong>{{ shops|length }}</strong> 件の結果
+      <strong>{{ shops|length }}</strong> 件
     </p>
     {% if shops %}
     <a href="/export.csv?area={{ selected_area }}&status={{ selected_status }}&q={{ selected_q }}"
@@ -108,7 +110,13 @@
         <tr>
           <td class="td--name">{{ shop.shop_name }}</td>
           <td class="td--area">{{ shop.area or "—" }}</td>
-          <td class="td--category">{{ shop.category or "—" }}</td>
+          <td class="td--category">
+            {% if shop.category %}
+            <span class="category-tag">{{ shop.category }}</span>
+            {% else %}
+            <span class="text-muted">—</span>
+            {% endif %}
+          </td>
           <td class="td--visited">
             {% if shop.is_visited %}
             <span class="badge badge--visited" aria-label="訪問済み">訪問済み</span>
