@@ -21,7 +21,26 @@ engine = create_engine(
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+def _migrate_add_columns() -> None:
+    """Idempotently add new columns to existing tables (SQLite-safe)."""
+    from sqlalchemy import text
+
+    new_columns = [
+        "ALTER TABLE shops ADD COLUMN visited_at DATETIME",
+        "ALTER TABLE shops ADD COLUMN rating INTEGER",
+        "ALTER TABLE shops ADD COLUMN memo TEXT",
+    ]
+    with engine.connect() as conn:
+        for sql in new_columns:
+            try:
+                conn.execute(text(sql))
+                conn.commit()
+            except Exception:
+                pass  # Column already exists — ignore
+
+
 def init_db():
     from db.models import Base
     Base.metadata.create_all(bind=engine)
+    _migrate_add_columns()
 

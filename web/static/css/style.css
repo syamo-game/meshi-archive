@@ -763,6 +763,243 @@ img, svg {
 }
 
 /* --------------------------------------------------------------------------
+   Sort links in table headers
+   -------------------------------------------------------------------------- */
+.sort-link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 0.12s;
+  white-space: nowrap;
+}
+.sort-link:hover { color: var(--color-primary); }
+.sort-link--active { color: var(--color-primary); }
+
+/* --------------------------------------------------------------------------
+   Star rating — interactive (table) and display
+   -------------------------------------------------------------------------- */
+.star-rating {
+  display: inline-flex;
+  gap: 1px;
+  align-items: center;
+}
+
+.star {
+  background: none;
+  border: none;
+  padding: 1px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--color-border);
+  line-height: 1;
+  transition: color 0.1s, transform 0.08s;
+}
+
+.star:hover,
+.star--hover { color: #FFB800; transform: scale(1.15); }
+
+.star--active { color: #FFB800; }
+
+.td--rating { min-width: 100px; }
+
+/* --------------------------------------------------------------------------
+   Visit toggle button (badge-as-button)
+   -------------------------------------------------------------------------- */
+.btn-visit-toggle {
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: opacity 0.12s, transform 0.08s;
+  white-space: nowrap;
+}
+
+.btn-visit-toggle:hover { opacity: 0.75; transform: scale(0.97); }
+
+/* --------------------------------------------------------------------------
+   Shop name link and Discord jump icon
+   -------------------------------------------------------------------------- */
+.shop-name-link {
+  color: var(--color-text);
+  text-decoration: none;
+  font-weight: 700;
+  transition: color 0.1s;
+}
+.shop-name-link:hover { color: var(--color-primary); text-decoration: underline; }
+
+.discord-link {
+  display: inline-block;
+  margin-left: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 0.1s;
+  vertical-align: middle;
+}
+.discord-link:hover { color: var(--color-primary); }
+
+/* --------------------------------------------------------------------------
+   Registered date cell
+   -------------------------------------------------------------------------- */
+.td--date {
+  min-width: 90px;
+  white-space: nowrap;
+}
+
+.date-text {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.result-count__page {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-left: var(--space-2);
+}
+
+/* --------------------------------------------------------------------------
+   Pagination
+   -------------------------------------------------------------------------- */
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+}
+
+.pagination__info {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  min-width: 100px;
+  text-align: center;
+}
+
+.pagination__disabled {
+  opacity: 0.35;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   Shop detail page
+   -------------------------------------------------------------------------- */
+.back-link {
+  display: inline-block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  margin-bottom: var(--space-2);
+  transition: color 0.1s;
+}
+.back-link:hover { color: var(--color-primary); }
+
+/* Two-column edit grid */
+.edit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+}
+
+.form-group--full { grid-column: 1 / -1; }
+
+.form-label__required {
+  color: var(--color-danger);
+  margin-left: 2px;
+}
+
+.form-textarea {
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  min-height: 80px;
+  width: 100%;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.form-textarea:focus {
+  border-color: var(--color-border-focus);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(76, 154, 255, 0.3);
+}
+
+.form-input--date { max-width: 180px; }
+
+.form-select--rating { max-width: 180px; }
+
+/* Visit status row: checkbox + date side by side */
+.visit-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin-top: var(--space-1);
+}
+
+.form-group--inline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  cursor: pointer;
+  padding-bottom: var(--space-2);
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary);
+  cursor: pointer;
+}
+
+/* Metadata card */
+.card--meta { background: #F8F9FC; }
+
+.meta-list { display: flex; flex-direction: column; gap: var(--space-3); }
+
+.meta-list__item {
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--font-size-sm);
+}
+
+.meta-list__item dt {
+  min-width: 100px;
+  font-weight: 700;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.meta-list__item dd { color: var(--color-text); }
+
+.code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: var(--font-size-xs);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1px var(--space-2);
+}
+
+/* Danger zone card */
+.card--danger { border-color: var(--color-danger-light); }
+
+.card__title--danger { color: var(--color-danger); }
+
+/* --------------------------------------------------------------------------
    Responsive — tablet and below (≤768px)
    -------------------------------------------------------------------------- */
 @media (max-width: 768px) {
@@ -795,6 +1032,16 @@ img, svg {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive — tablet and below: edit grid collapses to single column
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  .edit-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-group--full { grid-column: 1; }
 }
 
 /* --------------------------------------------------------------------------

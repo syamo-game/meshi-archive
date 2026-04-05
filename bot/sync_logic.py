@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+from difflib import SequenceMatcher
 from typing import Any, Dict, Optional
 
 import discord
@@ -40,6 +41,20 @@ async def find_duplicate_shop(db: Session, shop_info: Dict[str, Any]) -> Optiona
         query = query.filter(or_(Shop.area == area, Shop.area.is_(None)))
 
     candidates = query.limit(_DEDUP_CANDIDATE_LIMIT).all()
+    if not candidates:
+        return None
+
+    # Pre-filter by name similarity to reduce AI prompt size.
+    # Keep candidates whose shop_name shares at least 30% character overlap
+    # with the incoming name (SequenceMatcher ratio, case-insensitive).
+    # Always keep candidates with a matching URL (already checked above,
+    # but area-only candidates may still share the same URL substring).
+    new_name = (shop_info.get("shop_name") or "").lower()
+    if new_name:
+        candidates = [
+            s for s in candidates
+            if SequenceMatcher(None, new_name, s.shop_name.lower()).ratio() >= 0.3
+        ]
     if not candidates:
         return None
 

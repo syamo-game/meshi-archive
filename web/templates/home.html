@@ -74,6 +74,9 @@
         </div>
       </fieldset>
 
+      <!-- Preserve sort on filter resubmit -->
+      <input type="hidden" name="sort" value="{{ selected_sort }}">
+
     </div>
 
     <div class="filter-form__actions">
@@ -89,10 +92,13 @@
 <section aria-label="検索結果">
   <div class="result-bar">
     <p class="result-count">
-      <strong>{{ shops|length }}</strong> 件
+      <strong>{{ total }}</strong> 件
+      {% if total_pages > 1 %}
+      <span class="result-count__page">（{{ page }} / {{ total_pages }} ページ）</span>
+      {% endif %}
     </p>
-    {% if shops %}
-    <a href="/export.csv?area={{ selected_area }}&status={{ selected_status }}&q={{ selected_q }}&category={{ selected_category }}"
+    {% if total > 0 %}
+    <a href="/export.csv?{{ filter_qs }}&sort={{ selected_sort }}"
        class="btn btn--secondary btn--sm"
        aria-label="現在の絞り込み結果を CSV でダウンロード">
       CSV でダウンロード
@@ -100,7 +106,7 @@
     {% endif %}
   </div>
 
-  {% if not shops %}
+  {% if total == 0 %}
   <div class="empty-state" role="status">
     <p>絞り込み条件に一致するデータがありません。</p>
     <p><a href="/">条件をリセットする</a></p>
@@ -111,18 +117,66 @@
       <caption class="visually-hidden">飲食店一覧</caption>
       <thead>
         <tr>
-          <th scope="col">店名</th>
-          <th scope="col">エリア</th>
+          <!-- Sortable column headers -->
+          {% set sn = "name_desc" if selected_sort == "name_asc" else "name_asc" %}
+          <th scope="col">
+            <a href="/?{{ filter_qs }}&sort={{ sn }}&page=1" class="sort-link
+              {% if selected_sort in ('name_asc','name_desc') %} sort-link--active{% endif %}">
+              店名
+              {% if selected_sort == "name_asc" %}↑{% elif selected_sort == "name_desc" %}↓{% endif %}
+            </a>
+          </th>
+
+          {% set sa = "area_asc" %}
+          <th scope="col">
+            <a href="/?{{ filter_qs }}&sort={{ sa }}&page=1" class="sort-link
+              {% if selected_sort == 'area_asc' %} sort-link--active{% endif %}">
+              エリア
+              {% if selected_sort == "area_asc" %}↑{% endif %}
+            </a>
+          </th>
+
           <th scope="col">カテゴリ</th>
-          <th scope="col">訪問状況</th>
+
+          {% set sr = "rating_asc" if selected_sort == "rating_desc" else "rating_desc" %}
+          <th scope="col">
+            <a href="/?{{ filter_qs }}&sort={{ sr }}&page=1" class="sort-link
+              {% if selected_sort in ('rating_desc','rating_asc') %} sort-link--active{% endif %}">
+              評価
+              {% if selected_sort == "rating_desc" %}↓{% elif selected_sort == "rating_asc" %}↑{% endif %}
+            </a>
+          </th>
+
+          <th scope="col">訪問</th>
+
+          {% set sd = "created_at_asc" if selected_sort == "created_at_desc" else "created_at_desc" %}
+          <th scope="col">
+            <a href="/?{{ filter_qs }}&sort={{ sd }}&page=1" class="sort-link
+              {% if selected_sort in ('created_at_desc','created_at_asc') %} sort-link--active{% endif %}">
+              登録日
+              {% if selected_sort == "created_at_desc" %}↓{% elif selected_sort == "created_at_asc" %}↑{% endif %}
+            </a>
+          </th>
+
           <th scope="col">URL</th>
         </tr>
       </thead>
       <tbody>
         {% for shop in shops %}
         <tr>
-          <td class="td--name">{{ shop.shop_name }}</td>
+          <!-- Shop name: links to detail page; Discord icon if jump URL available -->
+          <td class="td--name">
+            <a href="/shop/{{ shop.id }}" class="shop-name-link">{{ shop.shop_name }}</a>
+            {% if discord_base_url %}
+            <a href="{{ discord_base_url }}/{{ shop.message_id }}"
+               target="_blank" rel="noopener noreferrer"
+               class="discord-link" aria-label="Discord の元メッセージを開く"
+               title="Discord で元メッセージを開く">↗</a>
+            {% endif %}
+          </td>
+
           <td class="td--area">{{ shop.area or "—" }}</td>
+
           <td class="td--category">
             {% if shop.category %}
             <span class="category-tag">{{ shop.category }}</span>
@@ -130,13 +184,42 @@
             <span class="text-muted">—</span>
             {% endif %}
           </td>
+
+          <!-- Interactive star rating -->
+          <td class="td--rating">
+            <span class="star-rating"
+                  data-shop-id="{{ shop.id }}"
+                  data-rating="{{ shop.rating or 0 }}"
+                  aria-label="{{ shop.rating or 0 }}星">
+              {% for i in range(1, 6) %}
+              <button type="button"
+                      class="star {% if shop.rating and i <= shop.rating %}star--active{% endif %}"
+                      data-value="{{ i }}"
+                      aria-label="{{ i }}星">★</button>
+              {% endfor %}
+            </span>
+          </td>
+
+          <!-- Visited toggle -->
           <td class="td--visited">
-            {% if shop.is_visited %}
-            <span class="badge badge--visited" aria-label="訪問済み">訪問済み</span>
+            <button type="button"
+                    class="btn-visit-toggle badge {% if shop.is_visited %}badge--visited{% else %}badge--unvisited{% endif %}"
+                    data-shop-id="{{ shop.id }}"
+                    data-visited="{{ 'true' if shop.is_visited else 'false' }}"
+                    title="{{ '訪問日: ' ~ shop.visited_at.strftime('%Y-%m-%d') if shop.visited_at else '未訪問' }}">
+              {% if shop.is_visited %}訪問済み{% else %}未訪問{% endif %}
+            </button>
+          </td>
+
+          <!-- Registered date -->
+          <td class="td--date">
+            {% if shop.created_at %}
+            <span class="date-text">{{ shop.created_at.strftime("%Y-%m-%d") }}</span>
             {% else %}
-            <span class="badge badge--unvisited" aria-label="未訪問">未訪問</span>
+            <span class="text-muted">—</span>
             {% endif %}
           </td>
+
           <td class="td--url">
             {% if shop.url %}
             {% set domain = shop.url.replace("https://", "").replace("http://", "").split("/")[0] %}
@@ -155,6 +238,28 @@
       </tbody>
     </table>
   </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <nav class="pagination" aria-label="ページナビゲーション">
+    {% if page > 1 %}
+    <a href="/?{{ filter_qs }}&sort={{ selected_sort }}&page={{ page - 1 }}"
+       class="btn btn--ghost btn--sm" aria-label="前のページ">← 前へ</a>
+    {% else %}
+    <span class="btn btn--ghost btn--sm pagination__disabled" aria-disabled="true">← 前へ</span>
+    {% endif %}
+
+    <span class="pagination__info">{{ page }} / {{ total_pages }} ページ</span>
+
+    {% if page < total_pages %}
+    <a href="/?{{ filter_qs }}&sort={{ selected_sort }}&page={{ page + 1 }}"
+       class="btn btn--ghost btn--sm" aria-label="次のページ">次へ →</a>
+    {% else %}
+    <span class="btn btn--ghost btn--sm pagination__disabled" aria-disabled="true">次へ →</span>
+    {% endif %}
+  </nav>
+  {% endif %}
+
   {% endif %}
 </section>
 {% endblock %}

@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+
+{% block title %}{{ shop.shop_name }} — Meshi Archive{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <a href="/" class="back-link">← 一覧に戻る</a>
+    <h1 class="page-title">{{ shop.shop_name }}</h1>
+    {% if shop.area or shop.category %}
+    <p class="page-subtitle">
+      {% if shop.area %}📍 {{ shop.area }}{% endif %}
+      {% if shop.area and shop.category %} &nbsp;|&nbsp; {% endif %}
+      {% if shop.category %}<span class="category-tag">{{ shop.category }}</span>{% endif %}
+    </p>
+    {% endif %}
+  </div>
+  {% if discord_url %}
+  <a href="{{ discord_url }}" target="_blank" rel="noopener noreferrer"
+     class="btn btn--ghost btn--sm" aria-label="Discord の元メッセージを開く">
+    Discord で元メッセージを開く ↗
+  </a>
+  {% endif %}
+</div>
+
+{% if saved %}
+<div class="alert alert--success" role="status">
+  <span class="alert__icon" aria-hidden="true">✓</span>
+  保存しました。
+</div>
+{% endif %}
+
+<!-- Edit form -->
+<div class="card">
+  <h2 class="card__title">店舗情報の編集</h2>
+
+  <form method="post" action="/shop/{{ shop.id }}/edit" novalidate>
+
+    <div class="edit-grid">
+
+      <div class="form-group">
+        <label for="shop-name" class="form-label">店名 <span class="form-label__required">*</span></label>
+        <input id="shop-name" type="text" name="shop_name"
+               class="form-input" value="{{ shop.shop_name }}" required>
+      </div>
+
+      <div class="form-group">
+        <label for="shop-area" class="form-label">エリア</label>
+        <input id="shop-area" type="text" name="area"
+               class="form-input" value="{{ shop.area or '' }}"
+               placeholder="例: 渋谷、新宿">
+      </div>
+
+      <div class="form-group">
+        <label for="shop-category" class="form-label">カテゴリ</label>
+        <select id="shop-category" name="category" class="form-select">
+          <option value="">— 未設定 —</option>
+          {% for cat in all_categories %}
+          <option value="{{ cat }}" {% if shop.category == cat %}selected{% endif %}>
+            {{ cat }}
+          </option>
+          {% endfor %}
+          {% if shop.category and shop.category not in all_categories %}
+          <option value="{{ shop.category }}" selected>{{ shop.category }}</option>
+          {% endif %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="shop-url" class="form-label">URL</label>
+        <input id="shop-url" type="url" name="url"
+               class="form-input" value="{{ shop.url or '' }}"
+               placeholder="https://...">
+      </div>
+
+      <!-- Rating -->
+      <div class="form-group">
+        <label for="shop-rating" class="form-label">評価</label>
+        <select id="shop-rating" name="rating" class="form-select form-select--rating">
+          <option value="">— 未評価 —</option>
+          {% for i in range(1, 6) %}
+          <option value="{{ i }}" {% if shop.rating == i %}selected{% endif %}>
+            {{ "★" * i }}{{ "☆" * (5 - i) }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Visit status -->
+      <div class="form-group">
+        <span class="form-label">訪問状況</span>
+        <div class="visit-status-row">
+          <label class="checkbox-label">
+            <input type="checkbox" name="is_visited" value="on"
+                   {% if shop.is_visited %}checked{% endif %}>
+            訪問済み
+          </label>
+          <div class="form-group form-group--inline">
+            <label for="shop-visited-at" class="form-label">訪問日</label>
+            <input id="shop-visited-at" type="date" name="visited_at"
+                   class="form-input form-input--date"
+                   value="{{ shop.visited_at.strftime('%Y-%m-%d') if shop.visited_at else '' }}">
+          </div>
+        </div>
+      </div>
+
+      <!-- Memo -->
+      <div class="form-group form-group--full">
+        <label for="shop-memo" class="form-label">メモ</label>
+        <textarea id="shop-memo" name="memo"
+                  class="form-textarea" rows="3"
+                  placeholder="例: 予約必須、行列あり、閉店した">{{ shop.memo or '' }}</textarea>
+      </div>
+
+    </div><!-- /.edit-grid -->
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn--primary">保存する</button>
+      <a href="/" class="btn btn--ghost">キャンセル</a>
+    </div>
+
+  </form>
+</div>
+
+<!-- Metadata card -->
+<div class="card card--meta">
+  <h2 class="card__title">メタ情報</h2>
+  <dl class="meta-list">
+    <div class="meta-list__item">
+      <dt>ID</dt>
+      <dd>{{ shop.id }}</dd>
+    </div>
+    <div class="meta-list__item">
+      <dt>登録日時</dt>
+      <dd>{{ shop.created_at.strftime("%Y-%m-%d %H:%M") if shop.created_at else "—" }}</dd>
+    </div>
+    <div class="meta-list__item">
+      <dt>メッセージ ID</dt>
+      <dd>
+        <code class="code">{{ shop.message_id }}</code>
+        {% if discord_url %}
+        <a href="{{ discord_url }}" target="_blank" rel="noopener noreferrer"
+           class="table-link" style="margin-left: 8px;">Discord で開く ↗</a>
+        {% endif %}
+      </dd>
+    </div>
+  </dl>
+</div>
+
+<!-- Danger zone -->
+<div class="card card--danger">
+  <h2 class="card__title card__title--danger">削除</h2>
+  <p class="card__desc">この操作は取り消せません。</p>
+  <form method="post" action="/shop/{{ shop.id }}/delete"
+        onsubmit="return confirm('【{{ shop.shop_name }}】を削除しますか？この操作は取り消せません。')">
+    <button type="submit" class="btn btn--danger btn--sm">この店舗を削除する</button>
+  </form>
+</div>
+
+{% endblock %}

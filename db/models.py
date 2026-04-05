@@ -21,4 +21,7 @@ class Shop(Base):
     category = Column(String, nullable=True)
     url = Column(Text, nullable=True)
     is_visited = Column(Boolean, default=False)
+    visited_at = Column(DateTime(timezone=True), nullable=True)
+    rating = Column(Integer, nullable=True)  # 1-5 stars; null = unrated
+    memo = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
