@@ -30,30 +30,40 @@
 </div>
 {% endif %}
 
-<!-- Edit form -->
+<!-- Edit form — admin only -->
 <div class="card">
-  <h2 class="card__title">店舗情報の編集</h2>
+  <h2 class="card__title">店舗情報{% if is_admin %}の編集{% endif %}</h2>
+
+  {% if not is_admin %}
+  <div class="alert alert--warning" role="note">
+    <span class="alert__icon" aria-hidden="true">🔒</span>
+    編集・削除は管理者のみ可能です。<a href="/admin/login" class="alert__link">管理者ログイン</a>
+  </div>
+  {% endif %}
 
   <form method="post" action="/shop/{{ shop.id }}/edit" novalidate>
 
     <div class="edit-grid">
 
       <div class="form-group">
-        <label for="shop-name" class="form-label">店名 <span class="form-label__required">*</span></label>
+        <label for="shop-name" class="form-label">店名 {% if is_admin %}<span class="form-label__required">*</span>{% endif %}</label>
         <input id="shop-name" type="text" name="shop_name"
-               class="form-input" value="{{ shop.shop_name }}" required>
+               class="form-input" value="{{ shop.shop_name }}"
+               {% if not is_admin %}readonly{% endif %} required>
       </div>
 
       <div class="form-group">
         <label for="shop-area" class="form-label">エリア</label>
         <input id="shop-area" type="text" name="area"
                class="form-input" value="{{ shop.area or '' }}"
-               placeholder="例: 渋谷、新宿">
+               placeholder="例: 渋谷、新宿"
+               {% if not is_admin %}readonly{% endif %}>
       </div>
 
       <div class="form-group">
         <label for="shop-category" class="form-label">カテゴリ</label>
-        <select id="shop-category" name="category" class="form-select">
+        <select id="shop-category" name="category" class="form-select"
+                {% if not is_admin %}disabled{% endif %}>
           <option value="">— 未設定 —</option>
           {% for cat in all_categories %}
           <option value="{{ cat }}" {% if shop.category == cat %}selected{% endif %}>
@@ -70,13 +80,15 @@
         <label for="shop-url" class="form-label">URL</label>
         <input id="shop-url" type="url" name="url"
                class="form-input" value="{{ shop.url or '' }}"
-               placeholder="https://...">
+               placeholder="https://..."
+               {% if not is_admin %}readonly{% endif %}>
       </div>
 
       <!-- Rating -->
       <div class="form-group">
         <label for="shop-rating" class="form-label">評価</label>
-        <select id="shop-rating" name="rating" class="form-select form-select--rating">
+        <select id="shop-rating" name="rating" class="form-select form-select--rating"
+                {% if not is_admin %}disabled{% endif %}>
           <option value="">— 未評価 —</option>
           {% for i in range(1, 6) %}
           <option value="{{ i }}" {% if shop.rating == i %}selected{% endif %}>
@@ -92,14 +104,16 @@
         <div class="visit-status-row">
           <label class="checkbox-label">
             <input type="checkbox" name="is_visited" value="on"
-                   {% if shop.is_visited %}checked{% endif %}>
+                   {% if shop.is_visited %}checked{% endif %}
+                   {% if not is_admin %}disabled{% endif %}>
             訪問済み
           </label>
           <div class="form-group form-group--inline">
             <label for="shop-visited-at" class="form-label">訪問日</label>
             <input id="shop-visited-at" type="date" name="visited_at"
                    class="form-input form-input--date"
-                   value="{{ shop.visited_at.strftime('%Y-%m-%d') if shop.visited_at else '' }}">
+                   value="{{ shop.visited_at.strftime('%Y-%m-%d') if shop.visited_at else '' }}"
+                   {% if not is_admin %}readonly{% endif %}>
           </div>
         </div>
       </div>
@@ -109,15 +123,18 @@
         <label for="shop-memo" class="form-label">メモ</label>
         <textarea id="shop-memo" name="memo"
                   class="form-textarea" rows="3"
-                  placeholder="例: 予約必須、行列あり、閉店した">{{ shop.memo or '' }}</textarea>
+                  placeholder="例: 予約必須、行列あり、閉店した"
+                  {% if not is_admin %}readonly{% endif %}>{{ shop.memo or '' }}</textarea>
       </div>
 
     </div><!-- /.edit-grid -->
 
+    {% if is_admin %}
     <div class="form-actions">
       <button type="submit" class="btn btn--primary">保存する</button>
       <a href="/" class="btn btn--ghost">キャンセル</a>
     </div>
+    {% endif %}
 
   </form>
 </div>
@@ -147,7 +164,8 @@
   </dl>
 </div>
 
-<!-- Danger zone -->
+<!-- Danger zone — admin only -->
+{% if is_admin %}
 <div class="card card--danger">
   <h2 class="card__title card__title--danger">削除</h2>
   <p class="card__desc">この操作は取り消せません。</p>
@@ -156,5 +174,6 @@
     <button type="submit" class="btn btn--danger btn--sm">この店舗を削除する</button>
   </form>
 </div>
+{% endif %}
 
 {% endblock %}

@@ -185,8 +185,9 @@
             {% endif %}
           </td>
 
-          <!-- Interactive star rating -->
+          <!-- Star rating: interactive for admin, static for viewer -->
           <td class="td--rating">
+            {% if is_admin %}
             <span class="star-rating"
                   data-shop-id="{{ shop.id }}"
                   data-rating="{{ shop.rating or 0 }}"
@@ -198,10 +199,18 @@
                       aria-label="{{ i }}星">★</button>
               {% endfor %}
             </span>
+            {% else %}
+            <span class="star-rating star-rating--readonly" aria-label="{{ shop.rating or 0 }}星">
+              {% for i in range(1, 6) %}
+              <span class="star {% if shop.rating and i <= shop.rating %}star--active{% endif %}">★</span>
+              {% endfor %}
+            </span>
+            {% endif %}
           </td>
 
-          <!-- Visited toggle -->
+          <!-- Visited: toggle button for admin, static badge for viewer -->
           <td class="td--visited">
+            {% if is_admin %}
             <button type="button"
                     class="btn-visit-toggle badge {% if shop.is_visited %}badge--visited{% else %}badge--unvisited{% endif %}"
                     data-shop-id="{{ shop.id }}"
@@ -209,6 +218,12 @@
                     title="{{ '訪問日: ' ~ shop.visited_at.strftime('%Y-%m-%d') if shop.visited_at else '未訪問' }}">
               {% if shop.is_visited %}訪問済み{% else %}未訪問{% endif %}
             </button>
+            {% else %}
+            <span class="badge {% if shop.is_visited %}badge--visited{% else %}badge--unvisited{% endif %}"
+                  title="{{ '訪問日: ' ~ shop.visited_at.strftime('%Y-%m-%d') if shop.visited_at else '未訪問' }}">
+              {% if shop.is_visited %}訪問済み{% else %}未訪問{% endif %}
+            </span>
+            {% endif %}
           </td>
 
           <!-- Registered date -->

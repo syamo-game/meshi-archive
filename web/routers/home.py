@@ -40,6 +40,11 @@ def _is_authenticated(request: Request) -> bool:
     return bool(request.session.get("authenticated"))
 
 
+def _is_admin(request: Request) -> bool:
+    """Admin session is set by /admin/login (separate from web viewer login)."""
+    return bool(request.session.get("admin_authenticated"))
+
+
 def _discord_base_url() -> Optional[str]:
     """Return base URL for Discord message jump links, or None if env vars are absent."""
     if DISCORD_GUILD_ID and DISCORD_CHANNEL_ID:
@@ -146,6 +151,7 @@ def home(
             "total": total,
             "filter_qs": filter_qs,
             "discord_base_url": _discord_base_url(),
+            "is_admin": _is_admin(request),
         },
     )
 
@@ -180,6 +186,7 @@ def shop_detail(
             "all_categories": _get_categories(db),
             "discord_url": discord_url,
             "saved": saved,
+            "is_admin": _is_admin(request),
         },
     )
 
@@ -198,8 +205,8 @@ def shop_edit(
     visited_at: Optional[str] = Form(None),
     db: Session = Depends(get_db),
 ):
-    if not _is_authenticated(request):
-        return RedirectResponse("/login", status_code=302)
+    if not _is_admin(request):
+        return RedirectResponse("/admin/login", status_code=302)
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
@@ -239,8 +246,8 @@ def shop_delete(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    if not _is_authenticated(request):
-        return RedirectResponse("/login", status_code=302)
+    if not _is_admin(request):
+        return RedirectResponse("/admin/login", status_code=302)
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         raise HTTPException(status_code=404, detail="Shop not found")
@@ -260,8 +267,8 @@ def toggle_visited(
     db: Session = Depends(get_db),
 ):
     """Toggle is_visited. Sets visited_at to now on first visit; clears on unvisit."""
-    if not _is_authenticated(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    if not _is_admin(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
     shop = db.query(Shop).filter(Shop.id == shop_id).first()
     if not shop:
         return JSONResponse({"error": "not found"}, status_code=404)
@@ -287,8 +294,8 @@ async def set_rating(
     db: Session = Depends(get_db),
 ):
     """Set rating (1-5) or clear it (0). Called via fetch with JSON body."""
-    if not _is_authenticated(request):
-        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    if not _is_admin(request):
+        return JSONResponse({"error": "forbidden"}, status_code=403)
 
     body = await request.json()
     try:
