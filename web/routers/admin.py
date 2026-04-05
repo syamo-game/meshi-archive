@@ -86,11 +86,11 @@ def _parse_timestamp(val: str) -> Optional[datetime]:
 def admin_home(request: Request):
     if not ADMIN_PASSWORD:
         return templates.TemplateResponse(
-            "admin.html", {"request": request, "disabled": True}
+            request=request, name="admin.html", context={"disabled": True}
         )
     if not _is_admin(request):
         return RedirectResponse("/admin/login", status_code=302)
-    return templates.TemplateResponse("admin.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="admin.html", context={})
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +104,7 @@ def admin_login_page(request: Request):
     if _is_admin(request):
         return RedirectResponse("/admin", status_code=302)
     return templates.TemplateResponse(
-        "admin_login.html", {"request": request, "error": None}
+        request=request, name="admin_login.html", context={"error": None}
     )
 
 
@@ -114,8 +114,9 @@ def admin_login(request: Request, password: str = Form(...)):
         request.session["admin_authenticated"] = True
         return RedirectResponse("/admin", status_code=302)
     return templates.TemplateResponse(
-        "admin_login.html",
-        {"request": request, "error": "パスワードが正しくありません。"},
+        request=request,
+        name="admin_login.html",
+        context={"error": "パスワードが正しくありません。"},
         status_code=401,
     )
 
@@ -246,6 +247,7 @@ async def import_csv(
             errors.append("CSV ファイルの読み込みに失敗しました。ファイル形式を確認してください。")
 
     return templates.TemplateResponse(
-        "admin.html",
-        {"request": request, "errors": errors, "result": result},
+        request=request,
+        name="admin.html",
+        context={"errors": errors, "result": result},
     )

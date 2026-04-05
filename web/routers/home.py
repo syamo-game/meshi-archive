@@ -77,9 +77,9 @@ def home(
     shops = _build_shop_query(db, area, status, q).all()
 
     return templates.TemplateResponse(
-        "home.html",
-        {
-            "request": request,
+        request=request,
+        name="home.html",
+        context={
             "shops": shops,
             "all_areas": areas,
             "selected_area": area or "",
@@ -99,7 +99,7 @@ def login_page(request: Request):
         return RedirectResponse("/", status_code=302)
     if _is_authenticated(request):
         return RedirectResponse("/", status_code=302)
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request=request, name="login.html", context={"error": None})
 
 
 @router.post("/login")
@@ -108,8 +108,9 @@ def login(request: Request, password: str = Form(...)):
         request.session["authenticated"] = True
         return RedirectResponse("/", status_code=302)
     return templates.TemplateResponse(
-        "login.html",
-        {"request": request, "error": "パスワードが正しくありません。"},
+        request=request,
+        name="login.html",
+        context={"error": "パスワードが正しくありません。"},
         status_code=401,
     )
 
