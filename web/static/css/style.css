@@ -356,11 +356,12 @@ img, svg {
   box-shadow: var(--shadow-sm);
 }
 
+/* Grid layout: 店名(2fr) / エリア(1.5fr) / カテゴリ(1.5fr) / 訪問状況(auto) */
 .filter-form__fields {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 1.5fr auto;
   gap: var(--space-4);
-  align-items: flex-end;
+  align-items: end;
 }
 
 .filter-form__actions {
@@ -762,21 +763,50 @@ img, svg {
 }
 
 /* --------------------------------------------------------------------------
-   Responsive — mobile
+   Responsive — tablet and below (≤768px)
+   -------------------------------------------------------------------------- */
+@media (max-width: 768px) {
+  /* Filter: switch from grid to single column */
+  .filter-form__fields {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  .form-group,
+  .form-fieldset {
+    width: 100%;
+  }
+
+  .form-select,
+  .form-input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .filter-form__actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-2);
+  }
+
+  .filter-form__actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Responsive — mobile only (≤640px)
    -------------------------------------------------------------------------- */
 @media (max-width: 640px) {
   .container {
     padding-inline: var(--space-4);
   }
 
-  .filter-form__fields {
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .filter-form__actions {
-    flex-direction: column;
-    align-items: stretch;
+  .filter-section {
+    padding: var(--space-4);
   }
 
   .page-header {
@@ -787,6 +817,26 @@ img, svg {
   .result-bar {
     flex-direction: column;
     align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  /* Table — tighter on small screens */
+  .data-table {
+    font-size: var(--font-size-xs);
+  }
+
+  .data-table th,
+  .data-table td {
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .category-tag {
+    font-size: 10px;
+  }
+
+  .badge {
+    font-size: 10px;
+    padding: 2px var(--space-2);
   }
 
   .auth-card {
