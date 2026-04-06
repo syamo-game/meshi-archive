@@ -106,13 +106,11 @@ def home(
     q: Optional[str] = None,
     category: Optional[str] = None,
     sort: str = "created_at_desc",
-    page: int = 1,
     db: Session = Depends(get_db),
 ):
     if not _is_authenticated(request):
         return RedirectResponse("/login", status_code=302)
 
-    page = max(1, page)
     areas = sorted(
         a[0]
         for a in db.query(Shop.area).filter(Shop.area.isnot(None)).distinct().all()
@@ -122,11 +120,11 @@ def home(
 
     base_q = _build_shop_query(db, area, status, q, category, sort)
     total = base_q.count()
-    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
-    page = min(page, total_pages)
-    shops = base_q.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
+    # Always render first page; subsequent pages are loaded via /api/shops
+    shops = base_q.limit(PER_PAGE).all()
+    has_more = total > PER_PAGE
 
-    # Pre-build filter query string so templates can construct sort/page links cleanly
+    # Pre-build filter query string so templates can construct sort/CSV links cleanly
     filter_qs = urlencode({
         "q": q or "",
         "area": area or "",
@@ -146,14 +144,45 @@ def home(
             "selected_q": q or "",
             "selected_category": category or "",
             "selected_sort": sort,
-            "page": page,
-            "total_pages": total_pages,
             "total": total,
+            "has_more": has_more,
             "filter_qs": filter_qs,
             "discord_base_url": _discord_base_url(),
             "is_admin": _is_admin(request),
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Infinite scroll API — returns rendered HTML rows for subsequent pages
+# ---------------------------------------------------------------------------
+
+@router.get("/api/shops")
+def api_shops(
+    request: Request,
+    area: Optional[str] = None,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
+    category: Optional[str] = None,
+    sort: str = "created_at_desc",
+    page: int = 2,
+    db: Session = Depends(get_db),
+):
+    if not _is_authenticated(request):
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    page = max(2, page)  # page 1 is always server-rendered; API starts at 2
+    base_q = _build_shop_query(db, area, status, q, category, sort)
+    total = base_q.count()
+    shops = base_q.offset((page - 1) * PER_PAGE).limit(PER_PAGE).all()
+    has_more = page * PER_PAGE < total
+
+    html = templates.env.get_template("_shop_rows.html").render(
+        shops=shops,
+        is_admin=_is_admin(request),
+        discord_base_url=_discord_base_url(),
+    )
+    return JSONResponse({"html": html, "has_more": has_more, "next_page": page + 1})
 
 
 # ---------------------------------------------------------------------------
