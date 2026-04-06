@@ -117,7 +117,7 @@
           <!-- Sortable column headers -->
           {% set sn = "name_desc" if selected_sort == "name_asc" else "name_asc" %}
           <th scope="col">
-            <a href="/?{{ filter_qs }}&sort={{ sn }}&page=1" class="sort-link
+            <a href="/?{{ filter_qs }}&sort={{ sn }}" class="sort-link
               {% if selected_sort in ('name_asc','name_desc') %} sort-link--active{% endif %}">
               店名
               {% if selected_sort == "name_asc" %}↑{% elif selected_sort == "name_desc" %}↓{% endif %}
@@ -126,7 +126,7 @@
 
           {% set sa = "area_asc" %}
           <th scope="col">
-            <a href="/?{{ filter_qs }}&sort={{ sa }}&page=1" class="sort-link
+            <a href="/?{{ filter_qs }}&sort={{ sa }}" class="sort-link
               {% if selected_sort == 'area_asc' %} sort-link--active{% endif %}">
               エリア
               {% if selected_sort == "area_asc" %}↑{% endif %}
@@ -137,7 +137,7 @@
 
           {% set sr = "rating_asc" if selected_sort == "rating_desc" else "rating_desc" %}
           <th scope="col">
-            <a href="/?{{ filter_qs }}&sort={{ sr }}&page=1" class="sort-link
+            <a href="/?{{ filter_qs }}&sort={{ sr }}" class="sort-link
               {% if selected_sort in ('rating_desc','rating_asc') %} sort-link--active{% endif %}">
               評価
               {% if selected_sort == "rating_desc" %}↓{% elif selected_sort == "rating_asc" %}↑{% endif %}
@@ -148,7 +148,7 @@
 
           {% set sd = "created_at_asc" if selected_sort == "created_at_desc" else "created_at_desc" %}
           <th scope="col">
-            <a href="/?{{ filter_qs }}&sort={{ sd }}&page=1" class="sort-link
+            <a href="/?{{ filter_qs }}&sort={{ sd }}" class="sort-link
               {% if selected_sort in ('created_at_desc','created_at_asc') %} sort-link--active{% endif %}">
               登録日
               {% if selected_sort == "created_at_desc" %}↓{% elif selected_sort == "created_at_asc" %}↑{% endif %}
