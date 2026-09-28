@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}飲食店一覧 — Meshi Archive{% endblock %}
+
+{% block content %}
+<header class="list-header">
+  <p class="eyebrow">MESHI ARCHIVE</p>
+  <h1 class="page-title">飲食店一覧</h1>
+</header>
+
+<section class="filter-section" aria-labelledby="filter-heading">
+  <h2 id="filter-heading" class="visually-hidden">絞り込み</h2>
+  {% set advanced_count = (1 if selected_category else 0) + (1 if selected_status else 0) + (1 if selected_sort != 'name_asc' else 0) %}
+  {% set filter_active_count = (1 if selected_q else 0) + (1 if selected_area else 0) + advanced_count %}
+  <details class="filter-disclosure" data-filter-disclosure data-active-count="{{ filter_active_count }}" open>
+    <summary class="filter-disclosure__summary">
+      <span>絞り込み</span>
+      {% if filter_active_count %}<span>適用中 {{ filter_active_count }}件</span>{% endif %}
+    </summary>
+    <div class="filter-disclosure__body">
+    <form id="filter-form" method="get" action="/" class="filter-form">
+    <div class="filter-form__primary">
+      <div class="form-group">
+        <label for="q-input" class="form-label">店名</label>
+        <input id="q-input" type="search" name="q" class="form-input"
+               placeholder="店名で検索"
+               value="{{ selected_q }}"
+               autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label for="area-select" class="form-label">エリア</label>
+        <select id="area-select" name="area" class="form-select">
+          <option value="">すべてのエリア</option>
+          {% if none_count > 0 or selected_area == "__none__" %}
+          <option value="__none__"{% if selected_area == "__none__" %} selected{% endif %}>
+            エリア未設定 ({{ none_count }})
+          </option>
+          {% endif %}
+          {% if selected_area and selected_area != "__none__" and selected_area not in all_areas %}
+          <option value="{{ selected_area }}" selected>{{ selected_area }} (0)</option>
+          {% endif %}
+          {% for group_label, areas in grouped_areas %}
+          <optgroup label="{{ group_label }}">
+            {% for area, count in areas %}
+            <option value="{{ area }}"{% if area == selected_area %} selected{% endif %}>
+              {{ area }} ({{ count }})
+            </option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <details class="filter-form__advanced" data-active-count="{{ advanced_count }}" open>
+      <summary class="filter-form__advanced-summary">
+        詳細条件{% if advanced_count %}（{{ advanced_count }}件）{% endif %}
+      </summary>
+      <div class="filter-form__advanced-fields">
+        <div class="form-group">
+          <label for="category-select" class="form-label">カテゴリ</label>
+          <select id="category-select" name="category" class="form-select">
+            <option value="">すべてのカテゴリ</option>
+            {% if selected_category and selected_category not in all_categories %}
+            <option value="{{ selected_category }}" selected>{{ selected_category }} (0)</option>
+            {% endif %}
+            {% for cat in all_categories %}
+            <option value="{{ cat }}"{% if cat == selected_category %} selected{% endif %}>
+              {{ cat }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <fieldset class="form-group form-fieldset">
+          <legend class="form-label">訪問状況</legend>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="status" value=""{% if selected_status == "" %} checked{% endif %}>
+              すべて
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="status" value="unvisited"{% if selected_status == "unvisited" %} checked{% endif %}>
+              未訪問
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="status" value="visited"{% if selected_status == "visited" %} checked{% endif %}>
+              訪問済み
+            </label>
+          </div>
+        </fieldset>
+
+        <div class="form-group filter-form__mobile-sort">
+          <label for="mobile-sort-select" class="form-label">並び順</label>
+          <select id="mobile-sort-select" name="sort" class="form-select">
+            <option value="name_asc"{% if selected_sort == "name_asc" %} selected{% endif %}>店名（昇順）</option>
+            <option value="name_desc"{% if selected_sort == "name_desc" %} selected{% endif %}>店名（降順）</option>
+            <option value="area_asc"{% if selected_sort == "area_asc" %} selected{% endif %}>エリア（昇順）</option>
+            <option value="area_desc"{% if selected_sort == "area_desc" %} selected{% endif %}>エリア（降順）</option>
+            <option value="rating_desc"{% if selected_sort == "rating_desc" %} selected{% endif %}>評価（高い順）</option>
+            <option value="rating_asc"{% if selected_sort == "rating_asc" %} selected{% endif %}>評価（低い順）</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <div class="filter-form__actions">
+      <button type="submit" class="btn btn--primary">この条件で表示</button>
+      {% if selected_area or selected_status or selected_q or selected_category or selected_sort != 'name_asc' %}
+      <a href="/?sort=name_asc" class="btn btn--ghost" data-result-navigation>すべて解除</a>
+      {% endif %}
+    </div>
+
+    {% if active_filters %}
+    <div class="active-filters" aria-label="適用中の絞り込み条件">
+      <span class="active-filters__label">適用中</span>
+      <ul class="active-filters__list">
+        {% for item in active_filters %}
+        <li>
+          <a href="{{ item.remove_url }}#q-input" class="filter-chip"
+             aria-label="{{ item.label }}の条件を解除">
+            {{ item.label }} <span aria-hidden="true">×</span>
+          </a>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% endif %}
+    </form>
+    </div>
+  </details>
+</section>
+
+<section id="search-results" aria-labelledby="result-heading" aria-busy="false">
+  <div class="result-bar">
+    <div>
+      <h2 id="result-heading" class="result-heading" tabindex="-1">検索結果</h2>
+      <p class="result-count">
+        {% if total %}
+        <strong>{{ total }}</strong>件中 <span>{{ page_start }}–{{ page_end }}件を表示</span>
+        {% else %}
+        <strong>0</strong>件
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <p id="result-status" class="visually-hidden" role="status" aria-live="polite"></p>
+
+  {% if total == 0 %}
+  <div class="empty-state" role="status">
+    <p class="empty-state__title">条件に一致する飲食店はありません</p>
+    <p>店名やエリアを変えて、もう一度お試しください。</p>
+    <p><a href="/?sort={{ selected_sort }}" class="btn btn--secondary" data-result-navigation>条件を解除</a></p>
+  </div>
+  {% else %}
+  <div class="table-wrapper" tabindex="0" role="region" aria-label="飲食店一覧">
+    <table class="data-table{% if is_admin %} data-table--admin{% endif %}">
+      <caption class="visually-hidden">飲食店一覧。{{ total }}件中{{ page_start }}件目から{{ page_end }}件目。</caption>
+      <colgroup>
+        <col class="col--name">
+        <col class="col--area">
+        <col class="col--category">
+        <col class="col--rating">
+        <col class="col--visited">
+      </colgroup>
+      <thead>
+        <tr>
+          {% set sn = "name_desc" if selected_sort == "name_asc" else "name_asc" %}
+          <th id="column-name" scope="col"
+              aria-label="店名。{% if selected_sort == 'name_asc' %}昇順{% elif selected_sort == 'name_desc' %}降順{% else %}並び替えなし{% endif %}"
+              aria-sort="{% if selected_sort == 'name_asc' %}ascending{% elif selected_sort == 'name_desc' %}descending{% else %}none{% endif %}">
+            <a href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ sn }}"
+               class="sort-link{% if selected_sort in ('name_asc','name_desc') %} sort-link--active{% endif %}"
+               aria-label="店名を{% if sn == 'name_asc' %}昇順{% else %}降順{% endif %}に並び替え">
+              店名
+              {% if selected_sort == "name_asc" %}<span aria-hidden="true">↑</span>{% elif selected_sort == "name_desc" %}<span aria-hidden="true">↓</span>{% endif %}
+            </a>
+          </th>
+
+          {% set sa = "area_asc" if selected_sort == "area_desc" else "area_desc" %}
+          <th id="column-area" scope="col"
+              aria-label="エリア。{% if selected_sort == 'area_asc' %}昇順{% elif selected_sort == 'area_desc' %}降順{% else %}並び替えなし{% endif %}"
+              aria-sort="{% if selected_sort == 'area_asc' %}ascending{% elif selected_sort == 'area_desc' %}descending{% else %}none{% endif %}">
+            <a href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ sa }}"
+               class="sort-link{% if selected_sort in ('area_asc','area_desc') %} sort-link--active{% endif %}"
+               aria-label="エリアを{% if sa == 'area_asc' %}昇順{% else %}降順{% endif %}に並び替え">
+              エリア
+              {% if selected_sort == "area_asc" %}<span aria-hidden="true">↑</span>{% elif selected_sort == "area_desc" %}<span aria-hidden="true">↓</span>{% endif %}
+            </a>
+          </th>
+
+          <th id="column-category" scope="col">カテゴリ</th>
+
+          {% set sr = "rating_asc" if selected_sort == "rating_desc" else "rating_desc" %}
+          <th id="column-rating" scope="col"
+              aria-label="評価。{% if selected_sort == 'rating_asc' %}昇順{% elif selected_sort == 'rating_desc' %}降順{% else %}並び替えなし{% endif %}"
+              aria-sort="{% if selected_sort == 'rating_asc' %}ascending{% elif selected_sort == 'rating_desc' %}descending{% else %}none{% endif %}">
+            <a href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ sr }}"
+               class="sort-link{% if selected_sort in ('rating_desc','rating_asc') %} sort-link--active{% endif %}"
+               aria-label="評価を{% if sr == 'rating_asc' %}昇順{% else %}降順{% endif %}に並び替え">
+              評価
+              {% if selected_sort == "rating_desc" %}<span aria-hidden="true">↓</span>{% elif selected_sort == "rating_asc" %}<span aria-hidden="true">↑</span>{% endif %}
+            </a>
+          </th>
+
+          <th id="column-visited" scope="col">訪問</th>
+
+        </tr>
+      </thead>
+      <tbody id="shop-tbody">
+        {% include "_shop_rows.html" %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if total_pages > 1 %}
+  <nav class="pagination" aria-label="検索結果のページ">
+    <a class="pagination__control{% if not has_previous %} is-disabled{% endif %}"
+       {% if has_previous %}href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ selected_sort }}&amp;page={{ previous_page }}"{% else %}aria-disabled="true" tabindex="-1"{% endif %}>
+      <span aria-hidden="true">←</span> 前へ
+    </a>
+
+    <div class="pagination__pages">
+      {% set pager = namespace(last=0) %}
+      {% for page_number in range(1, total_pages + 1) %}
+        {% if page_number == 1 or page_number == total_pages or (page_number >= current_page - 2 and page_number <= current_page + 2) %}
+          {% if pager.last and page_number - pager.last > 1 %}
+          <span class="pagination__ellipsis" aria-hidden="true">…</span>
+          {% endif %}
+          {% if page_number == current_page %}
+          <span class="pagination__page is-current" aria-current="page" aria-label="{{ page_number }}ページ目">{{ page_number }}</span>
+          {% else %}
+          <a class="pagination__page"
+             href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ selected_sort }}&amp;page={{ page_number }}"
+             aria-label="{{ page_number }}ページ目へ移動">{{ page_number }}</a>
+          {% endif %}
+          {% set pager.last = page_number %}
+        {% endif %}
+      {% endfor %}
+    </div>
+
+    <span class="pagination__mobile-status" aria-live="polite">{{ current_page }} / {{ total_pages }}ページ</span>
+
+    <a class="pagination__control{% if not has_next %} is-disabled{% endif %}"
+       {% if has_next %}href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ selected_sort }}&amp;page={{ next_page }}"{% else %}aria-disabled="true" tabindex="-1"{% endif %}>
+      次へ <span aria-hidden="true">→</span>
+    </a>
+  </nav>
+  {% endif %}
+  {% endif %}
+</section>
+
+<dialog id="shop-detail-dialog" class="detail-dialog" aria-labelledby="detail-dialog-title">
+  <div class="detail-dialog__panel">
+    <header class="detail-dialog__header">
+      <p class="eyebrow">SHOP DETAIL</p>
+      <h2 id="detail-dialog-title" class="detail-dialog__title">店舗詳細</h2>
+      <button type="button" class="icon-button detail-dialog__close" data-dialog-close
+              aria-label="詳細を閉じる">×</button>
+    </header>
+    <p id="detail-dialog-status" class="visually-hidden" role="status" aria-live="polite"></p>
+    <div id="detail-dialog-body" class="detail-dialog__body"></div>
+    <footer class="detail-dialog__footer">
+      <button type="button" class="btn btn--secondary" data-dialog-close>閉じる</button>
+    </footer>
+  </div>
+</dialog>
+{% endblock %}

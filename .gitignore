@@ -1,0 +1,39 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environments
+venv/
+env/
+.env
+.env.*
+!.env.example
+.venv
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+db_data/
+.shop-image-cache/
+
+# Local operational data
+.local/
+*.csv
+!web/data/municipalities.csv
+!web/data/tokyo_stations.csv
+*.log
+*.dump
+HANDOFF.md
+.claude/
+.tmp*
+.pytest-tmp*
+.pytest_tmp*
+.pytest_cache/
+.codex/
+.agents/
+
+# OS specific
+.DS_Store
+Thumbs.db

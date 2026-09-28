@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: meshi-archive
+
+jobs:
+  lint-build:
+    name: Test & build (Docker)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: meshi_archive_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d meshi_archive_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Scan Git history for secrets
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo --redact=100 --no-banner \
+            --config /repo/.gitleaks.toml
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0
+        with:
+          context: .
+          target: test
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:ci
+
+      - name: Run tests
+        run: |
+          docker run --rm --network host \
+            -e TEST_POSTGRES_URL="postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/meshi_archive_test" \
+            -e ALLOW_DESTRUCTIVE_POSTGRES_MIGRATION_TEST=1 \
+            "$IMAGE_NAME:ci" python -m pytest -q
+
+      - name: Audit installed runtime dependencies
+        run: |
+          docker run --rm "$IMAGE_NAME:ci" python -m pip list --format=freeze > runtime-packages.txt
+          python -m venv "$RUNNER_TEMP/dependency-audit"
+          "$RUNNER_TEMP/dependency-audit/bin/python" -m pip install pip-audit==2.10.1
+          "$RUNNER_TEMP/dependency-audit/bin/pip-audit" --disable-pip --no-deps -r runtime-packages.txt

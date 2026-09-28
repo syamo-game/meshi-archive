@@ -1,0 +1,138 @@
+{% from "_link_icons.html" import map_pin, reference_link %}
+{% set links = shop_links[shop.id] %}
+<article class="detail-summary place-detail d-flex flex-column gap-4" data-shop-detail-content>
+  <header class="place-detail__header d-flex flex-column gap-2">
+    <div class="place-detail__heading" data-detail-title-group>
+      <h1 class="place-detail__title h4 fw-bold mb-0" data-detail-title>{{ shop.shop_name }}</h1>
+      {% if shop.branch_name %}<p class="place-detail__branch text-body-secondary mb-0">{{ shop.branch_name }}</p>{% endif %}
+    </div>
+    <p class="place-detail__location small mb-0">
+      {% if shop.area %}
+        {% set ward = area_ward(shop.area) %}
+        {% if ward %}<span>{{ ward }}</span><span aria-hidden="true">・</span>{% endif %}
+        <span>{{ area_display_label(shop.area) }}</span>
+      {% else %}
+        <span class="text-muted">エリア未設定</span>
+      {% endif %}
+      {% if shop.category %}<span aria-hidden="true">／</span><span>{{ shop.category }}</span>{% endif %}
+    </p>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <div class="place-detail__state d-flex flex-wrap align-items-center gap-2" aria-label="自分の記録">
+        <span class="place-status{% if shop.is_visited %} place-status--visited{% else %} place-status--unvisited{% endif %}">
+          {% if shop.is_visited %}<span aria-hidden="true">✓</span> 訪問済み{% else %}未訪問{% endif %}
+        </span>
+        <span class="star-rating star-rating--readonly place-detail__rating{% if not shop.rating %} star-rating--empty{% endif %}" role="img"
+              aria-label="{% if shop.rating %}評価 {{ shop.rating }}点／5点{% else %}未評価{% endif %}">
+          {% for i in range(1, 6) %}
+          <span class="star{% if shop.rating and i <= shop.rating %} star--active{% endif %}" aria-hidden="true">★</span>
+          {% endfor %}
+        </span>
+        {% if shop.needs_review and is_admin %}
+        <span class="place-status place-status--review">データ確認</span>
+        {% endif %}
+      </div>
+      {% if is_admin %}
+      <a href="/shop/{{ shop.id }}?edit=true&amp;return_to={{ return_to|urlencode }}#shop-edit"
+         class="place-detail__admin-action btn btn-sm btn-outline-secondary ms-auto" data-full-detail-link>店舗情報を編集</a>
+      {% endif %}
+    </div>
+  </header>
+
+  {% if links.image_url %}
+  <figure class="place-detail__photo m-0">
+    <a href="{{ links.image_url }}" target="_blank" rel="noopener noreferrer"
+       class="place-detail__photo-link d-block link-secondary link-offset-2"
+       aria-label="{{ shop.shop_name }}{% if shop.branch_name %} {{ shop.branch_name }}{% endif %}の写真を拡大（新しいタブで開きます）">
+      <img src="{{ links.image_url }}" width="960" height="540"
+           class="place-detail__image" decoding="async" referrerpolicy="no-referrer"
+           alt="{{ shop.shop_name }}{% if shop.branch_name %} {{ shop.branch_name }}{% endif %}の写真">
+      <span class="d-inline-block mt-2">写真を拡大<span class="visually-hidden">（新しいタブで開きます）</span></span>
+    </a>
+  </figure>
+  {% endif %}
+
+  {% if saved %}
+  <div class="alert alert--success alert-success mb-0" role="status">
+    <span class="alert__icon" aria-hidden="true">✓</span>
+    保存しました。
+  </div>
+  {% endif %}
+
+  <section class="place-detail__action-section" aria-labelledby="place-actions-heading">
+    <h2 id="place-actions-heading" class="place-detail__section-title h6 fw-semibold mb-3">場所と保存元</h2>
+    <div class="place-detail__actions d-flex flex-wrap gap-2" role="group" aria-label="店舗リンク">
+      {% if links.source_url and links.source_is_map %}
+      <a href="{{ links.source_url }}" target="_blank" rel="noopener noreferrer"
+         class="place-detail-action place-detail-action--map link-secondary link-offset-2"
+         aria-label="{{ shop.shop_name }}のMap：登録時の地図を開く（新しいタブで開きます）">
+        {{ map_pin() }} Map
+      </a>
+      {% else %}
+      <a href="{{ links.maps_url }}" target="_blank" rel="noopener noreferrer"
+         class="place-detail-action place-detail-action--map link-secondary link-offset-2"
+         aria-label="{{ shop.shop_name }}をGoogle Mapsで検索{% if not shop.address and not shop.area %}。場所情報は未設定です{% endif %}（新しいタブで開きます）">
+        {{ map_pin() }} Map
+      </a>
+      {% if links.source_url %}
+      <a href="{{ links.source_url }}" target="_blank" rel="noopener noreferrer"
+         class="place-detail-action link-secondary link-offset-2"
+         aria-label="{{ shop.shop_name }}の{{ links.source_label }}（新しいタブで開きます）">
+        {{ reference_link() }} {{ links.source_label }}
+        <span class="visually-hidden">（新しいタブで開きます）</span>
+      </a>
+      {% endif %}
+      {% endif %}
+      {% if links.canonical_url %}
+      <a href="{{ links.canonical_url }}" target="_blank" rel="noopener noreferrer"
+         class="place-detail-action link-secondary link-offset-2">
+        {{ reference_link() }} 関連ページを見る
+        <span class="visually-hidden">（新しいタブで開きます）</span>
+      </a>
+      {% endif %}
+      {% if links.discord_url %}
+      <a href="{{ links.discord_url }}" target="_blank" rel="noopener noreferrer"
+         class="place-detail-action link-secondary link-offset-2">
+        {{ reference_link() }} Discordの投稿を見る
+        <span class="visually-hidden">（新しいタブで開きます）</span>
+      </a>
+      {% endif %}
+    </div>
+    {% if not links.source_url and not links.discord_url %}
+    <p class="place-detail__source-note">保存元へのリンクは登録されていません。</p>
+    {% endif %}
+  </section>
+
+  {% if shop.memo %}
+  <section class="place-detail__memo-section" aria-labelledby="place-memo-heading">
+    <h2 id="place-memo-heading" class="place-detail__section-title h6 fw-semibold mb-3">メモ</h2>
+    <p class="place-detail__memo">{{ shop.memo }}</p>
+  </section>
+  {% endif %}
+
+  {% if (shop.is_visited and shop.visited_at) or shop.address or shop.phone %}
+  <section class="place-detail__facts-section" aria-labelledby="place-facts-heading">
+    <h2 id="place-facts-heading" class="place-detail__section-title h6 fw-semibold mb-3">詳細情報</h2>
+    <dl class="place-detail__facts">
+      {% if shop.is_visited and shop.visited_at %}
+      <div>
+        <dt>訪問日</dt>
+        <dd><time datetime="{{ shop.visited_at.isoformat() }}">{{ shop.visited_at.strftime("%Y.%m.%d") }}</time></dd>
+      </div>
+      {% endif %}
+      {% if shop.address %}
+      <div class="place-detail__fact-wide">
+        <dt>住所</dt>
+        <dd>{{ shop.address }}</dd>
+      </div>
+      {% endif %}
+      {% if shop.phone %}
+      <div>
+        <dt>電話番号</dt>
+        <dd>{{ shop.phone }}</dd>
+      </div>
+      {% endif %}
+    </dl>
+  </section>
+  {% endif %}
+
+</article>

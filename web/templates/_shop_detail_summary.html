@@ -1,0 +1,99 @@
+{% set links = shop_links[shop.id] %}
+<article class="detail-summary" data-shop-detail-content>
+  <header class="detail-summary__header">
+    <div>
+      <p class="eyebrow">SHOP DETAIL</p>
+      <h1 class="detail-summary__title" data-detail-title>{{ shop.shop_name }}</h1>
+    </div>
+    <div class="detail-summary__badges" aria-label="店舗の状態">
+      <span class="badge{% if shop.is_visited %} badge--visited{% else %} badge--unvisited{% endif %}">
+        {% if shop.is_visited %}訪問済み{% else %}未訪問{% endif %}
+      </span>
+      {% if shop.needs_review %}
+      <span class="badge badge--review">データ確認</span>
+      {% endif %}
+    </div>
+  </header>
+
+  <div class="detail-summary__links" role="group" aria-label="店舗リンク">
+    <a href="{{ links.maps_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--secondary"
+       aria-label="{{ shop.shop_name }}をGoogle Mapsで検索{% if not shop.address and not shop.area %}。場所情報は未設定です{% endif %}（新しいタブで開きます）">
+      Google Mapsで検索{% if not shop.address and not shop.area %}（場所未設定）{% endif %} <span aria-hidden="true">↗</span><span class="visually-hidden">（新しいタブで開きます）</span>
+    </a>
+    {% if links.source_url %}
+    <a href="{{ links.source_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--secondary">
+      {% if links.source_is_map %}登録元の地図を開く{% else %}出典を見る{% endif %} <span aria-hidden="true">↗</span><span class="visually-hidden">（新しいタブで開きます）</span>
+    </a>
+    {% endif %}
+    {% if links.canonical_url %}
+    <a href="{{ links.canonical_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--secondary">
+      店舗ページ <span aria-hidden="true">↗</span><span class="visually-hidden">（新しいタブで開きます）</span>
+    </a>
+    {% endif %}
+    {% if links.discord_url %}
+    <a href="{{ links.discord_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--secondary">
+      Discord投稿 <span aria-hidden="true">↗</span><span class="visually-hidden">（Discordを新しいタブで開きます）</span>
+    </a>
+    {% endif %}
+    {% if is_admin %}
+    <a href="/shop/{{ shop.id }}?return_to={{ return_to|urlencode }}#shop-edit" class="btn btn--primary" data-full-detail-link>
+      編集画面を開く
+    </a>
+    {% endif %}
+  </div>
+
+  {% if saved %}
+  <div class="alert alert--success" role="status">
+    <span class="alert__icon" aria-hidden="true">✓</span>
+    保存しました。
+  </div>
+  {% endif %}
+
+  <dl class="detail-list">
+    <div class="detail-list__item">
+      <dt>エリア</dt>
+      <dd>
+        {% if shop.area %}
+          {% set ward = area_ward(shop.area) %}
+          {% if ward %}<span class="area-ward">{{ ward }}</span><span aria-hidden="true"> ＞ </span>{% endif %}{{ area_display_label(shop.area) }}
+        {% else %}<span class="text-muted">未設定</span>{% endif %}
+      </dd>
+    </div>
+    <div class="detail-list__item">
+      <dt>カテゴリ</dt>
+      <dd>{% if shop.category %}{{ shop.category }}{% else %}<span class="text-muted">未設定</span>{% endif %}</dd>
+    </div>
+    <div class="detail-list__item">
+      <dt>評価</dt>
+      <dd>
+        {% if shop.rating %}
+        <span class="star-rating star-rating--readonly" aria-label="評価 {{ shop.rating }}点／5点">
+          {% for i in range(1, 6) %}
+          <span class="star{% if i <= shop.rating %} star--active{% endif %}" aria-hidden="true">★</span>
+          {% endfor %}
+        </span>
+        {% else %}<span class="text-muted">未評価</span>{% endif %}
+      </dd>
+    </div>
+    <div class="detail-list__item">
+      <dt>訪問日</dt>
+      <dd>
+        {% if shop.is_visited and shop.visited_at %}<time datetime="{{ shop.visited_at.isoformat() }}">{{ shop.visited_at.strftime("%Y-%m-%d") }}</time>
+        {% else %}<span class="text-muted">未設定</span>{% endif %}
+      </dd>
+    </div>
+    <div class="detail-list__item detail-list__item--wide">
+      <dt>住所</dt>
+      <dd>{{ shop.address or "未設定" }}</dd>
+    </div>
+    <div class="detail-list__item">
+      <dt>電話番号</dt>
+      <dd>{{ shop.phone or "未設定" }}</dd>
+    </div>
+    <div class="detail-list__item detail-list__item--wide">
+      <dt>メモ</dt>
+      <dd class="detail-list__memo">{{ shop.memo or "未設定" }}</dd>
+    </div>
+  </dl>
+
+</article>

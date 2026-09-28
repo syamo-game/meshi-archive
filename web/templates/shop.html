@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}{{ shop.shop_name }} — Meshi Archive{% endblock %}
+{% block body_class %}shop-detail-body{% endblock %}
+
+{% block content %}
+<nav class="detail-page-nav mb-4" aria-label="一覧へ戻る">
+  <a href="{{ return_to }}" class="back-link btn btn-outline-secondary">← 一覧に戻る</a>
+</nav>
+
+{% if is_editing %}
+<header class="shop-edit-header mb-4">
+  <h1 class="h4 fw-bold mb-1">{{ shop.shop_name }}</h1>
+  {% if shop.branch_name %}<p class="text-body-secondary mb-0">{{ shop.branch_name }}</p>{% endif %}
+</header>
+{% else %}
+{% include "_place_detail_summary.html" %}
+{% endif %}
+
+{% if is_admin %}
+<section id="shop-edit" class="card admin-edit-card p-3 p-md-4 my-4" aria-labelledby="shop-edit-heading">
+  <h2 id="shop-edit-heading" class="card__title h5 fw-bold">店舗情報を編集</h2>
+  <p class="card__desc small text-body-secondary">公開される店舗情報を更新します。</p>
+  <form id="shop-edit-form" method="post" action="/shop/{{ shop.id }}/edit" enctype="multipart/form-data" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+
+    <div class="edit-grid row g-3">
+      <div class="form-group col-12 col-md-6">
+        <label for="shop-name" class="form-label">店名 <span class="form-label__required">*</span></label>
+        <input id="shop-name" type="text" name="shop_name"
+               class="form-input form-control{% if edit_errors.shop_name %} is-invalid{% endif %}" value="{{ edit_values.shop_name }}" required
+               {% if edit_errors.shop_name %}aria-invalid="true" aria-describedby="shop-name-error"{% endif %}>
+        <p id="shop-name-error" class="invalid-feedback">{{ edit_errors.shop_name or '' }}</p>
+      </div>
+
+      <div class="form-group col-12 col-md-6">
+        <div id="shop-area-filters" class="mb-2" hidden>
+          <label for="shop-area-prefecture" class="form-label">都道府県で絞る</label>
+          <select id="shop-area-prefecture" class="form-select form-select-sm mb-2">
+            <option value="">全国</option>
+          </select>
+          <label for="shop-area-query" class="form-label">地名で候補を探す</label>
+          <input id="shop-area-query" type="search" class="form-input form-control form-control-sm"
+                 placeholder="市区町村・東京の駅や街" autocomplete="off" aria-controls="shop-area">
+          <p id="shop-area-results" class="small text-body-secondary mt-1 mb-0" role="status"></p>
+        </div>
+        <label for="shop-area" class="form-label">市区町村・エリア</label>
+        <select id="shop-area" name="area" class="form-select form-select-sm{% if edit_errors.area %} is-invalid{% endif %}" aria-describedby="shop-area-help{% if edit_errors.area %} shop-area-error{% endif %}"
+                {% if edit_errors.area %}aria-invalid="true"{% endif %}>
+          <option value="">未設定</option>
+          {% if current_area_outside_master %}
+          <optgroup label="現在のエリア">
+            <option value="{{ edit_values.area }}" selected>{{ edit_values.area }}</option>
+          </optgroup>
+          {% endif %}
+          {% for group_label, areas in grouped_areas %}
+          <optgroup label="{{ group_label }}">
+            {% for area, count in areas %}
+            <option value="{{ area }}"{% if edit_values.area == area %} selected{% endif %}>{{ area_display_label(area) }}</option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+        </select>
+        <p id="shop-area-error" class="invalid-feedback">{{ edit_errors.area or '' }}</p>
+        <p id="shop-area-help" class="small text-body-secondary mt-1 mb-0">全国の市区町村を選べます。東京都は駅・街のエリアも選べます。</p>
+      </div>
+
+      <div class="form-group col-12 col-md-6">
+        <label for="shop-category" class="form-label">カテゴリ</label>
+        <select id="shop-category" name="category" class="form-select form-select-sm">
+          <option value="">未設定</option>
+          {% for cat in all_categories %}
+          <option value="{{ cat }}"{% if edit_values.category == cat %} selected{% endif %}>{{ cat }}</option>
+          {% endfor %}
+          {% if edit_values.category and edit_values.category not in all_categories %}
+          <option value="{{ edit_values.category }}" selected>{{ edit_values.category }}</option>
+          {% endif %}
+        </select>
+      </div>
+
+      <div class="form-group col-12 col-md-6">
+        <label for="shop-url" class="form-label">関連URL</label>
+        <input id="shop-url" type="url" name="url"
+               class="form-input form-control{% if edit_errors.url %} is-invalid{% endif %}" value="{{ edit_values.url }}"
+               {% if edit_errors.url %}aria-invalid="true" aria-describedby="shop-url-error"{% endif %}
+               placeholder="https://example.com/">
+        <p id="shop-url-error" class="invalid-feedback">{{ edit_errors.url or '' }}</p>
+      </div>
+
+      <div class="form-group col-12 col-md-6">
+        <label for="shop-address" class="form-label">住所</label>
+        <input id="shop-address" type="text" name="address"
+               class="form-input form-control" value="{{ edit_values.address }}">
+      </div>
+
+      <div class="form-group col-12 col-md-6">
+        <label for="shop-phone" class="form-label">電話番号</label>
+        <input id="shop-phone" type="tel" name="phone"
+               class="form-input form-control" value="{{ edit_values.phone }}">
+      </div>
+
+      <div class="form-group col-12 col-md-6">
+        <label for="shop-rating" class="form-label">評価</label>
+        <select id="shop-rating" name="rating" class="form-select form-select-sm form-select--rating{% if edit_errors.rating %} is-invalid{% endif %}"
+                {% if edit_errors.rating %}aria-invalid="true" aria-describedby="shop-rating-error"{% endif %}>
+          <option value="">未評価</option>
+          {% if edit_errors.rating %}<option value="{{ edit_values.rating }}" selected>{{ edit_values.rating }}</option>{% endif %}
+          {% for i in range(1, 6) %}
+          <option value="{{ i }}"{% if edit_values.rating == i|string %} selected{% endif %}>
+            {{ "★" * i }}{{ "☆" * (5 - i) }}
+          </option>
+          {% endfor %}
+        </select>
+        <p id="shop-rating-error" class="invalid-feedback">{{ edit_errors.rating or '' }}</p>
+      </div>
+
+      <fieldset class="form-group form-fieldset col-12">
+        <legend class="form-label">訪問状況</legend>
+        <div class="visit-status-row d-flex flex-wrap gap-3 align-items-center">
+          <label class="checkbox-label d-flex gap-2 align-items-center">
+            <input type="checkbox" class="form-check-input mt-0" name="is_visited" value="on"{% if edit_values.is_visited %} checked{% endif %}>
+            訪問済み
+          </label>
+          <div class="form-group form-group--inline">
+            <label for="shop-visited-at" class="form-label">訪問日</label>
+            <input id="shop-visited-at" type="{{ 'text' if edit_errors.visited_at else 'date' }}" name="visited_at"
+                   class="form-input form-input--date form-control{% if edit_errors.visited_at %} is-invalid{% endif %}"
+                   {% if edit_errors.visited_at %}aria-invalid="true" aria-describedby="shop-visited-at-error"{% endif %}
+                   value="{{ edit_values.visited_at }}">
+            <p id="shop-visited-at-error" class="invalid-feedback">{{ edit_errors.visited_at or '' }}</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-group col-12">
+        <div class="col-12 col-md-6">
+          <label for="shop-photo" class="form-label">店舗の写真</label>
+          <input id="shop-photo" type="file" name="photo" accept="image/jpeg,image/png,image/webp"
+                 class="form-control{% if edit_errors.photo %} is-invalid{% endif %}"
+                 aria-describedby="shop-photo-help{% if edit_errors.photo %} shop-photo-error{% endif %}"
+                 {% if edit_errors.photo %}aria-invalid="true"{% endif %}>
+          <p id="shop-photo-error" class="invalid-feedback">{{ edit_errors.photo or '' }}</p>
+          <p id="shop-photo-help" class="form-text">JPEG・PNG・WebP、20MiBまで。保存すると店舗の写真として使われます。</p>
+          <div class="ratio ratio-16x9 bg-body-tertiary rounded overflow-hidden">
+            <img id="shop-photo-preview" class="w-100 h-100 object-fit-cover" alt="店舗の写真のプレビュー"
+                 data-current-src="{{ shop_links[shop.id].image_url or '' }}"
+                 {% if shop_links[shop.id].image_url %}src="{{ shop_links[shop.id].image_url }}"{% else %}hidden{% endif %}>
+            <p id="shop-photo-empty" class="m-0 p-3 small text-body-secondary"{% if shop_links[shop.id].image_url %} hidden{% endif %}>写真は登録されていません。</p>
+          </div>
+          <p id="shop-photo-preview-label" class="form-text mb-0">{% if shop_links[shop.id].image_url %}現在の写真{% else %}写真を選ぶと、保存前に確認できます。{% endif %}</p>
+        </div>
+      </div>
+
+      <div class="form-group form-group--full col-12">
+        <label for="shop-memo" class="form-label">メモ</label>
+        <textarea id="shop-memo" name="memo" class="form-textarea form-control" rows="4"
+                  placeholder="予約や混雑などの補足情報">{{ edit_values.memo }}</textarea>
+      </div>
+    </div>
+
+    <p id="shop-edit-error" class="alert alert-danger mt-3 mb-0" role="alert" tabindex="-1"{% if not edit_errors and not edit_failure %} hidden{% endif %}>{{ edit_failure or ('入力内容を確認してください。変更内容はまだ保存されていません。' if edit_errors else '') }}</p>
+    <div class="form-actions d-flex flex-wrap gap-2 mt-4">
+      <button id="shop-edit-submit" type="submit" class="btn btn--primary btn-primary">保存する</button>
+      <a href="{{ return_to }}" class="btn btn--ghost btn-outline-secondary">キャンセル</a>
+    </div>
+  </form>
+</section>
+
+<section class="card card--meta p-3 p-md-4 my-4" aria-labelledby="shop-meta-heading">
+  <h2 id="shop-meta-heading" class="card__title h5 fw-bold">管理情報</h2>
+  <dl class="meta-list mb-0">
+    <div class="meta-list__item border-bottom py-2">
+      <dt>ID</dt>
+      <dd>{{ shop.id }}</dd>
+    </div>
+    <div class="meta-list__item border-bottom py-2">
+      <dt>メッセージID</dt>
+      <dd><code class="code">{{ shop.message_id }}</code></dd>
+    </div>
+    <div class="meta-list__item border-bottom py-2">
+      <dt>確認状態</dt>
+      <dd>{{ "データ確認が必要" if shop.needs_review else "確認済み" }}</dd>
+    </div>
+    {% if shop.extraction_source %}
+    <div class="meta-list__item border-bottom py-2">
+      <dt>抽出元</dt>
+      <dd>{{ shop.extraction_source }}</dd>
+    </div>
+    {% endif %}
+    {% if shop.confidence_reason %}
+    <div class="meta-list__item border-bottom py-2">
+      <dt>判断理由</dt>
+      <dd>{{ shop.confidence_reason }}</dd>
+    </div>
+    {% endif %}
+    {% if shop.extraction_error %}
+    <div class="meta-list__item border-bottom py-2">
+      <dt>抽出エラー</dt>
+      <dd>{{ shop.extraction_error }}</dd>
+    </div>
+    {% endif %}
+  </dl>
+</section>
+
+<section class="card card--danger border-danger-subtle p-3 p-md-4 my-4" aria-labelledby="shop-delete-heading">
+  <h2 id="shop-delete-heading" class="card__title card__title--danger h5 text-danger">店舗を削除</h2>
+  <p class="card__desc small text-body-secondary">この操作は取り消せません。</p>
+  <form method="post" action="/shop/{{ shop.id }}/delete"
+        data-confirm-message="この店舗を削除します。この操作は取り消せません。">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="return_to" value="{{ return_to }}">
+    <button type="submit" class="btn btn--danger btn-danger">この店舗を削除する</button>
+  </form>
+</section>
+<script src="/static/js/area-picker.js?v=1" defer></script>
+<script src="/static/js/shop-edit.js?v=2" defer></script>
+{% endif %}
+{% endblock %}

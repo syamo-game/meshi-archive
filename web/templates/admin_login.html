@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}管理者ログイン — Meshi Archive{% endblock %}
+
+{% block content %}
+<div class="auth-layout mx-auto py-3 py-sm-4">
+  <div class="card shadow-sm p-3 p-sm-4">
+    <h1 class="h4 mb-3">管理者ログイン</h1>
+    <p class="text-body-secondary mb-4">管理ページにアクセスするには管理者パスワードが必要です。</p>
+
+    {% if error %}
+    <div id="login-error" class="alert alert-danger" role="alert">
+      {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/admin/login" novalidate>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="mb-3">
+        <label for="password" class="form-label">管理者パスワード</label>
+        <input
+          id="password"
+          type="password"
+          name="password"
+          class="form-control{% if error %} is-invalid{% endif %}"
+          {% if error %}aria-invalid="true" aria-describedby="login-error"{% endif %}
+          placeholder="パスワードを入力してください"
+          autocomplete="current-password"
+          required
+          autofocus>
+      </div>
+      <button type="submit" class="btn btn-primary w-100">ログイン</button>
+    </form>
+
+    {% if request.session.get("authenticated") or request.session.get("admin_authenticated") %}
+    <div class="auth-divider text-body-secondary small my-3"><span>または</span></div>
+    <a href="/logout" class="btn btn-outline-secondary w-100">現在のユーザーからログアウト</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

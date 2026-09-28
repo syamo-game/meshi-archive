@@ -1,0 +1,24 @@
+title = "Meshi Archive secret scanning"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+
+[[rules.allowlists]]
+description = "A fixed Discord error message contains no credential."
+condition = "AND"
+paths = ['''(^|/)scripts/restore_discord_sources\.py$''']
+regexTarget = "line"
+regexes = ['''^\s*"Discord authentication failed: stage=discord_fetch http_status=401 "\s*$''']
+
+[[rules.allowlists]]
+description = "Two synthetic image hashes used in CSV round-trip tests."
+condition = "AND"
+paths = ['''(^|/)tests/test_import_service\.py$''']
+regexTarget = "line"
+regexes = [
+    '''^\s*first = \{\*\*row\(\), "shop\.image_key": "0123456789abcdef" \* 4\}\s*$''',
+    '''^\s*"shop\.image_key": "fedcba9876543210" \* 4,\s*$''',
+]

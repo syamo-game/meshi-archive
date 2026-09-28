@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+{% set public_ui = request.url.path == '/' or request.url.path.startswith('/shop/') %}
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {% if csrf_token %}<meta name="csrf-token" content="{{ csrf_token }}">{% endif %}
+  <title>{% block title %}Meshi Archive{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/vendor/bootstrap-5.3.8/bootstrap.min.css">
+  <link rel="stylesheet" href="/static/css/explorer.css?v=9">
+  {% if not public_ui %}
+  <link rel="stylesheet" href="/static/css/admin.css?v=2">
+  {% endif %}
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍚</text></svg>">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <a href="#main-content" class="skip-link visually-hidden-focusable btn btn-primary position-absolute top-0 start-0 m-2">メインコンテンツへスキップ</a>
+
+  <header class="site-header navbar bg-body border-bottom" role="banner">
+    <div class="container-fluid px-3 px-lg-4 gap-2 site-header__inner">
+      <a href="/" class="site-header__logo navbar-brand fw-bold me-0" aria-label="Meshi Archive トップページへ">
+        <span>Meshi Archive</span>
+      </a>
+      {% if request.url.path != '/' %}
+      <nav class="site-nav" aria-label="サイトナビゲーション">
+        <ul role="list" class="nav nav-pills gap-1">
+          <li>
+            <a href="/" class="nav-link">
+              ホーム
+            </a>
+          </li>
+          {% if not public_ui %}
+          <li>
+            <a href="/admin" class="nav-link{% if request.url.path == '/admin' or request.url.path.startswith('/admin/') %} active{% endif %}"
+               {% if request.url.path in ['/admin', '/admin/'] %}aria-current="page"{% endif %}>
+              管理
+            </a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+
+  <main id="main-content" class="main-content flex-grow-1 py-4">
+    <div class="container{% if request.url.path == '/' or request.url.path.startswith('/admin/review') %}-fluid{% endif %} px-3 px-lg-4">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  <footer class="site-footer border-top py-3 mt-4" role="contentinfo">
+    <div class="container-fluid px-3 px-lg-4 d-flex flex-wrap align-items-center justify-content-between gap-3 site-footer__inner">
+      <p class="site-footer__text small text-body-secondary mb-0">Meshi Archive</p>
+      {% if public_ui %}
+      <nav class="d-flex flex-wrap gap-3" aria-label="管理者向け">
+        {% if request.session.get("admin_authenticated") %}
+        <a href="/admin/review" class="site-footer__link link-secondary link-offset-2 small">データ確認</a>
+        {% endif %}
+        <a href="/admin" class="site-footer__link link-secondary link-offset-2 small">管理画面</a>
+      </nav>
+      {% endif %}
+    </div>
+  </footer>
+
+  <script src="/static/js/main.js?v=22"></script>
+</body>
+</html>
