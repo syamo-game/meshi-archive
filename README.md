@@ -1,86 +1,48 @@
 # Meshi Archive
 
-Discordの飲食店投稿を保存し、店舗候補を確認してから一覧へ載せるアプリケーションです。Python、FastAPI、Jinja2を使い、SQLiteまたはPostgreSQLに保存します。
+Discordで見つけた飲食店を、検索できる一覧にまとめるアプリです。店名や地域を確認・修正し、写真、訪問状況、評価、メモを保存できます。CSVの読み込み・書き出しにも対応しています。
 
-## できること
+## 手元で起動する
 
-- 投稿の本文・リンク・添付情報を保存し、出典付きの店舗候補を作成
-- 店名・支店名・地域・カテゴリを管理画面で確認・修正
-- 店舗検索、地域の絞り込み、訪問状態・評価・メモの編集
-- 店舗写真のアップロード、表示、拡大
-- 登録日時を保持したCSV入出力
-- Discordの過去投稿の同期と、重複候補の確認
-
-この配布物には店舗DB、投稿、店舗写真、認証情報、本番サーバーの設定を含めていません。空のDBから起動します。
-
-## ローカル起動（Windows / PowerShell）
-
-Python 3.11を使用します。テストにはNode.js 24も必要です。
+Python 3.11を用意し、PowerShellで次を実行します。Web画面だけならDiscordやOpenAIのAPIキーは不要です。
 
 ```powershell
+git clone https://github.com/syamo-game/meshi-archive.git
+cd meshi-archive
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --upgrade pip==26.2.1 setuptools==83.0.0
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-起動前に`.env`の`WEB_PASSWORD`、`ADMIN_PASSWORD`、`SECRET_KEY`をそれぞれ異なるランダム値で設定してください。次のコマンドを3回実行すると、設定に使える値を生成できます。
+`.env`の`WEB_PASSWORD`（閲覧用）、`ADMIN_PASSWORD`（編集用）、`SECRET_KEY`（ログイン情報の保護用）に、別々の値を設定します。次のコマンドを3回実行すると、それぞれの値を作れます。
 
 ```powershell
 .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-`.env`を保存してから起動します。
+`.env`を保存して起動します。DBは初回起動時に作成されます。
 
 ```powershell
-.\.venv\Scripts\python.exe -m alembic upgrade head
 .\.venv\Scripts\python.exe -m uvicorn web.main:app --host 127.0.0.1 --port 8000
 ```
 
-ブラウザで `http://127.0.0.1:8000/` を開きます。閲覧には`WEB_PASSWORD`、`/admin/`での編集には`ADMIN_PASSWORD`を使います。ローカルで閲覧認証を省く場合だけ、`APP_ENV=development`のまま`ALLOW_ANONYMOUS_READ=true`を指定します。パスワードを空にしただけでは閲覧できません。
+[店舗一覧](http://127.0.0.1:8000/)は`WEB_PASSWORD`、[管理画面](http://127.0.0.1:8000/admin/)は`ADMIN_PASSWORD`でログインします。初回は店舗0件です。管理画面からCSVを読み込むか、次のBotで投稿を登録します。
 
-Webだけの起動にDiscordやOpenAIのキーは不要です。投稿の自動処理には、別途Discord BotとOpenAI APIの設定が必要です。API利用には料金がかかります。
+## Discordから登録する
 
-## Discord Bot
+`.env`に`DISCORD_TOKEN`、`OPENAI_API_KEY`、`ADMIN_USER_ID`（操作する自分のDiscord ID）を設定します。`EXTRACTION_MODEL`と`RESOLUTION_MODEL`も、利用できるモデル名に合わせてください。OpenAI APIの利用には料金がかかります。
 
-`.env`に`DISCORD_TOKEN`、`ADMIN_USER_ID`、`OPENAI_API_KEY`を設定し、Botを使うサーバー・チャンネルの権限を確認してください。`ADMIN_USER_ID`は操作を許可するDiscord利用者のIDです。抽出・解決モデルは`EXTRACTION_MODEL`と`RESOLUTION_MODEL`で指定し、利用するアカウントで使えるモデルを選びます。
+Discord側ではBotの「Message Content Intent」を有効にし、使うチャンネルの閲覧・履歴の閲覧・送信・リアクションを許可します。別のPowerShellで、同じフォルダから起動します。
 
 ```powershell
 .\.venv\Scripts\python.exe -m bot.discord_bot
 ```
 
-Discord OAuthを使う場合は、クライアントID・シークレット・コールバックURL・許可利用者IDも設定します。パスワードによるログインだけなら不要です。
+`@Bot 店舗のURLや説明`で登録し、`@Bot sync`でそのチャンネルの過去投稿を取り込みます。店や地域を特定できなかった投稿は、管理画面の「データ確認」で修正します。
 
-## テストとCI
+## 詳しい説明
 
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q
-```
+[開発・テスト](docs/CONTRIBUTING.md) · [外部公開時の設定](docs/security.md) · [内部の仕組み](docs/architecture.md) · [画面の仕様](docs/ui-framework.md)
 
-SQLiteとJavaScriptの回帰テストを実行します。PostgreSQL専用テストは、専用のテストDBを設定した場合に実行します。実データがあるDBは指定せず、破棄できる`test_*`または`*_test`という名前のDBを使ってください。
-
-```powershell
-$env:TEST_POSTGRES_URL = "postgresql+psycopg2://USER:PASSWORD@127.0.0.1:5432/meshi_archive_test"
-$env:ALLOW_DESTRUCTIVE_POSTGRES_MIGRATION_TEST = "1"
-.\.venv\Scripts\python.exe -m pytest -q
-```
-
-Dockerでもテストできます。
-
-```powershell
-docker build --target test -t meshi-archive:test .
-docker run --rm meshi-archive:test python -m pytest -q
-```
-
-GitHub ActionsはPostgreSQL 16を使ったテスト、Dockerビルド、Gitleaksによる秘密情報検査、pip-auditによる依存関係検査を実行します。コンテナの発行やサーバーへのデプロイは行いません。
-
-## 文書
-
-- [システム構成](docs/architecture.md)
-- [認証と公開時の設定](docs/security.md)
-- [画面の仕様](docs/ui-framework.md)
-- [開発ルール](docs/CONTRIBUTING.md)
-- [地域データの出典と利用条件](web/data/README.md)
-- [同梱Bootstrapのライセンス](web/static/vendor/bootstrap-5.3.8/LICENSE)
-
-アプリ本体のライセンスは未設定です。
+店舗データ・写真・認証情報は同梱していません。アプリ本体は[MITライセンス](LICENSE)です。[地域データの出典・利用条件](web/data/README.md)と[Bootstrapのライセンス](web/static/vendor/bootstrap-5.3.8/LICENSE)は各ファイルをご覧ください。

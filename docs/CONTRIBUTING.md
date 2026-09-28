@@ -1,51 +1,31 @@
-# 開発ルール
+# 開発・テスト
 
-実装、テスト、コミット、コメントには別の役割があります。同じ説明を複数の場所へ重ねません。
+## テストを実行する
 
-## コードはHowを書く
+READMEの環境にNode.js 24とテスト用の依存パッケージを追加します。
 
-関数名、型、データモデル、制御フローから、処理方法を追えるようにします。
-
-- すべての関数に引数型と戻り値型を付ける
-- 未検証の辞書ではなく、Pydanticモデルや明示的な型を使う
-- 例外を握りつぶさず、処理段階と対象IDを記録する
-- 暗黙のフォールバックを入れず、利用不能な設定は明示的に失敗させる
-
-## テストはWhatを書く
-
-テスト名と検証値から、成立すべき仕様が分かるようにします。実装手順をテストへ写しません。
-
-```python
-def test_unknown_category_is_queued_for_data_review() -> None:
-    ...
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest -q
 ```
 
-不具合の再現条件と期待結果を検証します。テストを通すためだけのモックや、失敗するテストの削除は行いません。
+通常はSQLiteとJavaScriptのテストを実行します。PostgreSQL専用テストには、破棄できる`test_*`または`*_test`という名前のDBを用意し、接続先を`TEST_POSTGRES_URL`、`ALLOW_DESTRUCTIVE_POSTGRES_MIGRATION_TEST`を`1`に設定します。実データのあるDBの代わりに、テスト専用DBを使ってください。
 
-## コミットログはWhyを書く
+Dockerでの実行方法です。
 
-Conventional Commitsを使い、72文字未満の命令形で、変更が必要な理由を表します。
-
-```text
-fix: prevent unknown categories from stopping sync
-docs: prevent stale operations guidance
+```powershell
+docker build --target test -t meshi-archive:test .
+docker run --rm meshi-archive:test python -m pytest -q
 ```
 
-ファイル名や変更一覧だけの件名は使いません。
+GitHub ActionsではPostgreSQL 16も使って全テストを実行し、Gitleaksで秘密情報、pip-auditで依存パッケージを検査します。コンテナの発行や本番への反映は行いません。
 
-## コードコメントはWhy notを書く
+## 変更するとき
 
-コメントは英語で短く書きます。採用しなかった自然な選択肢と、その選択肢を使えない理由だけを残します。
+- 関数には引数と戻り値の型を付け、外部から受け取る値は検証します。
+- 例外は処理段階と対象が分かる形で記録します。秘密情報はログへ出さず、設定不足は明示的にエラーにします。
+- テストでは不具合の再現条件と期待する結果を確認します。失敗したテストは削除する代わりに、原因を直すか未解決として報告します。
+- コミットには`fix:`や`docs:`などの接頭辞を付け、72文字未満で変更の目的を書きます。
+- コメントは英語で短く書き、コードだけでは伝わらない判断理由を残します。処理の読み上げや作業履歴の代わりに、名前と型で意図を伝えます。
 
-```python
-# Do not infer a visit date because the source contains no date evidence.
-```
-
-次のコメントは書きません。
-
-- コードを読み上げる説明
-- ファイル内の区切り線
-- 関数名で表せる処理内容
-- 一時的な作業履歴や解決済み障害
-
-コメントなしで意図が伝わらない場合は、先に名前、型、関数分割を見直します。
+仕様は[内部の仕組み](architecture.md)と[画面の仕様](ui-framework.md)を確認してください。同じ説明を複数の文書へ繰り返す代わりに、該当箇所へリンクします。
