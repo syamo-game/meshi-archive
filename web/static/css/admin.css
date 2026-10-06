@@ -1,0 +1,66 @@
+/* Bootstrap owns the components; keep only the management layout here. */
+.auth-layout { max-width: 28rem; }
+.auth-divider { display: flex; align-items: center; gap: .75rem; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; border-top: 1px solid var(--bs-border-color); }
+.admin-import-facts > div { display: grid; grid-template-columns: 7rem minmax(0, 1fr); gap: .75rem; padding-block: .5rem; border-bottom: 1px solid var(--bs-border-color); }
+.admin-import-facts dt { color: var(--bs-secondary-color); font-weight: 500; }
+.admin-import-facts dd { margin: 0; overflow-wrap: anywhere; }
+
+.review-filter { display: grid; grid-template-columns: minmax(15rem, 1fr) minmax(0, 2fr) auto; align-items: end; gap: .75rem; margin-bottom: 1rem; }
+.review-filter > div { min-width: 0; }
+.review-filter .form-label { margin-bottom: .25rem; }
+.review-scope { grid-column: 1 / -1; min-width: 0; margin-bottom: .25rem; }
+.review-scope-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.review-scope-switch .btn { white-space: normal; padding: .75rem 1rem; }
+.review-scope-switch .btn[aria-pressed="true"] { color: var(--bs-body-color); background: var(--bs-secondary-bg); border-color: var(--bs-secondary-color); box-shadow: inset 3px 0 var(--bs-secondary-color); }
+.review-results { overflow-wrap: anywhere; }
+.review-shortcuts { margin-bottom: 1rem; color: var(--bs-secondary-color); font-size: .75rem; }
+.review-shortcuts kbd { background: var(--bs-secondary-bg); color: var(--bs-body-color); }
+.review-shortcuts summary, .review-processing-details summary, .review-processing-summary summary { cursor: pointer; }
+.review-processing-details, .review-processing-summary { font-size: .875rem; }
+.review-processing-counts { display: grid; gap: .5rem; }
+.review-processing-counts > div { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }
+.review-processing-counts dt { color: var(--bs-secondary-color); font-weight: 400; }
+.review-processing-counts dd { margin: 0; }
+.review-workspace { display: grid; grid-template-columns: minmax(12rem, .72fr) minmax(18rem, 1.3fr) minmax(19rem, 1fr); min-height: 41.25rem; }
+.review-queue-panel, .review-evidence-panel, .review-decision-panel { min-width: 0; padding: 1rem; }
+.review-queue-panel, .review-evidence-panel { border-right: 1px solid var(--bs-border-color); }
+.review-panel-title { margin: 0 0 .75rem; font-size: 1rem; }
+.review-queue { max-height: 32rem; overflow-y: auto; overscroll-behavior: contain; margin-bottom: .75rem; }
+.review-queue__item { display: grid; gap: .25rem; padding: .75rem; overflow-wrap: anywhere; }
+.review-queue__item[aria-selected="true"] { background: var(--bs-secondary-bg); box-shadow: inset 3px 0 var(--bs-secondary-color); }
+.review-queue__item span { color: var(--bs-secondary-color); font-size: .75rem; }
+.review-meta-line { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; font-size: .75rem; overflow-wrap: anywhere; }
+.review-message { min-height: 7rem; margin-bottom: 1rem; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+.review-assets { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)); gap: .75rem; margin-bottom: 1rem; }
+.review-asset { display: grid; gap: .5rem; min-width: 0; font-size: .75rem; }
+.review-asset img { width: 100%; max-height: 14rem; object-fit: cover; }
+.review-asset a { overflow-wrap: anywhere; }
+.review-facts { display: grid; gap: .5rem; margin: 0; }
+.review-facts > div { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: .75rem; padding-bottom: .5rem; border-bottom: 1px solid var(--bs-border-color); }
+.review-facts dt { color: var(--bs-secondary-color); font-size: .75rem; font-weight: 500; }
+.review-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.review-candidates, .review-edit-form, .review-merge { margin-bottom: 1.25rem; }
+.review-candidate { gap: .5rem; margin-bottom: .75rem; overflow-wrap: anywhere; }
+.review-candidate--strong { border-color: var(--bs-success); }
+.review-candidate h3, .review-candidate p { margin: 0; }
+.review-candidate__score { color: var(--bs-secondary-color); font-size: .75rem; }
+.review-edit-form, .review-merge form { display: grid; gap: .75rem; }
+.review-edit-form h3 { margin: 0; }
+.review-edit-form .form-label, .review-merge .form-label { display: grid; gap: .25rem; margin: 0; }
+.review-merge summary { margin-bottom: .75rem; cursor: pointer; font-weight: 600; }
+.review-actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: .5rem; padding-block: .75rem; border-top: 1px solid var(--bs-border-color); background: var(--bs-body-bg); }
+
+/* Keep state-driven visibility stronger than display utilities. */
+[hidden] { display: none !important; }
+
+@media (max-width: 1040px) {
+  .review-workspace { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .review-queue { max-height: 18rem; }
+  .review-queue-panel, .review-evidence-panel { border-right: 0; border-bottom: 1px solid var(--bs-border-color); }
+}
+@media (max-width: 575.98px) {
+  .review-filter, .review-scope-switch { grid-template-columns: minmax(0, 1fr); }
+  .review-queue-panel, .review-evidence-panel, .review-decision-panel { padding: .75rem; }
+  .admin-import-facts > div { grid-template-columns: minmax(0, 1fr); gap: .25rem; }
+}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}店を探す — Meshi Archive{% endblock %}
+{% block body_class %}explore-body{% endblock %}
+
+{% block content %}
+<div class="place-explorer">
+  <header class="explore-hero mb-4">
+    <h1 class="explore-hero__title h4 fw-bold mb-0">店を探す</h1>
+  </header>
+
+  <section class="explorer-search-shell" aria-labelledby="search-heading">
+    <h2 id="search-heading" class="visually-hidden">保存した店を検索</h2>
+    <form id="filter-form" method="get" action="/" class="explorer-search">
+      <div class="explorer-search__main">
+        <label for="q-input" class="explorer-field__label form-label small fw-semibold">キーワード</label>
+        <div class="explorer-search__query-row input-group">
+            <span class="input-group-text bg-body text-body-secondary">
+            <svg class="explorer-search__icon" aria-hidden="true" viewBox="0 0 24 24" width="20" height="20">
+              <path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            </span>
+            <input id="q-input" type="search" name="q" class="explorer-search__input form-control"
+                   placeholder="店名・エリア"
+                   value="{{ selected_q }}" autocomplete="off">
+        </div>
+      </div>
+
+          <div class="explorer-field explorer-field--area">
+            <label for="area-select" class="explorer-field__label form-label small fw-semibold">エリア</label>
+            <select id="area-select" name="area" class="explorer-field__control form-select form-select-sm">
+              <option value="">すべてのエリア</option>
+              {% if none_count > 0 or selected_area == "__none__" %}
+              <option value="__none__"{% if selected_area == "__none__" %} selected{% endif %}>
+                エリア未設定 ({{ none_count }})
+              </option>
+              {% endif %}
+              {% if selected_area and selected_area != "__none__" and selected_area not in all_areas %}
+              <option value="{{ selected_area }}" selected>{{ area_filter_label(selected_area) }} (0)</option>
+              {% endif %}
+              {% for option in area_filter_options %}
+              <option value="{{ option.value }}"{% if option.is_group %} class="fw-semibold"{% endif %}{% if option.value == selected_area %} selected{% endif %}>
+                {{ '　' * option.depth }}{{ option.label }} ({{ option.count }})
+              </option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="explorer-field explorer-field--category">
+            <label for="category-select" class="explorer-field__label form-label small fw-semibold">カテゴリ</label>
+            <select id="category-select" name="category" class="explorer-field__control form-select form-select-sm">
+              <option value="">すべてのカテゴリ</option>
+              {% if selected_category and selected_category not in all_categories %}
+              <option value="{{ selected_category }}" selected>{{ selected_category }} (0)</option>
+              {% endif %}
+              {% for cat in all_categories %}
+              <option value="{{ cat }}"{% if cat == selected_category %} selected{% endif %}>{{ cat }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="explorer-field">
+            <label for="status-select" class="explorer-field__label form-label small fw-semibold">訪問状況</label>
+            <select id="status-select" name="status" class="explorer-field__control form-select form-select-sm">
+              {% for facet in status_facets %}
+              <option value="{% if facet.key != 'all' %}{{ facet.key }}{% endif %}"
+                      data-status-facet="{{ facet.key }}"
+                      {% if facet.selected %}selected{% endif %}>{{ facet.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="explorer-field">
+            <label for="sort-select" class="explorer-field__label form-label small fw-semibold">並び順</label>
+            <select id="sort-select" name="sort" class="explorer-field__control form-select form-select-sm">
+              <option value="area_order"{% if selected_sort == "area_order" %} selected{% endif %}>地域順（東京から）</option>
+              <option value="name_asc"{% if selected_sort == "name_asc" %} selected{% endif %}>店名順</option>
+              <option value="name_desc"{% if selected_sort == "name_desc" %} selected{% endif %}>店名順（逆順）</option>
+              <option value="area_asc"{% if selected_sort == "area_asc" %} selected{% endif %}>エリア名順</option>
+              <option value="area_desc"{% if selected_sort == "area_desc" %} selected{% endif %}>エリア名順（逆順）</option>
+              <option value="rating_desc"{% if selected_sort == "rating_desc" %} selected{% endif %}>評価が高い順</option>
+              <option value="rating_asc"{% if selected_sort == "rating_asc" %} selected{% endif %}>評価が低い順</option>
+              <option value="created_at_desc"{% if selected_sort == "created_at_desc" %} selected{% endif %}>追加が新しい順</option>
+            </select>
+          </div>
+      <button type="submit" class="explorer-search__submit btn btn-primary px-3">検索</button>
+    </form>
+
+    {% if active_filters %}
+    <div class="active-filters explorer-active-filters mt-3" aria-label="適用中の条件">
+      <ul class="active-filters__list d-flex flex-wrap gap-2 list-unstyled mb-0" role="list">
+        {% for item in active_filters %}
+        <li>
+          <a href="{{ item.remove_url }}#q-input" class="filter-chip btn btn-outline-secondary btn-sm"
+             aria-label="{{ item.label }}の条件を解除">
+            {{ item.label }} <span aria-hidden="true">×</span>
+          </a>
+        </li>
+        {% endfor %}
+        <li><a href="/?sort={{ default_sort }}#q-input" class="explorer-active-filters__clear btn btn-link link-secondary btn-sm" data-result-navigation>すべて解除</a></li>
+      </ul>
+    </div>
+    {% endif %}
+  </section>
+
+  <section id="search-results" class="explorer-results mt-4" aria-labelledby="result-heading" aria-busy="false">
+    <div class="explorer-results__header mb-3">
+      <div>
+        <h2 id="result-heading" class="explorer-results__title h5 fw-bold mb-0" tabindex="-1">保存した店</h2>
+        <p class="explorer-results__count small text-body-secondary">
+          {% if total %}
+          <strong>{{ total }}</strong>件 <span>・ {{ page_start }}–{{ page_end }}件目</span>
+          {% else %}
+          <strong>0</strong>件
+          {% endif %}
+        </p>
+      </div>
+    </div>
+
+    <p id="result-status" class="visually-hidden" role="status" aria-live="polite"></p>
+
+    {% if total == 0 %}
+    <div class="explorer-empty card text-center py-5 px-3" role="status">
+      <span class="explorer-empty__icon" aria-hidden="true">⌕</span>
+      <h3>条件に合う店が見つかりません</h3>
+      <p>キーワードを短くするか、エリアやカテゴリを変えてみてください。</p>
+      <a href="/?sort={{ default_sort }}" class="explorer-empty__reset btn btn-outline-secondary align-self-center mt-3" data-result-navigation>条件をすべて解除</a>
+    </div>
+    {% else %}
+    <div class="place-results" role="region" aria-label="保存した飲食店の一覧">
+      <ol id="shop-list" class="place-grid" start="{{ page_start }}">
+        {% include "_shop_cards.html" %}
+      </ol>
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination explorer-pagination d-flex align-items-center justify-content-center flex-wrap gap-2 mt-4 mb-0" aria-label="検索結果のページ">
+      <a class="pagination__control page-link{% if not has_previous %} is-disabled disabled{% endif %}"
+         {% if has_previous %}href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ selected_sort }}&amp;page={{ previous_page }}"{% else %}aria-disabled="true" tabindex="-1"{% endif %}>
+        <span aria-hidden="true">←</span> 前へ
+      </a>
+
+      <div class="pagination__pages">
+        {% set pager = namespace(last=0) %}
+        {% for page_number in range(1, total_pages + 1) %}
+          {% if page_number == 1 or page_number == total_pages or (page_number >= current_page - 2 and page_number <= current_page + 2) %}
+            {% if pager.last and page_number - pager.last > 1 %}
+            <span class="pagination__ellipsis" aria-hidden="true">…</span>
+            {% endif %}
+            {% if page_number == current_page %}
+            <span class="pagination__page page-link is-current" aria-current="page" aria-label="{{ page_number }}ページ目">{{ page_number }}</span>
+            {% else %}
+            <a class="pagination__page page-link"
+               href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ selected_sort }}&amp;page={{ page_number }}"
+               aria-label="{{ page_number }}ページ目へ移動">{{ page_number }}</a>
+            {% endif %}
+            {% set pager.last = page_number %}
+          {% endif %}
+        {% endfor %}
+      </div>
+
+      <span class="pagination__mobile-status" aria-live="polite">{{ current_page }} / {{ total_pages }}ページ</span>
+
+      <a class="pagination__control page-link{% if not has_next %} is-disabled disabled{% endif %}"
+         {% if has_next %}href="/?{{ filter_qs }}{% if filter_qs %}&amp;{% endif %}sort={{ selected_sort }}&amp;page={{ next_page }}"{% else %}aria-disabled="true" tabindex="-1"{% endif %}>
+        次へ <span aria-hidden="true">→</span>
+      </a>
+    </nav>
+    {% endif %}
+    {% endif %}
+  </section>
+</div>
+
+<dialog id="shop-detail-dialog" class="detail-dialog place-detail-dialog modal" aria-labelledby="detail-dialog-title">
+  <div class="detail-dialog__panel modal-content">
+    <header class="detail-dialog__header modal-header">
+      <h2 id="detail-dialog-title" class="detail-dialog__title modal-title fs-5">店の詳細</h2>
+      <button type="button" class="icon-button detail-dialog__close btn-close" data-dialog-close
+              aria-label="詳細を閉じる"></button>
+    </header>
+    <p id="detail-dialog-status" class="visually-hidden" role="status" aria-live="polite"></p>
+    <div id="detail-dialog-body" class="detail-dialog__body modal-body"></div>
+  </div>
+</dialog>
+{% endblock %}

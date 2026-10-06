@@ -1,0 +1,109 @@
+{% from "_link_icons.html" import map_pin, reference_link %}
+{% for shop in shops %}
+{% set links = shop_links[shop.id] %}
+<li id="shop-row-{{ shop.id }}" class="place-grid__item" data-shop-row data-shop-id="{{ shop.id }}">
+  <article class="place-card card h-100 shadow-sm{% if links.image_url %} place-card--with-image{% endif %}" aria-labelledby="shop-name-{{ shop.id }}">
+    {% if shop.is_visited %}
+    <span class="place-card__visited-mark"
+          role="img" aria-label="訪問済み"
+          title="{% if shop.visited_at %}訪問済み（訪問日: {{ shop.visited_at.strftime('%Y-%m-%d') }}）{% else %}訪問済み（訪問日未設定）{% endif %}">
+      <span aria-hidden="true">✓</span>
+    </span>
+    {% endif %}
+    <div class="place-card__media{% if not links.image_url %} place-card__media--empty{% endif %}" data-shop-media{% if not links.image_url %} aria-hidden="true"{% endif %}>
+    {% if links.image_url %}
+    <a href="/shop/{{ shop.id }}?return_to={{ current_list_url|urlencode }}"
+       class="place-card__image-link"
+       data-shop-detail data-shop-id="{{ shop.id }}" data-shop-image-link
+       aria-label="{{ shop.shop_name }}の詳細を開く">
+      <img src="{{ links.image_url }}"
+           class="place-card__image card-img-top"
+           width="320" height="180"
+           loading="lazy" decoding="async" referrerpolicy="no-referrer"
+           alt="" data-shop-image>
+    </a>
+    {% endif %}
+    </div>
+    <div class="place-card__content card-body d-flex flex-column">
+    <header class="place-card__header d-flex flex-column gap-2">
+      <div class="place-card__identity min-width-0 w-100">
+        <h3 id="shop-name-{{ shop.id }}" class="place-card__title fs-6 fw-bold mb-0">
+          <a href="/shop/{{ shop.id }}?return_to={{ current_list_url|urlencode }}"
+             class="link-body-emphasis text-decoration-none"
+             data-shop-detail data-shop-id="{{ shop.id }}">
+            {{ shop.shop_name }}
+          </a>
+        </h3>
+        {% if shop.branch_name %}
+        <p class="place-card__branch small text-body-secondary mb-2">{{ shop.branch_name }}</p>
+        {% endif %}
+        <div class="place-card__subline d-flex flex-column align-items-start gap-1">
+          <span class="star-rating star-rating--readonly place-card__rating{% if not shop.rating %} star-rating--empty{% endif %}" role="img"
+                aria-label="{% if shop.rating %}評価 {{ shop.rating }}点／5点{% else %}未評価{% endif %}">
+            {% for i in range(1, 6) %}
+            <span class="star{% if shop.rating and i <= shop.rating %} star--active{% endif %}" aria-hidden="true">★</span>
+            {% endfor %}
+          </span>
+          <p class="place-card__meta small text-body-secondary mb-0">
+            {% if shop.area %}
+              {% set ward = area_ward(shop.area) %}
+              {% if ward %}<span>{{ ward }}</span><span aria-hidden="true">・</span>{% endif %}
+              <span>{{ area_display_label(shop.area) }}</span>
+            {% else %}
+              <span class="place-card__meta-missing">エリア未設定</span>
+            {% endif %}
+            {% if shop.category %}
+              <span aria-hidden="true">／</span><span>{{ shop.category }}</span>
+            {% endif %}
+          </p>
+        </div>
+      </div>
+
+      {% if shop.needs_review and is_admin %}
+      <div class="place-card__status d-flex flex-wrap gap-1">
+        <span class="place-status place-status--review"
+              title="{{ shop.confidence_reason or shop.extraction_error or 'データ確認が必要' }}">データ確認</span>
+      </div>
+      {% endif %}
+    </header>
+
+    {% if shop.memo %}
+    <div class="place-card__signals d-flex flex-column align-items-start gap-2 mt-2">
+      <p class="place-card__memo small text-body-secondary mb-0">
+        <span class="visually-hidden">メモ: </span>{{ shop.memo }}
+      </p>
+    </div>
+    {% endif %}
+
+    <footer class="place-card__footer pt-3">
+      <div class="place-card__actions d-flex flex-wrap gap-2" role="group" aria-label="{{ shop.shop_name }}の地図と保存元">
+        {% if links.source_url and links.source_is_map %}
+        <a href="{{ links.source_url }}" target="_blank" rel="noopener noreferrer"
+           class="place-action shop-action-link link-secondary link-offset-2"
+           aria-label="{{ shop.shop_name }}のMap：登録時の地図を開く（新しいタブで開きます）">
+          {{ map_pin() }} Map
+        </a>
+        {% else %}
+        <a href="{{ links.maps_url }}" target="_blank" rel="noopener noreferrer"
+           class="place-action shop-action-link link-secondary link-offset-2"
+           aria-label="{{ shop.shop_name }}をGoogle Mapsで検索{% if not shop.address and not shop.area %}。場所情報は未設定です{% endif %}（新しいタブで開きます）">
+          {{ map_pin() }} Map
+        </a>
+        {% if links.source_url %}
+        <a href="{{ links.source_url }}" target="_blank" rel="noopener noreferrer"
+           class="place-action shop-action-link link-secondary link-offset-2"
+           aria-label="{{ shop.shop_name }}の{{ links.source_label }}（新しいタブで開きます）">
+          {{ reference_link() }} {{ links.source_label }}
+        </a>
+        {% elif not links.discord_url %}
+        <span class="place-action place-action--missing small text-body-secondary align-self-center" aria-label="{{ shop.shop_name }}の保存元リンクはありません">
+          保存元なし
+        </span>
+        {% endif %}
+        {% endif %}
+      </div>
+    </footer>
+    </div>
+  </article>
+</li>
+{% endfor %}
