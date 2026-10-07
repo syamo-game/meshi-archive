@@ -71,6 +71,12 @@ def test_actual_sdk_request_limits_context_and_enforces_output_schema(
     assert requests[0].url.host == "model-test.invalid"
     payload = cast(dict[str, object], json.loads(requests[0].content))
     assert payload["store"] is False
+    model: str = extractor.EXTRACTION_MODEL if operation in {"preflight", "message", "source"} else extractor.RESOLUTION_MODEL
+    effort: extractor.ReasoningEffort = extractor.EXTRACTION_REASONING_EFFORT if operation in {"preflight", "message", "source"} else extractor.RESOLUTION_REASONING_EFFORT
+    assert payload["model"] == model
+    assert payload["reasoning"] == {"effort": effort}
+    assert effort != "none"
+    assert cast(int, payload["max_output_tokens"]) >= 25_000
     assert "previous_response_id" not in payload
     assert "conversation" not in payload
     instructions = cast(str, payload["instructions"])

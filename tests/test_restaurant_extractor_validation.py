@@ -204,7 +204,7 @@ class RestaurantExtractorValidationTest(unittest.TestCase):
 
         self.assertEqual(result.metrics.web_search_calls, 1)
         self.assertEqual(result.metrics.estimated_cost_microusd, 2)
-        estimate_cost.assert_called_once_with("gpt-5.6-terra", 8, 3, 2)
+        estimate_cost.assert_called_once_with(extractor_module.RESOLUTION_MODEL, 8, 3, 2)
         self.assertEqual(result.source_urls, ("https://example.com/ginza-hana",))
 
     def test_candidate_search_rejects_unfinished_response(self) -> None:

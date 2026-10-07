@@ -23,6 +23,10 @@ from sqlalchemy.orm import Session
 
 from bot.restaurant_extractor import (
     CANDIDATE_SEARCH_PROMPT_VERSION,
+    EXTRACTION_MODEL,
+    EXTRACTION_REASONING_EFFORT,
+    RESOLUTION_MODEL,
+    RESOLUTION_REASONING_EFFORT,
     CandidateSearchResult,
     ExtractedMention,
     ExtractedMessage,
@@ -847,7 +851,12 @@ def _source_discovery_evidence(
 
 
 def _cache_key(kind: str, value: str) -> str:
-    digest = hashlib.sha256(f"{kind}:{PROMPT_VERSION}:{value}".encode("utf-8")).hexdigest()
+    namespace: str = f"{kind}:{PROMPT_VERSION}"
+    if kind in {"source_discovery", SOURCE_MENTION_CACHE_KIND}:
+        namespace += f":{EXTRACTION_MODEL}:{EXTRACTION_REASONING_EFFORT}"
+    elif kind == "web_search":
+        namespace += f":{RESOLUTION_MODEL}:{RESOLUTION_REASONING_EFFORT}"
+    digest: str = hashlib.sha256(f"{namespace}:{value}".encode("utf-8")).hexdigest()
     return digest
 
 
