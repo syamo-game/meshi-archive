@@ -4,7 +4,6 @@
 <div class="auth-layout admin-auth mx-auto py-3 py-sm-4">
   <div class="admin-auth-content">
     <h1 class="admin-page-title">管理者ログイン</h1>
-    <p class="text-body-secondary mb-4">管理者として登録されたDiscordアカウントでログインしてください。</p>
     {% if error %}<div id="login-error" class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
     {% if discord_login_enabled %}
     <a href="/auth/discord" class="btn btn-primary w-100">Discordでログイン</a>

@@ -4,7 +4,6 @@
 <div class="auth-layout mx-auto py-3 py-sm-4">
   <div class="card shadow-sm p-3 p-sm-4">
     <h1 class="h4 mb-3">ログイン</h1>
-    <p class="text-body-secondary mb-4">利用許可を受けたDiscordアカウントでログインしてください。</p>
     {% if error %}<div id="login-error" class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
     {% if discord_login_enabled %}
     <a href="/auth/discord" class="btn btn-primary w-100">Discordでログイン</a>

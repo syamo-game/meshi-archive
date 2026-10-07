@@ -193,6 +193,8 @@
 .admin-layout .main-content .btn { max-width: 100%; white-space: normal; overflow-wrap: anywhere; min-height: var(--admin-control-height); display: inline-flex; align-items: center; justify-content: center; padding: 8px 16px; border-radius: 4px; }
 .admin-layout .main-content .btn-primary, .admin-auth .btn-primary { --bs-btn-color: var(--bs-body-bg); --bs-btn-bg: var(--bs-body-color); --bs-btn-border-color: var(--bs-body-color); --bs-btn-hover-color: var(--bs-body-bg); --bs-btn-hover-bg: var(--bs-secondary-color); --bs-btn-hover-border-color: var(--bs-secondary-color); --bs-btn-active-color: var(--bs-body-bg); --bs-btn-active-bg: var(--bs-body-color); --bs-btn-active-border-color: var(--bs-body-color); --bs-btn-disabled-color: var(--bs-body-bg); --bs-btn-disabled-bg: var(--bs-body-color); --bs-btn-disabled-border-color: var(--bs-body-color); }
 .admin-layout .main-content .form-control, .admin-layout .main-content .form-select { min-height: var(--admin-control-height); border-radius: 4px; }
+.admin-layout .main-content .form-control[type="file"] { padding-block: 0; line-height: calc(var(--admin-control-height) - 2 * var(--bs-border-width)); }
+.admin-layout .main-content .form-control[type="file"]::file-selector-button { padding-block: 0; margin-block: 0; line-height: inherit; }
 .admin-page-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: var(--admin-group-gap, 32px); }
 .admin-page-count { display: flex; align-items: baseline; gap: 8px; margin: 0; color: var(--bs-secondary-color); }
 .admin-page-count strong { font-size: 24px; color: var(--bs-body-color); }

@@ -2,11 +2,11 @@
 (function () {
   'use strict';
 
-  /** @typedef {'shop_name'|'area'|'url'|'rating'|'visited_at'|'photo'} ErrorField */
+  /** @typedef {'shop_name'|'branch_name'|'area'|'url'|'rating'|'visited_at'|'photo'} ErrorField */
   /** @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|HTMLButtonElement} FormControl */
   /** @typedef {{control: HTMLInputElement|HTMLSelectElement, feedback: HTMLElement}} FieldElements */
   /** @typedef {{detail?: string, errors?: Partial<Record<ErrorField, string>>, redirect_url?: string}} SaveResponse */
-  /** @typedef {'shop_name'|'area'|'category'|'url'|'address'|'phone'|'memo'|'rating'|'is_visited'|'visited_at'} EditableField */
+  /** @typedef {'shop_name'|'branch_name'|'area'|'category'|'url'|'address'|'phone'|'memo'|'rating'|'is_visited'|'visited_at'} EditableField */
   /** @typedef {Record<Exclude<EditableField, 'is_visited'>, string> & {is_visited: boolean}} EditValues */
   /** @typedef {{version: number, values: EditValues, image_url: string|null}} EditSnapshot */
   /** @typedef {{name: EditableField|'photo', control: HTMLSelectElement}} ConflictChoice */
@@ -40,7 +40,7 @@
       !(conflictAccept instanceof HTMLButtonElement)) throw new Error('Shop conflict controls are invalid');
   /** @type {Record<EditableField, string>} */
   const editLabels = {
-    shop_name: '店名', area: 'エリア', category: 'カテゴリ', url: 'URL', address: '住所',
+    shop_name: '店名', branch_name: '支店名', area: 'エリア', category: 'カテゴリ', url: 'URL', address: '住所',
     phone: '電話番号', memo: 'メモ', rating: '評価', is_visited: '訪問済み', visited_at: '訪問日',
   };
   /** @type {Map<EditableField, HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} */
@@ -62,7 +62,7 @@
   if (!(csrfInput instanceof HTMLInputElement)) throw new Error('Shop edit CSRF field is missing');
   /** @type {Record<ErrorField, string>} */
   const fieldIds = {
-    shop_name: 'shop-name', area: 'shop-area', url: 'shop-url',
+    shop_name: 'shop-name', branch_name: 'shop-branch-name', area: 'shop-area', url: 'shop-url',
     rating: 'shop-rating', visited_at: 'shop-visited-at', photo: 'shop-photo',
   };
   /** @type {Map<ErrorField, FieldElements>} */

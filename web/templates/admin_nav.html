@@ -3,9 +3,9 @@
   <nav class="admin-navigation" aria-label="管理">
     {% for label, url, icon in [
       ('概要', '/admin', 'M3 10l9-7 9 7v11h-6v-7H9v7H3z'),
-      ('登録内容の確認', '/admin/review', 'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6'),
+      ('登録内容の確認', '/admin/review', 'M6 3h8l4 4v14H6z M14 3v5h4 M9 15l2 2 4-4'),
       ('利用ユーザー', '/admin/users', 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M9 3a4 4 0 1 0 0 8a4 4 0 1 0 0-8 M18 8a3 3 0 0 1 0 6 M22 21v-2a4 4 0 0 0-3-4'),
-      ('店舗情報の一括編集', '/admin/shops/bulk', 'M6 3h8l4 4v14H6z M14 3v5h4 M9 12h6 M9 16h6'),
+      ('店舗情報の一括編集', '/admin/shops/bulk', 'M3 3h18v18H3z M3 9h18 M3 15h18 M9 3v18'),
       ('データ出力', '/admin/exports', 'M12 3v12 M7 10l5 5 5-5 M4 16v5h16v-5')
     ] %}
     {% set active = request.url.path.rstrip('/') == url or (url == '/admin/shops/bulk' and request.url.path.startswith('/admin/import')) or (url == '/admin/users' and request.url.path.startswith('/admin/users/')) %}

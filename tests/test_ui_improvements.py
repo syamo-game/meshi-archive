@@ -723,7 +723,7 @@ def test_css_keeps_compact_cards_and_mobile_touch_targets() -> None:
     assert "html.is-dialog-open" in css
     assert "--app-control-size: 2.5rem" in css
     assert "--app-control-size: 2.75rem" in css
-    assert "/static/css/explorer.css?v=14" in base
+    assert "/static/css/explorer.css?v=16" in base
     assert ".place-card__visited-mark" in css
     assert ".star-rating--empty .star" in css
     assert "/static/js/main.js?v=28" in base
@@ -755,7 +755,7 @@ def test_bootstrap_is_local_and_shared_with_admin_pages(db: Session, path: str) 
     _, parser = render_html(home(make_request("/"), db=db))
     stylesheets = {attrs["href"] for attrs in parser.find("link", attribute="rel", value="stylesheet")}
     assert "/static/vendor/bootstrap-5.3.8/bootstrap.min.css" in stylesheets
-    assert "/static/css/explorer.css?v=14" in stylesheets
+    assert "/static/css/explorer.css?v=16" in stylesheets
     assert not any((href or "").startswith("/static/css/admin.css?") for href in stylesheets)
     assert not any((href or "").startswith("/static/css/style.css") for href in stylesheets)
 
@@ -763,7 +763,7 @@ def test_bootstrap_is_local_and_shared_with_admin_pages(db: Session, path: str) 
     _, admin_parser = render_html(templates.TemplateResponse(request, "base.html", {"csrf_token": "test-token"}))
     admin_stylesheets = {attrs["href"] for attrs in admin_parser.find("link", attribute="rel", value="stylesheet")}
     assert "/static/vendor/bootstrap-5.3.8/bootstrap.min.css" in admin_stylesheets
-    assert "/static/css/explorer.css?v=14" in admin_stylesheets
+    assert "/static/css/explorer.css?v=16" in admin_stylesheets
     assert any((href or "").startswith("/static/css/admin.css?") for href in admin_stylesheets)
     assert not any((href or "").startswith("/static/css/style.css") for href in admin_stylesheets)
 

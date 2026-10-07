@@ -40,7 +40,7 @@ def render_editor(
     }
     values = home.ShopEditValues(
         shop_name="入力した店名", area="", category="", url="", address="", phone="",
-        memo="保存前のメモ", rating="", is_visited=False, visited_at="",
+        memo="保存前のメモ", rating="", is_visited=False, visited_at="", branch_name="入力した支店名",
     )
     html = home.templates.env.get_template("shop.html").render(
         request=request, shop=shop, shop_links={12: links}, is_admin=admin, is_editing=admin and editing, return_to="/?q=cafe",
@@ -72,7 +72,7 @@ def test_admin_editor_submits_photo_with_existing_fields_and_previews_current_im
     assert "data-shop-detail-content" not in html
     assert document.ids["shop-edit-submit"]["type"] == "submit"
     assert '/static/js/area-picker.js?v=1' in html
-    assert '/static/js/shop-edit.js?v=3' in html
+    assert '/static/js/shop-edit.js?v=4' in html
 
 
 def test_editor_renders_photo_error_and_retains_other_inputs_without_current_image() -> None:
@@ -84,6 +84,8 @@ def test_editor_renders_photo_error_and_retains_other_inputs_without_current_ima
     assert "src" not in document.ids["shop-photo-preview"]
     assert "hidden" not in document.ids["shop-photo-empty"]
     assert document.ids["shop-name"]["value"] == "入力した店名"
+    assert document.ids["shop-branch-name"]["value"] == "入力した支店名"
+    assert document.ids["shop-branch-name"]["maxlength"] == "255"
     assert "保存前のメモ" in html
     assert "hidden" not in document.ids["shop-edit-error"]
 

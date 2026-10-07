@@ -476,6 +476,8 @@ class SyncState(Base):
 
     channel_id = Column(String(20), primary_key=True)
     last_contiguous_message_id = Column(String(20), nullable=True)
+    last_weekly_sync_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_weekly_sync_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
 
