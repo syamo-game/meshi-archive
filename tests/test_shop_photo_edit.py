@@ -21,6 +21,7 @@ from starlette.responses import Response
 from db.models import Base, Message, Shop, ShopMention, SourceAsset
 from services.shop_image_cache import processed_image_public_url
 from services.shop_image_upload import MAX_UPLOAD_BYTES, UploadedShopImage, save_uploaded_image
+from services.admin_sessions import issue_admin_session
 from web.routers import admin, home, shop_images
 
 
@@ -79,7 +80,7 @@ def editor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[PhotoEd
     @app.middleware("http")
     async def add_session(request: Request, call_next: RequestResponseEndpoint) -> Response:
         request.scope["session"] = {
-            "authenticated": True,
+            "authenticated": request.headers.get("x-test-role", "admin") != "anonymous",
             "admin_authenticated": request.headers.get("x-test-role", "admin") == "admin",
             "csrf_token": "photo-token",
         }
@@ -100,6 +101,7 @@ def edit_payload() -> dict[str, str]:
         "shop_name": "変更した店名", "area": "銀座", "category": "カフェ",
         "memo": "写真と一緒に保存\n2行目", "rating": "4", "csrf_token": "photo-token",
         "is_visited": "on", "visited_at": "2026-09-01", "return_to": "/?sort=created_desc&page=3",
+        "expected_version": "1",
     }
 
 
@@ -113,6 +115,35 @@ def assert_original_shop(editor: PhotoEditor) -> None:
         assert shop.version == 1
         assert shop.created_at == editor.created_at
     assert editor.original_photo.file_path.is_file()
+
+
+def test_edit_snapshot_is_admin_only_and_matches_the_current_shop_image(editor: PhotoEditor) -> None:
+    with editor.sessions() as db:
+        saved = {
+            name: [tuple(row) for row in db.execute(table.select()).all()]
+            for name, table in Base.metadata.tables.items()
+        }
+    for role in ("member", "anonymous"):
+        denied = editor.client.get(
+            f"/shop/{editor.shop_id}/edit-snapshot", headers={"x-test-role": role},
+        )
+        assert denied.status_code == 403
+        assert "values" not in denied.json() and "version" not in denied.json()
+        assert editor.original_photo.public_url not in denied.text
+    snapshot = editor.client.get(f"/shop/{editor.shop_id}/edit-snapshot")
+    assert snapshot.status_code == 200
+    assert snapshot.headers["cache-control"] == "private, no-store"
+    assert snapshot.json()["image_url"] == editor.original_photo.public_url
+    assert snapshot.json()["image_url"] in editor.client.get(f"/shop/{editor.shop_id}").text
+    other = editor.client.get(f"/shop/{editor.other_shop_id}/edit-snapshot")
+    assert other.status_code == 200
+    assert other.json()["image_url"] is None
+    with editor.sessions() as db:
+        assert {
+            name: [tuple(row) for row in db.execute(table.select()).all()]
+            for name, table in Base.metadata.tables.items()
+        } == saved
+    assert list(editor.original_photo.file_path.parent.glob("*.webp")) == [editor.original_photo.file_path]
 
 
 @pytest.mark.parametrize("image_format", ["JPEG", "PNG", "WEBP"])
@@ -191,6 +222,42 @@ def test_invalid_text_does_not_store_an_uploaded_photo(editor: PhotoEditor) -> N
     assert response.json()["errors"] == {"shop_name": "店名を入力してください。"}
     assert list(editor.original_photo.file_path.parent.glob("*.webp")) == [editor.original_photo.file_path]
     assert_original_shop(editor)
+
+
+@pytest.mark.parametrize("version", [None, "invalid", "1"])
+def test_stale_or_invalid_version_never_stores_an_uploaded_photo(
+    editor: PhotoEditor, monkeypatch: pytest.MonkeyPatch, version: str | None,
+) -> None:
+    other_payload = edit_payload()
+    other_payload["shop_name"] = "Newer saved name"
+    other_payload["memo"] = "Newer saved memo"
+    saved = editor.client.post(
+        f"/shop/{editor.shop_id}/edit", data=other_payload, headers=XHR_HEADERS,
+    )
+    assert saved.status_code == 200
+
+    def unexpected_photo_storage(source_bytes: bytes) -> UploadedShopImage:
+        raise AssertionError("A rejected version must not write photo storage")
+
+    monkeypatch.setattr(home, "save_uploaded_image", unexpected_photo_storage)
+    payload = edit_payload()
+    if version is None:
+        del payload["expected_version"]
+    else:
+        payload["expected_version"] = version
+    response = editor.client.post(
+        f"/shop/{editor.shop_id}/edit", data=payload, headers=XHR_HEADERS,
+        files={"photo": ("new.png", photo_bytes(), "image/png")},
+    )
+    assert response.status_code == 409
+    with editor.sessions() as db:
+        shop = db.get(Shop, editor.shop_id)
+        assert shop is not None and shop.version == 2
+        assert shop.shop_name == "Newer saved name" and shop.memo == "Newer saved memo"
+        assert shop.image_key == editor.original_photo.image_key
+        assert shop.created_at == editor.created_at
+        assert db.query(SourceAsset).one().url == SOURCE_URL
+    assert list(editor.original_photo.file_path.parent.glob("*.webp")) == [editor.original_photo.file_path]
 
 
 def test_invalid_photo_returns_field_error_and_retained_text_in_html(editor: PhotoEditor) -> None:
@@ -292,8 +359,6 @@ def test_upload_requires_admin_csrf_and_writable_mode(
 def test_expired_session_can_log_in_and_retry_the_same_photo(
     editor: PhotoEditor, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(home, "WEB_PASSWORD", "photo-session-test")
-    monkeypatch.setattr(admin, "ADMIN_PASSWORD", "photo-session-test")
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="photo-session-test")
     app.include_router(home.router)
@@ -307,6 +372,12 @@ def test_expired_session_can_log_in_and_retry_the_same_photo(
     payload = edit_payload()
     image = photo_bytes()
     app.dependency_overrides[admin.get_db] = get_db
+
+    @app.get("/_test/discord-admin")
+    def discord_admin_session(request: Request) -> dict[str, bool]:
+        with editor.sessions() as db:
+            issue_admin_session(db, request.session, method="discord", credential="123456789012345678", discord_user_id="123456789012345678")
+        return {"ok": True}
     with TestClient(app, client=("192.0.2.1", 50000), follow_redirects=False) as client:
         expired = client.post(
             f"/shop/{editor.shop_id}/edit", data=payload, headers=XHR_HEADERS,
@@ -315,19 +386,15 @@ def test_expired_session_can_log_in_and_retry_the_same_photo(
         assert expired.status_code == 401
         current_token = expired.headers["x-csrf-token"]
         assert current_token != payload["csrf_token"]
-        for route in ("/login", "/admin/login"):
-            assert current_token in client.get(route).text
-            assert client.post(route, data={
-                "password": "photo-session-test", "csrf_token": current_token,
-            }).status_code == 302
+        assert client.get("/_test/discord-admin").status_code == 200
         stale = client.post(
             f"/shop/{editor.shop_id}/edit", data=payload, headers=XHR_HEADERS,
             files={"photo": ("new.png", image, "image/png")},
         )
         assert stale.status_code == 403
-        assert stale.headers["x-csrf-token"] == current_token
+        assert stale.headers["x-csrf-token"] != current_token
         assert_original_shop(editor)
-        payload["csrf_token"] = current_token
+        payload["csrf_token"] = stale.headers["x-csrf-token"]
         retried = client.post(
             f"/shop/{editor.shop_id}/edit", data=payload, headers=XHR_HEADERS,
             files={"photo": ("new.png", image, "image/png")},

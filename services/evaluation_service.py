@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 from contextvars import Token
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from bot.restaurant_extractor import (
     ExtractedMention,
+    ExtractedMessage,
     ImageAnalysisResult,
     analyze_restaurant_images,
     extract_restaurant_message,
@@ -23,8 +26,10 @@ from db.models import (
     ResolutionMethod,
     ResolutionStatus,
     ReviewStatus,
+    ReviewEvent,
     Shop,
     ShopMention,
+    SourceAsset,
     utc_now,
 )
 from services.identification_pipeline import (
@@ -32,6 +37,9 @@ from services.identification_pipeline import (
     SourceAssetInput,
     _ACTIVE_OPERATIONAL_JOURNAL,
     _OperationalJournal,
+    _EventOriginResolution,
+    _event_origin_mention_row,
+    _prepare_event_origin,
     _candidate_for_new_shop,
     _candidate_verification_urls,
     _candidates_from_image,
@@ -50,6 +58,7 @@ from services.identification_pipeline import (
     _structured_candidates,
     _web_candidates,
 )
+from services.shop_creation_lock import lock_new_shop_creation
 from services.resolution import (
     CandidateIdentity,
     branches_conflict,
@@ -58,6 +67,17 @@ from services.resolution import (
     normalize_address,
     normalize_area,
     normalize_phone,
+)
+from services.extraction_safety import (
+    EVENT_EXCLUDED,
+    EvidenceAssessment,
+    assess_mention_evidence,
+    evidence_review_error,
+    image_evidence_assessment,
+    input_evidence_assessment,
+    is_event_excluded_registration,
+    operating_status_note,
+    requires_manual_evidence_review,
 )
 
 
@@ -71,6 +91,149 @@ class EvaluationResult:
     new_mentions: int
     differences: int
     skipped: bool
+    skip_reason: str | None = None
+
+
+class _EvaluationChanged(Exception):
+    pass
+
+
+@dataclass(frozen=True)
+class _EvaluationSnapshot:
+    content: str | None
+    fetch_error: str | None
+    source_created_at: datetime | None
+    processing_status: str
+    processed_at: datetime | None
+    assets: tuple[tuple[int, SourceAssetInput], ...]
+    mentions: tuple[tuple[int, int, int | None, int], ...]
+    shops: tuple[tuple[int, int], ...]
+
+
+@dataclass(frozen=True)
+class _PreparedCandidates:
+    candidates: tuple[PipelineCandidate, ...] = ()
+    image_assessment: EvidenceAssessment = EvidenceAssessment()
+    event_origin: _EventOriginResolution | None = None
+
+
+def _load_evaluation(
+    db: Session, message_id: str, *, for_update: bool = False,
+) -> tuple[Message, list[ShopMention]]:
+    message_query = db.query(Message).filter(Message.message_id == message_id)
+    mention_query = (
+        db.query(ShopMention)
+        .filter(ShopMention.message_id == message_id)
+        .order_by(ShopMention.id)
+    )
+    asset_query = (
+        db.query(SourceAsset)
+        .filter(SourceAsset.message_id == message_id)
+        .order_by(SourceAsset.id)
+    )
+    if for_update:
+        if db.get_bind().dialect.name == "sqlite":
+            db.execute(
+                text("UPDATE messages SET message_id = message_id WHERE message_id = :id"),
+                {"id": message_id},
+            )
+        message_query = message_query.with_for_update()
+        mention_query = mention_query.with_for_update()
+        asset_query = asset_query.with_for_update()
+    message = message_query.populate_existing().first()
+    if message is None:
+        raise _EvaluationChanged("message_removed")
+    mentions = mention_query.populate_existing().all()
+    asset_query.populate_existing().all()
+    db.expire(message, ["assets", "mentions"])
+    shop_ids = {mention.shop_id for mention in mentions if mention.shop_id is not None}
+    shops = db.query(Shop).filter(Shop.id.in_(shop_ids)).order_by(Shop.id)
+    if for_update:
+        shops = shops.with_for_update()
+    shops.populate_existing().all()
+    for mention in mentions:
+        db.expire(mention, ["shop"])
+    return message, mentions
+
+
+def _evaluation_snapshot(
+    message: Message, mentions: list[ShopMention],
+) -> _EvaluationSnapshot:
+    return _EvaluationSnapshot(
+        content=message.content,
+        fetch_error=message.fetch_error,
+        source_created_at=message.source_created_at,
+        processing_status=message.processing_status,
+        processed_at=message.processed_at,
+        assets=tuple(
+            (asset.id, SourceAssetInput(
+                kind=asset.kind, url=asset.url, title=asset.title,
+                description=asset.description, mime_type=asset.mime_type,
+            ))
+            for asset in sorted(message.assets, key=lambda asset: asset.id)
+        ),
+        mentions=tuple(
+            (mention.id, mention.version, mention.shop_id, mention.occurrence_index)
+            for mention in mentions
+        ),
+        shops=tuple(sorted({
+            (mention.shop.id, mention.shop.version)
+            for mention in mentions if mention.shop is not None
+        })),
+    )
+
+
+def _human_reviewed(db: Session, mentions: list[ShopMention]) -> bool:
+    # Legacy imports inferred manual approval; review history distinguishes actual decisions.
+    if any(
+        mention.resolution_method == ResolutionMethod.MANUAL.value
+        and mention.extraction_source != "legacy_import"
+        for mention in mentions
+    ):
+        return True
+    return (
+        db.query(ReviewEvent.id)
+        .filter(ReviewEvent.mention_id.in_([mention.id for mention in mentions]))
+        .first()
+    ) is not None
+
+
+def _lock_evaluation(
+    db: Session, message_id: str, expected: _EvaluationSnapshot,
+) -> tuple[Message, list[ShopMention]]:
+    # External fetches finish before this short transaction acquires row locks.
+    lock_new_shop_creation(db)
+    message, mentions = _load_evaluation(db, message_id, for_update=True)
+    if _evaluation_snapshot(message, mentions) != expected:
+        raise _EvaluationChanged("concurrent_change")
+    if _human_reviewed(db, mentions):
+        raise _EvaluationChanged("human_reviewed")
+    return message, mentions
+
+
+def _persist_evaluation_journal(db: Session) -> None:
+    journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
+    if journal is None:
+        return
+    token = _ACTIVE_OPERATIONAL_JOURNAL.set(None)
+    try:
+        _persist_operational_journal(db, journal)
+    finally:
+        _ACTIVE_OPERATIONAL_JOURNAL.reset(token)
+
+
+def _skip_evaluation(db: Session, message_id: str, reason: str) -> EvaluationResult:
+    db.rollback()
+    if db.get(Message, message_id) is None:
+        logger.info("Evaluation skipped after message removal: message_id=%s", message_id)
+        return EvaluationResult(message_id, 0, 0, 0, True, "message_removed")
+    _persist_evaluation_journal(db)
+    db.add(ProcessingRun(
+        message_id=message_id, stage="evaluation_pipeline",
+        status=ProcessingStatus.IGNORED.value, error=reason,
+    ))
+    db.commit()
+    return EvaluationResult(message_id, 0, 0, 0, True, reason)
 
 
 def _asset_inputs(message: Message) -> tuple[SourceAssetInput, ...]:
@@ -251,27 +414,143 @@ def _mark_metadata_difference(mention: ShopMention, difference_type: str) -> Non
     mention.version += 1
 
 
+async def _prepare_candidates(
+    db: Session, message: Message, extracted_message: ExtractedMessage,
+    assets: tuple[SourceAssetInput, ...], mentions: list[ShopMention],
+) -> tuple[_PreparedCandidates, ...]:
+    prepared: list[_PreparedCandidates] = []
+    unmatched = list(mentions)
+    input_assessment = input_evidence_assessment(
+        message.content or "", omitted_asset_count=max(0, len(assets) - 50),
+    )
+    _source_url, canonical_hint, canonical_assets_ambiguous = _source_urls_from_assets(assets)
+    image_urls = tuple(asset.url for asset in assets if _is_discord_image(asset))
+    image_result: ImageAnalysisResult | None = None
+    for extracted in extracted_message.mentions:
+        mention = _match_legacy_mention(extracted, unmatched)
+        if mention is not None:
+            unmatched.remove(mention)
+        safety = assess_mention_evidence(
+            extracted, message.content or "", input_assessment=input_assessment,
+        )
+        if safety.is_event_excluded:
+            origin = await _prepare_event_origin(
+                db, message.message_id, extracted, message.content or "",
+                assets=assets, input_assessment=input_assessment,
+            )
+            prepared.append(_PreparedCandidates(event_origin=origin))
+            continue
+        if safety.requires_review or (
+            mention is not None
+            and mention.review_status != ReviewStatus.APPROVED.value
+            and requires_manual_evidence_review(mention.extraction_error)
+        ):
+            prepared.append(_PreparedCandidates())
+            continue
+        if canonical_assets_ambiguous:
+            existing_shop, blocked = None, None
+        else:
+            existing_shop, blocked = _find_existing_shop_from_mention(
+                db, extracted, canonical_hint if len(extracted_message.mentions) == 1 else None,
+            )
+        candidates: list[PipelineCandidate] = []
+        automatic_candidate: PipelineCandidate | None = None
+        image_assessment = EvidenceAssessment()
+        if existing_shop is None and blocked is None:
+            candidates = await _collect_candidates(db, message, extracted, assets)
+            if canonical_assets_ambiguous:
+                existing_shop, blocked = None, None
+            else:
+                existing_shop, blocked = _find_existing_shop(db, extracted, candidates)
+            if not (canonical_assets_ambiguous or existing_shop or blocked):
+                automatic_candidate = _candidate_for_new_shop(extracted, candidates)
+        if (
+            existing_shop is None and automatic_candidate is None and blocked is None
+            and image_urls and not canonical_assets_ambiguous
+            and len(extracted_message.mentions) == 1
+        ):
+            if image_result is None:
+                try:
+                    image_result = await analyze_restaurant_images(extracted, image_urls)
+                except Exception as exc:
+                    _record_failure(db, message.message_id, "evaluation_image", exc)
+                    raise
+                _record_metrics(db, message.message_id, "evaluation_image", image_result.metrics)
+            image_assessment = image_evidence_assessment(
+                image_result.clues.subject_kind,
+                input_assessment=input_assessment,
+            )
+            if image_assessment.is_event_excluded:
+                event = extracted.model_copy(update={
+                    "subject_kind": "event", "event_origin": image_result.clues.event_origin,
+                })
+                origin = await _prepare_event_origin(
+                    db, message.message_id, event, message.content or "",
+                    assets=assets, input_assessment=input_assessment,
+                )
+                image_candidates = _candidates_from_image(image_result, image_urls[0])
+                origin = replace(
+                    origin, extracted=origin.extracted or event,
+                    candidates=tuple(_dedupe_candidates([*origin.candidates, *image_candidates])),
+                )
+                prepared.append(_PreparedCandidates(image_assessment=image_assessment, event_origin=origin))
+                continue
+            candidates.extend(_candidates_from_image(image_result, image_urls[0]))
+        prepared.append(_PreparedCandidates(
+            tuple(_dedupe_candidates(candidates)), image_assessment,
+        ))
+    return tuple(prepared)
+
+
+def _append_review_candidates(
+    db: Session, mention: ShopMention, extracted: ExtractedMention,
+    candidates: tuple[PipelineCandidate, ...],
+) -> None:
+    existing_rank = (
+        db.query(ResolutionCandidate.rank)
+        .filter(ResolutionCandidate.mention_id == mention.id)
+        .order_by(ResolutionCandidate.rank.desc())
+        .first()
+    )
+    rank_offset = existing_rank[0] if existing_rank is not None else 0
+    _store_candidates(db, mention, extracted, list(candidates), None)
+    for item in db.new:
+        if isinstance(item, ResolutionCandidate) and item.mention is mention:
+            item.rank += rank_offset
+
+
 async def _evaluate_imported_message_transaction(
     db: Session,
     message_id: str,
 ) -> EvaluationResult:
-    message = db.query(Message).filter(Message.message_id == message_id).first()
-    if message is None:
-        raise ValueError(f"Evaluation message not found: message_id={message_id}")
+    try:
+        message, mentions = _load_evaluation(db, message_id)
+    except _EvaluationChanged as exc:
+        raise ValueError(f"Evaluation message not found: message_id={message_id}") from exc
+    expected = _evaluation_snapshot(message, mentions)
+    if mentions and all(is_event_excluded_registration(mention) for mention in mentions):
+        return _skip_evaluation(db, message_id, EVENT_EXCLUDED)
+    if _human_reviewed(db, mentions):
+        return _skip_evaluation(db, message_id, "human_reviewed")
     if message.fetch_error or not message.content:
-        for mention in message.mentions:
+        db.rollback()
+        try:
+            message, mentions = _lock_evaluation(db, message_id, expected)
+        except _EvaluationChanged as exc:
+            return _skip_evaluation(db, message_id, str(exc))
+        for mention in mentions:
             _mark_difference(mention, "source_unavailable")
         db.commit()
-        return EvaluationResult(message_id, 0, 0, len(message.mentions), True)
+        return EvaluationResult(message_id, 0, 0, len(mentions), True, "source_unavailable")
 
-    message.processing_status = ProcessingStatus.PROCESSING.value
     assets = _asset_inputs(message)
+    input_assessment = input_evidence_assessment(
+        message.content, omitted_asset_count=max(0, len(assets) - 50)
+    )
     source_url, canonical_hint, canonical_assets_ambiguous = (
         _source_urls_from_assets(assets)
     )
-    image_urls = tuple(asset.url for asset in assets if _is_discord_image(asset))
-    image_result: ImageAnalysisResult | None = None
-    unmatched = list(message.mentions)
+    unmatched = list(mentions)
     matched_count = 0
     new_count = 0
     difference_count = 0
@@ -281,17 +560,78 @@ async def _evaluate_imported_message_transaction(
         except Exception as exc:
             _record_failure(db, message.message_id, "evaluation_extraction", exc)
             raise
-        _record_metrics(db, message.message_id, "evaluation_extraction", extraction.metrics)
-        if not extraction.message.is_restaurant_message:
+        with db.no_autoflush:
+            _record_metrics(db, message.message_id, "evaluation_extraction", extraction.metrics)
+            event_context = image_evidence_assessment(
+                "unknown", content=message.content,
+                unresolved_reason=extraction.message.unresolved_reason or extraction.message.ignore_reason or "",
+            ).is_event_excluded
+            extracted_message = extraction.message
+            if event_context and not extracted_message.mentions:
+                extracted_message = ExtractedMessage(is_restaurant_message=True, mentions=[ExtractedMention(
+                    shop_name="催事（出店元未特定）", needs_review=True, subject_kind="event",
+                    confidence_reason=extracted_message.unresolved_reason or extracted_message.ignore_reason or "催事の紹介",
+                )])
+            if any(
+                assess_mention_evidence(item, message.content).is_event_excluded
+                for item in extracted_message.mentions
+            ) and any(item.shop_id is not None or item.review_status == ReviewStatus.APPROVED.value for item in mentions):
+                return _skip_evaluation(db, message_id, "event_reassessment_preserved")
+            prepared_candidates = (
+                await _prepare_candidates(db, message, extracted_message, assets, unmatched)
+                if extracted_message.is_restaurant_message else ()
+            )
+            if any(item.event_origin is not None for item in prepared_candidates) and any(
+                item.shop_id is not None or item.review_status == ReviewStatus.APPROVED.value for item in mentions
+            ):
+                return _skip_evaluation(db, message_id, "event_reassessment_preserved")
+        # Release the evidence-read transaction before locking the current records.
+        db.rollback()
+        message, unmatched = _lock_evaluation(db, message_id, expected)
+        if not extracted_message.is_restaurant_message:
             for mention in unmatched:
+                if is_event_excluded_registration(mention):
+                    continue
                 _mark_difference(mention, "new_pipeline_not_restaurant")
+                if input_assessment.requires_review:
+                    mention.extraction_error = evidence_review_error(input_assessment)
+                    mention.confidence_reason = " / ".join(input_assessment.reasons)
             message.processing_status = ProcessingStatus.SUCCEEDED.value
             message.processed_at = utc_now()
+            _persist_evaluation_journal(db)
             db.commit()
             return EvaluationResult(message_id, 0, 0, len(unmatched), False)
 
         next_occurrence = max((mention.occurrence_index for mention in unmatched), default=-1) + 1
-        for extracted in extraction.message.mentions:
+        for extracted, prepared in zip(extracted_message.mentions, prepared_candidates, strict=True):
+            prior_event = next((
+                item for item in unmatched
+                if item.shop_id is None and item.extracted_name == extracted.shop_name
+                and item.extracted_branch_name == extracted.branch_name
+            ), None)
+            if prior_event is not None and is_event_excluded_registration(prior_event):
+                unmatched.remove(prior_event)
+                continue
+            if prepared.event_origin is not None:
+                if prior_event is not None:
+                    unmatched.remove(prior_event)
+                    matched_count += 1
+                row = _event_origin_mention_row(
+                    db, message, extracted, prepared.event_origin,
+                    occurrence=prior_event.occurrence_index if prior_event is not None else next_occurrence,
+                    source_url=source_url, extraction_source="responses_structured", previous=prior_event,
+                )
+                if prior_event is None:
+                    next_occurrence += 1
+                    new_count += 1
+                if row.shop_id is not None:
+                    difference_count += 1
+                continue
+            note = operating_status_note(extracted)
+            if note:
+                extracted = extracted.model_copy(
+                    update={"confidence_reason": f"{extracted.confidence_reason} / {note}"}
+                )
             mention_canonical_hint = (
                 canonical_hint if len(extraction.message.mentions) == 1 else None
             )
@@ -320,6 +660,29 @@ async def _evaluate_imported_message_transaction(
                 new_count += 1
                 difference_count += 1
 
+            safety_assessment = assess_mention_evidence(
+                extracted, message.content, input_assessment=input_assessment
+            )
+            if prepared.image_assessment.requires_review:
+                safety_assessment = EvidenceAssessment(
+                    tuple(dict.fromkeys((*safety_assessment.codes, *prepared.image_assessment.codes))),
+                    tuple(dict.fromkeys((*safety_assessment.reasons, *prepared.image_assessment.reasons))),
+                )
+            if safety_assessment.requires_review or (
+                mention.review_status != ReviewStatus.APPROVED.value
+                and requires_manual_evidence_review(mention.extraction_error)
+            ):
+                _mark_difference(mention, "evidence_review")
+                mention.resolution_status = ResolutionStatus.AMBIGUOUS.value
+                mention.extraction_error = evidence_review_error(safety_assessment) or mention.extraction_error
+                mention.confidence_reason = " / ".join(
+                    (extracted.confidence_reason, *safety_assessment.reasons)
+                )
+                if prepared.candidates:
+                    _append_review_candidates(db, mention, extracted, prepared.candidates)
+                difference_count += 1
+                continue
+
             if canonical_assets_ambiguous:
                 existing_shop = None
                 _existing_reason = None
@@ -332,16 +695,10 @@ async def _evaluate_imported_message_transaction(
             creation_blocked_reason = (
                 _existing_reason if existing_shop is None else None
             )
-            candidates: list[PipelineCandidate] = []
+            candidates = list(prepared.candidates)
             automatic_candidate: PipelineCandidate | None = None
             collision_candidate: PipelineCandidate | None = None
             if existing_shop is None and creation_blocked_reason is None:
-                candidates = await _collect_candidates(
-                    db,
-                    message,
-                    extracted,
-                    assets,
-                )
                 if canonical_assets_ambiguous:
                     existing_shop = None
                     candidate_reason = None
@@ -381,60 +738,24 @@ async def _evaluate_imported_message_transaction(
                     creation_blocked_reason = None
                 else:
                     creation_blocked_reason = collision_reason
-            if (
-                existing_shop is None
-                and automatic_candidate is None
-                and creation_blocked_reason is None
-                and image_urls
-                and not canonical_assets_ambiguous
-            ):
-                if image_result is None:
-                    try:
-                        image_result = await analyze_restaurant_images(extracted, image_urls)
-                    except Exception as exc:
-                        _record_failure(db, message.message_id, "evaluation_image", exc)
-                        raise
-                    _record_metrics(
-                        db,
-                        message.message_id,
-                        "evaluation_image",
-                        image_result.metrics,
-                    )
-                candidates.extend(_candidates_from_image(image_result, image_urls[0]))
-                candidates = _dedupe_candidates(candidates)
-                existing_shop, candidate_reason = _find_existing_shop(
-                    db,
-                    extracted,
-                    candidates,
+            if existing_shop is not None:
+                selected_version = existing_shop.version
+                selected = (
+                    db.query(Shop)
+                    .filter(Shop.id == existing_shop.id)
+                    .with_for_update()
+                    .populate_existing()
+                    .first()
                 )
-                creation_blocked_reason = (
-                    candidate_reason if existing_shop is None else None
-                )
-                automatic_candidate = (
-                    None
-                    if existing_shop or creation_blocked_reason
-                    else _candidate_for_new_shop(
-                        extracted,
-                        candidates,
-                    )
-                )
-                candidate_before_collision = automatic_candidate
-                (
-                    automatic_candidate,
-                    collision_shop,
-                    collision_reason,
-                ) = _guard_new_shop_creation_or_link(
-                    db,
-                    extracted,
-                    automatic_candidate,
-                    creation_blocked_reason,
-                )
-                if collision_shop is not None:
-                    existing_shop = collision_shop
-                    collision_candidate = candidate_before_collision
-                    creation_blocked_reason = None
-                else:
-                    creation_blocked_reason = collision_reason
+                if selected is None or selected.version != selected_version:
+                    raise _EvaluationChanged("concurrent_change")
+                if collision_candidate is not None:
+                    db.expire(selected, ["mentions"])
+                    if not any(
+                        item.review_status == ReviewStatus.APPROVED.value
+                        for item in selected.mentions
+                    ):
+                        raise _EvaluationChanged("concurrent_change")
 
             mention.extracted_name = extracted.shop_name
             mention.extracted_branch_name = extracted.branch_name
@@ -503,11 +824,18 @@ async def _evaluate_imported_message_transaction(
                         difference_count += 1
 
         for mention in unmatched:
+            if is_event_excluded_registration(mention):
+                continue
             _mark_difference(mention, "new_pipeline_missing_mention")
             difference_count += 1
 
+        for mention_id, version, _shop_id, _occurrence in expected.mentions:
+            mention = db.get(ShopMention, mention_id)
+            if mention is not None and mention.version == version and not is_event_excluded_registration(mention):
+                mention.version += 1
         message.processing_status = ProcessingStatus.SUCCEEDED.value
         message.processed_at = utc_now()
+        _persist_evaluation_journal(db)
         db.commit()
         return EvaluationResult(
             message_id,
@@ -516,9 +844,14 @@ async def _evaluate_imported_message_transaction(
             difference_count,
             False,
         )
+    except _EvaluationChanged as exc:
+        return _skip_evaluation(db, message_id, str(exc))
     except Exception as exc:
         db.rollback()
-        failed = db.query(Message).filter(Message.message_id == message_id).one()
+        try:
+            failed, _mentions = _lock_evaluation(db, message_id, expected)
+        except _EvaluationChanged as conflict:
+            return _skip_evaluation(db, message_id, str(conflict))
         failed.processing_status = ProcessingStatus.FAILED.value
         db.add(
             ProcessingRun(
@@ -533,7 +866,7 @@ async def _evaluate_imported_message_transaction(
 
 
 async def evaluate_imported_message(db: Session, message_id: str) -> EvaluationResult:
-    journal = _OperationalJournal()
+    journal = _OperationalJournal(defer_writes=True)
     token: Token[_OperationalJournal | None] = _ACTIVE_OPERATIONAL_JOURNAL.set(journal)
     journal_is_active = True
     try:

@@ -261,21 +261,30 @@ def test_home_keeps_internal_details_and_exposes_public_external_links(
     )
 
 
+@pytest.mark.parametrize(
+    "source_url",
+    (
+        "https://x.com/example/status/25",
+        "https://x.com/i/web/status/25",
+        "https://mobile.twitter.com/example/status/25",
+    ),
+)
 def test_public_links_use_short_labels_without_losing_their_destinations(
     db: Session,
+    source_url: str,
 ) -> None:
-    source_url = "https://x.com/example/status/25"
     shop = add_public_shop(db, index=25, name="短いボタン名の店", source_url=source_url)
     db.commit()
 
     list_html, list_parser = render_html(home(make_request("/"), db=db))
     assert "</svg> Map" in list_html
-    assert "</svg> Xの投稿" in list_html
+    assert "</svg> X" in list_html
+    assert "Xの投稿" not in list_html
     assert "↗" not in list_html
     assert "place-card__detail-arrow" not in list_html
     source_link = list_parser.find("a", attribute="href", value=source_url)[0]
     assert source_link["aria-label"] == (
-        "短いボタン名の店のXの投稿（新しいタブで開きます）"
+        "短いボタン名の店のX（新しいタブで開きます）"
     )
     assert source_link["rel"] == "noopener noreferrer"
     assert source_link["target"] == "_blank"
@@ -284,7 +293,8 @@ def test_public_links_use_short_labels_without_losing_their_destinations(
         shop_detail(shop.id, make_request(f"/shop/{shop.id}"), db=db)
     )
     assert "</svg> Map" in detail_html
-    assert "</svg> Xの投稿" in detail_html
+    assert "</svg> X" in detail_html
+    assert "Xの投稿" not in detail_html
     assert "↗" not in detail_html
     for parser in (list_parser, detail_parser):
         icons = parser.find("svg", attribute="class", value="place-link-icon")
@@ -348,7 +358,7 @@ def test_home_keeps_all_search_conditions_visible_with_one_submit(
     response = home(make_request("/"), sort="rating_desc", db=db)
     html, parser = render_html(response)
 
-    assert parser.find("details") == []
+    assert "<details" not in html.split("<main", 1)[1]
     assert parser.find("input", attribute="id", value="q-input")
     assert {attrs["name"] for attrs in parser.find("select")} == {
         "area", "category", "status", "sort",
@@ -392,7 +402,7 @@ def test_search_form_preserves_selected_visit_status(db: Session) -> None:
     db.commit()
 
     response = home(make_request("/?status=visited"), status="visited", db=db)
-    _, parser = render_html(response)
+    html, parser = render_html(response)
 
     status_selects = parser.find("select", attribute="name", value="status")
     assert len(status_selects) == 1
@@ -403,7 +413,7 @@ def test_search_form_preserves_selected_visit_status(db: Session) -> None:
         if "selected" in attrs
     ]
     assert [attrs["data-status-facet"] for attrs in selected_options] == ["visited"]
-    assert parser.find("details") == []
+    assert "<details" not in html.split("<main", 1)[1]
 
 
 def test_visit_status_can_be_cleared_from_the_active_conditions(db: Session) -> None:
@@ -542,6 +552,7 @@ def test_editing_shop_as_unvisited_clears_submitted_visit_date(
     db.commit()
 
     shop_edit(
+        expected_version=str(shop.version),
         shop_id=shop.id,
         request=make_request(f"/shop/{shop.id}/edit", admin=True),
         shop_name=shop.shop_name,
@@ -573,6 +584,7 @@ def test_editing_visited_shop_can_clear_visit_date(
     db.commit()
 
     shop_edit(
+        expected_version=str(shop.version),
         shop_id=shop.id,
         request=make_request(f"/shop/{shop.id}/edit", admin=True),
         shop_name=shop.shop_name,
@@ -711,10 +723,10 @@ def test_css_keeps_compact_cards_and_mobile_touch_targets() -> None:
     assert "html.is-dialog-open" in css
     assert "--app-control-size: 2.5rem" in css
     assert "--app-control-size: 2.75rem" in css
-    assert "/static/css/explorer.css?v=9" in base
+    assert "/static/css/explorer.css?v=14" in base
     assert ".place-card__visited-mark" in css
     assert ".star-rating--empty .star" in css
-    assert "/static/js/main.js?v=22" in base
+    assert "/static/js/main.js?v=28" in base
     assert "/static/vendor/bootstrap-5.3.8/bootstrap.min.css" in base
     assert ".explorer-filters__summary" not in css
     assert "outline: 2px solid var(--bs-primary)" in css
@@ -724,13 +736,16 @@ def test_css_keeps_compact_cards_and_mobile_touch_targets() -> None:
     assert "--place-card-min-width: 16rem" in css
     assert "gap: var(--place-card-gap)" in css
     assert ".place-action, .place-detail-action" in css
-    assert ".site-nav .nav-link.active { background: var(--bs-secondary-bg)" in css
+    assert ".site-account-menu__toggle" in css
+    assert "width: 44px; height: 44px" in css
+    assert "'Noto Sans JP'" in css
+    assert "family=Noto+Sans+JP" in base
     assert ".pagination__page.is-current { background: var(--bs-secondary-bg)" in css
     assert ".status-switcher" not in css
     assert "行きたい店を、すぐ見つける。" not in explore
     assert 'href="/export.csv"' not in explore
-    assert 'href="/export.csv"' in admin
-    assert "全店舗をCSVでダウンロード" in admin
+    assert 'href="/export.csv"' in Path("web/templates/admin_exports.html").read_text(encoding="utf-8")
+    assert 'aria-label="店舗一覧のCSVをダウンロード"' in Path("web/templates/admin_exports.html").read_text(encoding="utf-8")
 
 
 @pytest.mark.parametrize("path", ("/login", "/admin/login", "/admin", "/admin/review"))
@@ -740,22 +755,22 @@ def test_bootstrap_is_local_and_shared_with_admin_pages(db: Session, path: str) 
     _, parser = render_html(home(make_request("/"), db=db))
     stylesheets = {attrs["href"] for attrs in parser.find("link", attribute="rel", value="stylesheet")}
     assert "/static/vendor/bootstrap-5.3.8/bootstrap.min.css" in stylesheets
-    assert "/static/css/explorer.css?v=9" in stylesheets
-    assert "/static/css/admin.css?v=2" not in stylesheets
+    assert "/static/css/explorer.css?v=14" in stylesheets
+    assert not any((href or "").startswith("/static/css/admin.css?") for href in stylesheets)
     assert not any((href or "").startswith("/static/css/style.css") for href in stylesheets)
 
     request = make_request(path, admin=True)
     _, admin_parser = render_html(templates.TemplateResponse(request, "base.html", {"csrf_token": "test-token"}))
     admin_stylesheets = {attrs["href"] for attrs in admin_parser.find("link", attribute="rel", value="stylesheet")}
     assert "/static/vendor/bootstrap-5.3.8/bootstrap.min.css" in admin_stylesheets
-    assert "/static/css/explorer.css?v=9" in admin_stylesheets
-    assert "/static/css/admin.css?v=2" in admin_stylesheets
+    assert "/static/css/explorer.css?v=14" in admin_stylesheets
+    assert any((href or "").startswith("/static/css/admin.css?") for href in admin_stylesheets)
     assert not any((href or "").startswith("/static/css/style.css") for href in admin_stylesheets)
 
 
 @pytest.mark.parametrize("admin", [False, True])
 @pytest.mark.parametrize("detail", [False, True])
-def test_public_pages_keep_management_navigation_in_the_footer(
+def test_public_pages_share_role_based_header_menu(
     db: Session, admin: bool, detail: bool,
 ) -> None:
     shop = add_public_shop(db, index=30, name="閲覧画面の確認店")
@@ -766,10 +781,10 @@ def test_public_pages_keep_management_navigation_in_the_footer(
         response = home(make_request("/", admin=admin), db=db)
     html, _ = render_html(response)
     header = html.split('<header class="site-header', 1)[1].split("</header>", 1)[0]
-    footer = html.split('<footer class="site-footer', 1)[1].split("</footer>", 1)[0]
-    assert 'href="/admin' not in header
-    assert 'href="/admin"' in footer
-    assert ('href="/admin/review"' in footer) is admin
+    assert 'class="site-footer' not in html
+    assert ('href="/admin"' in header) is admin
+    assert 'href="/logout"' in header
+    assert 'href="/admin/review"' not in header
 
     bootstrap = Path("web/static/vendor/bootstrap-5.3.8/bootstrap.min.css").read_bytes()
     assert base64.b64encode(sha384(bootstrap.removesuffix(b"\n")).digest()).decode("ascii") == (
@@ -897,7 +912,7 @@ def test_list_row_uses_plain_category_and_five_star_rating(db: Session) -> None:
         if class_contains(attrs, "star-rating--readonly")
     ]
     assert len(readonly_ratings) == 1
-    assert readonly_ratings[0]["aria-label"] == "評価 3点／5点"
+    assert readonly_ratings[0]["aria-label"] == "評価 3点/5点"
     assert readonly_ratings[0]["role"] == "img"
     stars = [
         attrs
@@ -1002,7 +1017,7 @@ def test_initial_and_incremental_cards_keep_visit_and_rating_readonly(
         assert len(ratings) == 1
         assert ratings[0]["role"] == "img"
         assert ratings[0]["aria-label"] == (
-            f"評価 {rating}点／5点" if rating is not None else "未評価"
+            f"評価 {rating}点/5点" if rating is not None else "未評価"
         )
         stars = parser.find("span", attribute="class", value="star")
         assert len(stars) == 5

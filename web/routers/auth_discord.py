@@ -1,12 +1,26 @@
 import logging
 import os
 import secrets
+from collections.abc import Generator
 from typing import Optional
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
+
+from db.database import SessionLocal
+from services.admin_sessions import is_discord_admin, issue_admin_session, revoke_admin_session
+from services.discord_access import (
+    DiscordUserIdError,
+    configured_discord_ids,
+    configured_web_admin_ids,
+    discord_grant_generation,
+    normalize_discord_user_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +42,16 @@ def is_configured() -> bool:
 
 
 def _allowed_ids() -> set[str]:
-    raw = os.getenv("DISCORD_ALLOWED_USER_IDS", "")
-    ids = {s.strip() for s in raw.split(",") if s.strip()}
-    if ADMIN_USER_ID:
-        ids.add(ADMIN_USER_ID)
-    return ids
+    return configured_discord_ids(ADMIN_USER_ID)
+
+
+def get_db() -> Generator[Session, None, None]:
+    with SessionLocal() as db:
+        yield db
 
 
 @router.get("/auth/discord")
-def discord_login(request: Request):
+def discord_login(request: Request) -> RedirectResponse:
     if not is_configured():
         return RedirectResponse("/login?error=discord_not_configured", status_code=302)
     state = secrets.token_urlsafe(32)
@@ -58,7 +73,8 @@ async def discord_callback(
     code: Optional[str] = None,
     state: Optional[str] = None,
     error: Optional[str] = None,
-):
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
     if error:
         return RedirectResponse(f"/login?error=discord_{error}", status_code=302)
     if not code or not state:
@@ -85,10 +101,17 @@ async def discord_callback(
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
             )
             if token_resp.status_code != 200:
-                logger.warning("Discord token exchange failed: %s %s", token_resp.status_code, token_resp.text)
+                logger.warning("Discord token exchange failed: status=%s", token_resp.status_code)
                 return RedirectResponse("/login?error=discord_token_failed", status_code=302)
-            access_token = token_resp.json().get("access_token")
-            if not access_token:
+            try:
+                token_data: object = token_resp.json()
+            except ValueError:
+                logger.warning("Discord token exchange returned invalid JSON")
+                return RedirectResponse("/login?error=discord_token_failed", status_code=302)
+            if not isinstance(token_data, dict):
+                return RedirectResponse("/login?error=discord_token_failed", status_code=302)
+            access_token = token_data.get("access_token")
+            if not isinstance(access_token, str) or not access_token:
                 return RedirectResponse("/login?error=discord_no_token", status_code=302)
 
             user_resp = await client.get(
@@ -96,27 +119,64 @@ async def discord_callback(
                 headers={"Authorization": f"Bearer {access_token}"},
             )
             if user_resp.status_code != 200:
-                logger.warning("Discord user fetch failed: %s %s", user_resp.status_code, user_resp.text)
+                logger.warning("Discord user fetch failed: status=%s", user_resp.status_code)
                 return RedirectResponse("/login?error=discord_user_failed", status_code=302)
-            user = user_resp.json()
+            try:
+                user: object = user_resp.json()
+            except ValueError:
+                logger.warning("Discord user fetch returned invalid JSON")
+                return RedirectResponse("/login?error=discord_user_failed", status_code=302)
+            if not isinstance(user, dict):
+                return RedirectResponse("/login?error=discord_user_failed", status_code=302)
     except httpx.HTTPError as e:
-        logger.error("Discord OAuth network error: %s", e)
+        logger.error("Discord OAuth network error: type=%s", type(e).__name__)
         return RedirectResponse("/login?error=discord_network", status_code=302)
 
-    user_id = str(user.get("id") or "")
-    username = user.get("username") or "unknown"
-    if not user_id:
+    raw_user_id = user.get("id")
+    if raw_user_id is None or raw_user_id == "":
         return RedirectResponse("/login?error=discord_no_user_id", status_code=302)
+    if not isinstance(raw_user_id, str):
+        return RedirectResponse("/login?error=discord_invalid_user_id", status_code=302)
+    try:
+        user_id = normalize_discord_user_id(raw_user_id)
+    except DiscordUserIdError:
+        return RedirectResponse("/login?error=discord_invalid_user_id", status_code=302)
+    if user_id != raw_user_id:
+        return RedirectResponse("/login?error=discord_invalid_user_id", status_code=302)
+    raw_username = user.get("username")
+    username = raw_username if isinstance(raw_username, str) and raw_username else "unknown"
 
-    if user_id not in _allowed_ids():
+    try:
+        generation: str | None = await run_in_threadpool(discord_grant_generation, db, user_id, _allowed_ids())
+        admin_allowed: bool = user_id in configured_web_admin_ids(ADMIN_USER_ID)
+        if generation is not None and generation != "configuration":
+            admin_allowed = await run_in_threadpool(is_discord_admin, db, user_id, configured_web_admin_ids(ADMIN_USER_ID))
+    except SQLAlchemyError as exc:
+        logger.error("Discord access lookup failed: type=%s", type(exc).__name__)
+        return RedirectResponse("/login?error=discord_access_unavailable", status_code=302)
+    if generation is None:
         logger.info("Discord login denied for unregistered user id=%s username=%s", user_id, username)
         return RedirectResponse("/login?error=discord_unauthorized", status_code=302)
 
-    request.session["authenticated"] = True
-    request.session["discord_user_id"] = user_id
-    request.session["discord_username"] = username
-    if ADMIN_USER_ID and user_id == ADMIN_USER_ID:
-        request.session["admin_authenticated"] = True
+    try:
+        if admin_allowed:
+            await run_in_threadpool(
+                issue_admin_session,
+                db, request.session, method="discord", credential=user_id,
+                discord_user_id=user_id, discord_username=username,
+            )
+        else:
+            await run_in_threadpool(revoke_admin_session, db, request.session)
+            request.session.clear()
+            request.session["authenticated"] = True
+            request.session["discord_user_id"] = user_id
+            request.session["discord_username"] = username
+            request.session["discord_grant_generation"] = generation
+    except SQLAlchemyError as exc:
+        db.rollback()
+        logger.error("Discord session creation failed: error_type=%s", type(exc).__name__)
+        return RedirectResponse("/login?error=discord_access_unavailable", status_code=302)
+    if admin_allowed:
         logger.info("Discord admin login: id=%s username=%s", user_id, username)
     else:
         logger.info("Discord viewer login: id=%s username=%s", user_id, username)

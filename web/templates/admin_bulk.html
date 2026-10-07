@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}店舗情報の一括編集 — Meshi Archive{% endblock %}
+{% block content %}
+<h1 class="admin-page-title">店舗情報の一括編集</h1>
+{% if read_only %}
+<div class="alert alert-warning" role="status">現在は読取専用モードです。変更はできません。</div>
+{% endif %}
+
+<div id="bulk-workspace" class="admin-bulk-workspace" data-read-only="{{ 'true' if read_only else 'false' }}">
+  <div id="bulk-errors" tabindex="-1" {% if not errors %}hidden{% endif %}>
+    {% for error in errors %}<p class="alert alert-danger" role="alert">{{ error }}</p>{% endfor %}
+  </div>
+
+  <section id="bulk-selection" class="admin-bulk-selection" aria-label="CSVを編集" {% if preview or result %}hidden{% endif %}>
+    <p class="mb-3">CSVをダウンロードし、変更する行だけ残して編集してください。<br>編集したファイルを選択し、変更内容を確認して保存します。</p>
+    <a id="bulk-download" href="/admin/import/update/template.csv" class="btn btn-outline-secondary">CSVをダウンロード</a>
+
+    <form id="bulk-file-form" class="admin-bulk-file-form" method="post" action="/admin/import/validate" enctype="multipart/form-data" novalidate>
+      <input id="bulk-csrf-token" type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="d-flex flex-wrap align-items-baseline justify-content-between gap-2 mb-2">
+        <label for="bulk-file-input" class="form-label mb-0">編集したCSVを選択</label>
+        <span id="bulk-file-limit" class="small text-body-secondary">最大5 MB・5,000行</span>
+      </div>
+      <input id="bulk-file-input" type="file" name="file" class="form-control" accept=".csv" aria-describedby="bulk-file-limit" {% if read_only %}disabled{% endif %}>
+      <button id="bulk-check" type="submit" class="btn btn-primary mt-4" disabled>変更内容を確認</button>
+    </form>
+    <noscript><p class="alert alert-danger mt-4">CSVを確認・保存するにはJavaScriptを有効にしてください。</p></noscript>
+  </section>
+
+  <div id="bulk-content">
+    {% if preview %}
+    <section data-bulk-stage="preview" aria-labelledby="bulk-preview-heading">
+      <h2 id="bulk-preview-heading" class="h4 mb-3" tabindex="-1">変更内容の確認</h2>
+      <p class="text-break mb-4">{{ preview.filename }}<span class="ms-3">{{ preview.updated }}店舗を変更</span></p>
+      {% if changes %}
+      <div class="bulk-changes">
+        {% for shop_id, shop_changes in changes|groupby('shop_id') %}
+        <section class="bulk-shop-changes" aria-labelledby="bulk-shop-{{ loop.index }}">
+          <h3 id="bulk-shop-{{ loop.index }}" class="admin-section-title">{{ shop_changes[0].shop_name }}</h3>
+          <table class="table bulk-changes-table">
+            <thead><tr><th scope="col">項目</th><th scope="col">変更前</th><th scope="col">変更後</th></tr></thead>
+            <tbody>{% for change in shop_changes %}
+              <tr><th scope="row">{{ change.field_label }}</th><td data-label="変更前">{{ change.previous }}</td><td data-label="変更後">{{ change.proposed }}</td></tr>
+            {% endfor %}</tbody>
+          </table>
+        </section>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="lh-lg mb-4">変更はありません。戻ってCSVを編集し直してください。</p>
+      {% endif %}
+      <form id="bulk-save-form" method="post" action="/admin/import/update/apply" enctype="multipart/form-data" class="admin-form-actions">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="button" class="btn btn-outline-secondary" data-bulk-back>戻る</button>
+        {% if preview.updated %}<button id="bulk-save" type="submit" class="btn btn-primary" {% if read_only %}disabled{% endif %}>保存</button>{% endif %}
+      </form>
+    </section>
+    {% elif result %}
+    <section data-bulk-stage="complete" aria-labelledby="bulk-complete-heading">
+      <h2 id="bulk-complete-heading" class="h4 mb-3" tabindex="-1">保存しました</h2>
+      <p class="lh-lg mb-4">{{ result.updated }}店舗の情報を更新しました。</p>
+      <button type="button" class="btn btn-outline-secondary" data-bulk-again>続けて編集</button>
+    </section>
+    {% endif %}
+  </div>
+</div>
+<script src="/static/js/admin-bulk.js?v=1" defer></script>
+{% endblock %}

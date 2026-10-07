@@ -3,7 +3,7 @@ import unittest
 from starlette.requests import Request
 
 from web.routers.admin import templates
-from web.routers.home import logout
+from web.routers.home import perform_logout
 
 
 def _request(session: dict[str, object]) -> Request:
@@ -50,7 +50,7 @@ class AdminLoginTest(unittest.TestCase):
             "discord_username": "test-user",
             "csrf_token": "keep-token",
         }
-        response = logout(_request(session))
+        response = perform_logout(_request(session), csrf_token="keep-token")
 
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["location"], "/login")

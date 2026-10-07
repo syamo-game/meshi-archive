@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block title %}ログアウト — Meshi Archive{% endblock %}
+
+{% block content %}
+<div class="auth-layout mx-auto py-3 py-sm-4">
+  <div class="card shadow-sm p-3 p-sm-4">
+    <h1 class="h4 mb-3">ログアウト</h1>
+    <p>このブラウザの管理者セッションも失効します。</p>
+    <form method="post" action="/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit" class="btn btn-primary">ログアウトする</button>
+      <a href="/" class="btn btn-outline-secondary">戻る</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

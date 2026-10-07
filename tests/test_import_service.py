@@ -4,7 +4,6 @@ import asyncio
 import csv
 import io
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, text

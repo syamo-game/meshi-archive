@@ -22,3 +22,16 @@ regexes = [
     '''^\s*first = \{\*\*row\(\), "shop\.image_key": "0123456789abcdef" \* 4\}\s*$''',
     '''^\s*"shop\.image_key": "fedcba9876543210" \* 4,\s*$''',
 ]
+
+[[rules]]
+id = "discord-client-id"
+
+[[rules.allowlists]]
+description = "The fixed Discord user ID is synthetic and is not a credential."
+condition = "AND"
+paths = ['(^|/)tests/(test_home_pagination|test_shop_image_delivery|test_shop_photo_edit)\.py$']
+regexTarget = "line"
+regexes = [
+    '^\s*request\.session\.update\(authenticated=True, discord_user_id="123456789012345678"\)\s*$',
+    '^\s*issue_admin_session\(db, request\.session, method="discord", credential="123456789012345678", discord_user_id="123456789012345678"\)\s*$',
+]

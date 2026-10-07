@@ -68,6 +68,8 @@ def _extract_url(text: str) -> str | None:
 def _build_text_to_parse(message: discord.Message) -> str:
     parts = [message.content.strip()] if message.content.strip() else []
     for embed in message.embeds:
+        if isinstance(embed, discord.Embed) and embed.author.name:
+            parts.append(f"[Embed Author] {embed.author.name}")
         if embed.url:
             parts.append(f"[Embed URL] {embed.url}")
         if embed.title:
@@ -167,7 +169,8 @@ def build_message_envelope(message: discord.Message) -> MessageEnvelope:
         channel_id=str(message.channel.id),
         content=_build_text_to_parse(message),
         created_at=created_at,
-        assets=tuple(assets[:50]),
+        assets=tuple(assets),
+        omitted_asset_count=max(0, len(assets) - 50),
     )
 
 

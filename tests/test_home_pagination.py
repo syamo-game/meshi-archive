@@ -201,16 +201,20 @@ def test_home_http_redirects_a_stale_last_page_after_deletion(
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret")
 
+    @app.get("/_test/login")
+    def viewer_login(request: Request) -> dict[str, bool]:
+        request.session.update(authenticated=True, discord_user_id="123456789012345678")
+        return {"ok": True}
+
     def override_db() -> Generator[Session, None, None]:
         yield db
 
     app.include_router(home_router.router)
     app.dependency_overrides[home_router.get_db] = override_db
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home_router, "WEB_PASSWORD", None)
 
     with TestClient(app) as client:
+        client.get("/_test/login")
         response = client.get(
             "/",
             params={
@@ -261,16 +265,20 @@ def test_home_query_rejects_invalid_page_values(
     app = FastAPI()
     app.add_middleware(SessionMiddleware, secret_key="test-secret")
 
+    @app.get("/_test/login")
+    def viewer_login(request: Request) -> dict[str, bool]:
+        request.session.update(authenticated=True, discord_user_id="123456789012345678")
+        return {"ok": True}
+
     def override_db() -> Generator[Session, None, None]:
         yield db
 
     app.include_router(home_router.router)
     app.dependency_overrides[home_router.get_db] = override_db
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home_router, "WEB_PASSWORD", None)
 
     with TestClient(app) as client:
+        client.get("/_test/login")
         response = client.get("/", params={"page": page})
 
     assert response.status_code == 422

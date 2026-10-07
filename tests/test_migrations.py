@@ -88,6 +88,40 @@ def test_fresh_sqlite_migration_round_trip() -> None:
         database_path.unlink(missing_ok=True)
 
 
+def test_grant_audit_downgrade_requires_explicit_archive_and_cleanup(tmp_path: Path) -> None:
+    database_path = tmp_path / "grant-audit-migration.db"
+    config = alembic_config(database_path)
+    command.upgrade(config, "20261005_01")
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO discord_viewers (discord_user_id, generation, created_at) "
+            "VALUES ('123456789012345678', '0123456789abcdef0123456789abcdef', CURRENT_TIMESTAMP)"
+        ))
+    command.upgrade(config, "head")
+    assert {"admin_sessions", "discord_viewer_grant_events"}.issubset(inspect(engine).get_table_names())
+    with engine.begin() as connection:
+        assert connection.scalar(text("SELECT COUNT(*) FROM discord_viewers")) == 1
+        connection.execute(text(
+            "INSERT INTO discord_viewer_grant_events "
+            "(discord_user_id, actor_method, actor_session_hash, created_at) "
+            "VALUES ('123456789012345678', 'password', :session_hash, CURRENT_TIMESTAMP)"
+        ), {"session_hash": "a" * 64})
+    with pytest.raises(RuntimeError, match="Export grant audit events"):
+        command.downgrade(config, "20261005_01")
+    with engine.begin() as connection:
+        assert connection.scalar(text("SELECT COUNT(*) FROM discord_viewer_grant_events")) == 1
+        connection.execute(text("DELETE FROM discord_viewer_grant_events"))
+    command.downgrade(config, "20261005_01")
+    assert "discord_viewer_grant_events" not in inspect(engine).get_table_names()
+    with pytest.raises(RuntimeError, match="Discord viewer grants exist"):
+        command.downgrade(config, "20260928_01")
+    with engine.begin() as connection:
+        connection.execute(text("DELETE FROM discord_viewers"))
+    command.downgrade(config, "20260928_01")
+    engine.dispose()
+
+
 def test_shop_image_key_migration_preserves_existing_data() -> None:
     database_path = PROJECT_ROOT / f"migration-shop-image-{uuid.uuid4().hex}.db"
     database_url = f"sqlite:///{database_path.as_posix()}"
@@ -468,3 +502,61 @@ def test_legacy_sqlite_data_survives_upgrade() -> None:
         engine.dispose()
     finally:
         database_path.unlink(missing_ok=True)
+
+
+def test_discord_only_migration_backfills_old_grants_and_preserves_change_audit(tmp_path: Path) -> None:
+    database_path = tmp_path / "discord-only-old-schema.db"
+    config = alembic_config(database_path)
+    engine = create_engine(f"sqlite:///{database_path.as_posix()}")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE discord_viewers (discord_user_id VARCHAR(20) PRIMARY KEY, created_at DATETIME NOT NULL)"))
+        connection.execute(text(
+            "CREATE TABLE discord_viewer_grant_events (id INTEGER PRIMARY KEY, discord_user_id VARCHAR(20) NOT NULL, "
+            "actor_method VARCHAR(16) NOT NULL, actor_discord_user_id VARCHAR(20), actor_session_hash VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
+        ))
+        for user_id in ("11111111111111111", "22222222222222222"):
+            connection.execute(text("INSERT INTO discord_viewers VALUES (:user_id, '2026-01-02 03:04:05')"), {"user_id": user_id})
+        connection.execute(text(
+            "INSERT INTO discord_viewer_grant_events VALUES (1, '11111111111111111', 'password', NULL, :session_hash, '2026-01-02 03:04:05')"
+        ), {"session_hash": "a" * 64})
+    command.stamp(config, "20261005_02")
+    command.upgrade(config, "head")
+    with engine.begin() as connection:
+        rows = connection.execute(text("SELECT discord_user_id, generation, created_at FROM discord_viewers ORDER BY discord_user_id")).all()
+        assert [row[0] for row in rows] == ["11111111111111111", "22222222222222222"]
+        assert all(len(row[1]) == 32 and row[2] == "2026-01-02 03:04:05" for row in rows)
+        assert rows[0][1] != rows[1][1]
+        event = connection.execute(text("SELECT action, replacement_user_id, actor_method FROM discord_viewer_grant_events")).one()
+        assert tuple(event) == ("grant", None, "password")
+        connection.execute(text("UPDATE discord_viewer_grant_events SET action='revoke' WHERE id=1"))
+    with pytest.raises(RuntimeError, match="preserve access change audit"):
+        command.downgrade(config, "20261005_02")
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT action FROM discord_viewer_grant_events WHERE id=1")) == "revoke"
+        assert connection.scalar(text("SELECT COUNT(*) FROM discord_viewers")) == 2
+    engine.dispose()
+
+
+def test_role_migration_preserves_old_viewers_and_refuses_to_drop_role_audit(tmp_path: Path) -> None:
+    path = tmp_path / "old-discord-roles.db"
+    engine = create_engine(f"sqlite:///{path.as_posix()}")
+    config = alembic_config(path)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE discord_viewers (discord_user_id VARCHAR(20) PRIMARY KEY, generation VARCHAR(32) NOT NULL, created_at DATETIME NOT NULL)"))
+        connection.execute(text("CREATE TABLE discord_viewer_grant_events (id INTEGER PRIMARY KEY, discord_user_id VARCHAR(20) NOT NULL, actor_method VARCHAR(16) NOT NULL, actor_discord_user_id VARCHAR(20), actor_session_hash VARCHAR(64) NOT NULL, action VARCHAR(16) NOT NULL, replacement_user_id VARCHAR(20), created_at DATETIME NOT NULL)"))
+        connection.execute(text("INSERT INTO discord_viewers VALUES ('11111111111111111', :generation, '2026-01-02 03:04:05')"), {"generation": "a" * 32})
+    command.stamp(config, "20261006_01")
+    command.upgrade(config, "head")
+    with engine.begin() as connection:
+        assert tuple(connection.execute(text("SELECT discord_user_id, generation, is_admin, created_at FROM discord_viewers")).one()) == ("11111111111111111", "a" * 32, 0, "2026-01-02 03:04:05")
+        connection.execute(text("UPDATE discord_viewers SET is_admin=1"))
+    with pytest.raises(RuntimeError, match="Restore administrator access"):
+        command.downgrade(config, "20261006_01")
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE discord_viewers SET is_admin=0"))
+        connection.execute(text("INSERT INTO discord_viewer_grant_events (discord_user_id, actor_method, actor_session_hash, action, previous_role, new_role, created_at) VALUES ('11111111111111111', 'discord', :hash, 'update', 'admin', 'viewer', CURRENT_TIMESTAMP)"), {"hash": "b" * 64})
+    with pytest.raises(RuntimeError, match="preserve access change audit"):
+        command.downgrade(config, "20261006_01")
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT previous_role FROM discord_viewer_grant_events")) == "admin"
+    engine.dispose()

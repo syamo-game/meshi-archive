@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import datetime, timezone
 from enum import StrEnum
 
@@ -38,6 +39,43 @@ IMAGE_KEY_RE = re.compile(r"^[0-9a-f]{64}$")
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+class DiscordViewer(Base):
+    __tablename__ = "discord_viewers"
+
+    discord_user_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    generation: Mapped[str] = mapped_column(String(32), nullable=False, default=lambda: secrets.token_hex(16))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utc_now
+    )
+
+
+class AdminSession(Base):
+    __tablename__ = "admin_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    auth_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_discord_user_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    credential_binding: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class DiscordViewerGrantEvent(Base):
+    __tablename__ = "discord_viewer_grant_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    discord_user_id: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    actor_method: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_discord_user_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    actor_session_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False, default="grant", server_default="grant")
+    replacement_user_id: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    previous_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    new_role: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
 
 def validate_image_key(value: object) -> str | None:
@@ -224,9 +262,12 @@ class Shop(Base):
     @property
     def needs_review(self) -> bool:
         return any(
-            mention.review_status in {ReviewStatus.PENDING.value, ReviewStatus.DEFERRED.value}
-            or mention.metadata_review_status
-            in {MetadataReviewStatus.PENDING.value, MetadataReviewStatus.DEFERRED.value}
+            not (mention.review_status == ReviewStatus.REJECTED.value and mention.difference_type == "manual_excluded")
+            and (
+                mention.review_status in {ReviewStatus.PENDING.value, ReviewStatus.DEFERRED.value}
+                or mention.metadata_review_status
+                in {MetadataReviewStatus.PENDING.value, MetadataReviewStatus.DEFERRED.value}
+            )
             for mention in self.mentions
         )
 

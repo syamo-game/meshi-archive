@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from typing import Callable, Literal
 
-from sqlalchemy import or_
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -29,6 +29,7 @@ from services.resolution import (
     normalize_url_identity,
 )
 from services.shop_creation_lock import lock_new_shop_creation
+from services.merge_history import snapshot_merge
 
 
 @dataclass(frozen=True)
@@ -304,6 +305,7 @@ def _approved_shops(db: Session) -> tuple[Shop, ...]:
     return tuple(
         db.query(Shop)
         .filter(Shop.mentions.any(ShopMention.review_status == ReviewStatus.APPROVED.value))
+        .populate_existing()
         .order_by(Shop.id.asc())
         .all()
     )
@@ -442,6 +444,7 @@ def _redirect_conflict_reason(
                 ShopRedirect.target_shop_id.in_(shop_ids),
             )
         )
+        .populate_existing()
         .all()
     )
     if any(
@@ -572,6 +575,7 @@ def _lock_candidate_rows(
                 ShopRedirect.target_shop_id.in_(candidate_shop_ids),
             )
         )
+        .populate_existing()
         .order_by(ShopRedirect.source_shop_id.asc())
     )
     if dialect == "postgresql":
@@ -584,11 +588,12 @@ def _lock_candidate_rows(
 
 def _group_mentions_for_update(
     db: Session,
-    losing_shop_ids: tuple[int, ...],
+    shop_ids: tuple[int, ...],
 ) -> tuple[ShopMention, ...]:
     query = (
         db.query(ShopMention)
-        .filter(ShopMention.shop_id.in_(losing_shop_ids))
+        .filter(ShopMention.shop_id.in_(shop_ids))
+        .populate_existing()
         .order_by(ShopMention.id.asc())
     )
     if db.get_bind().dialect.name == "postgresql":
@@ -605,6 +610,7 @@ def _flatten_redirects(
     incoming = (
         db.query(ShopRedirect)
         .filter(ShopRedirect.target_shop_id.in_(losing_shop_ids))
+        .populate_existing()
         .order_by(ShopRedirect.source_shop_id.asc())
         .all()
     )
@@ -636,6 +642,28 @@ def _merge_safe_group(
     keeper = shops[0]
     losing_shops = shops[1:]
     losing_shop_ids = tuple(shop.id for shop in losing_shops)
+    group_mentions = _group_mentions_for_update(db, group.shop_ids)
+    approved_shop_ids = {
+        mention.shop_id for mention in group_mentions
+        if mention.review_status == ReviewStatus.APPROVED.value
+    }
+    if approved_shop_ids != set(group.shop_ids):
+        return SafeDuplicateMergeResultGroup(
+            shop_ids=group.shop_ids,
+            keep_shop_id=group.keep_shop_id,
+            evidence=group.evidence,
+            action="skipped",
+            reason="approved_mentions_changed",
+            merged_shop_count=0,
+            moved_mention_count=0,
+            complemented_fields=(),
+        )
+    mentions = tuple(mention for mention in group_mentions if mention.shop_id in losing_shop_ids)
+    note = snapshot_merge(
+        shops,
+        mentions,
+        reason=f"safe duplicate merge; evidence={','.join(group.evidence)}",
+    )
     moved_external_identity = None
     if not keeper.external_source and not keeper.external_id:
         moved_external_identity = next(
@@ -656,8 +684,6 @@ def _merge_safe_group(
         shops,
         moved_external_identity=moved_external_identity,
     )
-    mentions = _group_mentions_for_update(db, losing_shop_ids)
-    note = f"safe duplicate merge; evidence={','.join(group.evidence)}"
     for mention in mentions:
         previous_shop_id = mention.shop_id
         mention.shop = keeper
@@ -696,6 +722,9 @@ def _merge_safe_group(
 
 def apply_safe_duplicate_merges(db: Session) -> SafeDuplicateMergeResult:
     lock_new_shop_creation(db)
+    if db.get_bind().dialect.name == "sqlite":
+        # SQLite ignores row locks; reserve its writer before taking any snapshots.
+        db.execute(text("UPDATE shops SET id = id WHERE id = (SELECT MIN(id) FROM shops)"))
     preliminary_plan = build_safe_duplicate_merge_plan(db)
     candidate_shop_ids = tuple(
         sorted(

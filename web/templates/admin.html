@@ -1,117 +1,20 @@
 {% extends "base.html" %}
-
-{% block title %}管理 — Meshi Archive{% endblock %}
-
+{% block title %}概要 — Meshi Archive{% endblock %}
 {% block content %}
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-  <h1 class="h4 mb-0">管理</h1>
-  <a href="/admin/logout" class="btn btn-outline-secondary btn-sm">ログアウト</a>
-</div>
-
-{% if disabled %}
-<div class="alert alert-danger" role="alert">
-  <span class="alert__icon" aria-hidden="true">⚠</span>
-  ADMIN_PASSWORD が設定されていません。管理ページは無効です。
-</div>
-
-{% else %}
-
-{% if read_only %}
-<div class="alert alert-warning" role="status">
-  <span class="alert__icon" aria-hidden="true">⚠</span>
-  現在は読取専用モードです。データの確認はできますが、変更はできません。
-</div>
-{% endif %}
-
-{% if result %}
-<div class="alert alert-success" role="status">
-  <span class="alert__icon" aria-hidden="true">✓</span>
-  インポート完了:
-  <strong>{{ result.row_count }}</strong> 店舗、
-  <strong>{{ result.message_count }}</strong> 投稿を店舗データへ適用しました。
-</div>
-{% endif %}
-
-{% if preview %}
-<section class="card p-3 p-sm-4 mb-3" aria-labelledby="preview-heading">
-  <h2 id="preview-heading" class="h5 mb-3">検証結果</h2>
-  <dl class="admin-import-facts">
-    <div><dt>ファイル</dt><dd>{{ preview.filename }}</dd></div>
-    <div><dt>SHA-256</dt><dd><code>{{ preview.sha256 }}</code></dd></div>
-    <div><dt>店舗 / 投稿</dt><dd>{{ preview.row_count }} / {{ preview.message_count }}</dd></div>
-    <div><dt>データ確認</dt><dd>{{ preview.review_count }}</dd></div>
-    <div><dt>差分</dt><dd>追加 {{ preview.inserted }} / 更新 {{ preview.updated }} / 削除 {{ preview.deleted }}</dd></div>
-  </dl>
-  <div class="alert alert-warning" role="note">
-    この時点ではデータを変更していません。適用すると、現在の店舗・投稿関連データをこのCSVで置き換えます。複数の投稿、未確定の確認項目、添付、処理履歴、統合前URLはCSVから復元できません。先にDBをバックアップしてください。
-  </div>
-  <form id="import-apply-form" method="post" action="/admin/import/{{ preview.batch_id }}/apply">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button type="submit" class="btn btn-danger" {% if read_only %}disabled{% endif %}>
-      検証済みデータを適用
-    </button>
-  </form>
+<h1 class="admin-page-title">概要</h1>
+<section class="admin-summary" aria-label="確認が必要な登録内容">
+  <div><h2 class="admin-section-title">未確認の登録内容</h2><p class="admin-summary-count"><strong>{{ counters.unresolved }}</strong> 件</p></div>
+  <a class="btn btn-primary" href="/admin/review">登録内容を確認</a>
 </section>
-{% endif %}
-
-{% if errors %}
-{% for error in errors %}
-<div class="alert alert-danger" role="alert">
-  <span class="alert__icon" aria-hidden="true">⚠</span>
-  {{ error }}
-</div>
-{% endfor %}
-{% endif %}
-
-<section class="card p-3 p-sm-4 mb-3 align-items-start" aria-labelledby="review-heading">
-  <h2 id="review-heading" class="h5 mb-3">データ確認</h2>
-  <p class="text-body-secondary">未確定店舗の投稿根拠と検索候補を比較し、承認・修正・統合・除外できます。</p>
-  <a href="/admin/review" class="btn btn-outline-secondary">データ確認を開く</a>
+{% if read_only %}<p class="alert alert-warning" role="status">現在は読取専用です。変更はできません。</p>{% endif %}
+<div id="admin-intake-config" data-read-only="{{ 'true' if read_only else 'false' }}" hidden></div>
+<section class="admin-intake" aria-labelledby="intake-title">
+  <h2 id="intake-title" class="admin-intake-title">登録できなかった投稿</h2>
+  <div id="intake-posts" role="list" aria-live="polite" aria-busy="true"></div>
+  <p id="intake-loading" class="small text-body-secondary" role="status">読み込み中…</p>
+  <p id="intake-empty" class="text-body-secondary" hidden>対応が必要な投稿はありません。</p>
+  <p id="intake-error" class="text-danger" role="alert" hidden></p>
+  <button id="intake-load" type="button" class="btn btn-outline-secondary" hidden>再試行</button>
 </section>
-
-<section class="card p-3 p-sm-4 mb-3 align-items-start" aria-labelledby="export-heading">
-  <h2 id="export-heading" class="h5 mb-3">CSVエクスポート</h2>
-  <a href="/export.csv" class="btn btn-outline-secondary">全店舗をCSVでダウンロード</a>
-</section>
-
-<section class="card p-3 p-sm-4 mb-3" aria-labelledby="import-heading">
-  <h2 id="import-heading" class="h5 mb-3">CSV インポート</h2>
-  <p class="text-body-secondary">
-    まず形式・ID・日時・重複・全列を検証し、差分を表示します。CSVは店舗カタログ用で、DBの完全なバックアップではありません。検証だけではデータを変更しません。
-  </p>
-
-  <form id="import-form"
-        method="post"
-        action="/admin/import/validate"
-        enctype="multipart/form-data"
-        novalidate>
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-
-    <div class="mb-3">
-      <label for="file-input" class="form-label">
-        CSV ファイル
-        <span class="text-body-secondary small">（最大 5 MB、5,000 行）</span>
-      </label>
-      <input
-        id="file-input"
-        type="file"
-        name="file"
-        class="form-control"
-        accept=".csv"
-        required
-        aria-describedby="file-hint">
-      <p id="file-hint" class="form-text">
-        必須列: <code>_id</code>、<code>@timestamp</code>、<code>message_id</code>、<code>shop.name</code>、<code>status.is_visited</code>、<code>needs_review</code>
-      </p>
-    </div>
-
-    <div>
-      <button type="submit" class="btn btn-primary" id="import-btn" {% if read_only %}disabled{% endif %}>
-        CSVを検証
-      </button>
-    </div>
-  </form>
-</section>
-
-{% endif %}
+<script src="/static/js/admin-overview.js?v=2"></script>
 {% endblock %}

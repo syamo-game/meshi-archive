@@ -21,7 +21,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from sqlalchemy import text
+from sqlalchemy import exists, text, tuple_, update
 from sqlalchemy.orm import Session
 
 from db.models import (
@@ -47,6 +47,7 @@ from db.models import (
 )
 from services.resolution import normalize_external_identity
 from services.source_identity import source_asset_fingerprint, source_asset_identity
+from web.area_groups import canonicalize_area
 
 
 MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -165,6 +166,14 @@ class ParsedImport:
 
 
 @dataclass(frozen=True)
+class CsvUpdateChange:
+    shop_id: int
+    column: str
+    previous: str
+    proposed: str
+
+
+@dataclass(frozen=True)
 class ImportPreview:
     batch_id: str
     filename: str
@@ -175,6 +184,7 @@ class ImportPreview:
     inserted: int
     updated: int
     deleted: int
+    changes: tuple[CsvUpdateChange, ...] = ()
 
 
 def _blank_to_none(value: str | None) -> str | None:
@@ -683,6 +693,7 @@ def build_preview(db: Session, batch: ImportBatch) -> ImportPreview:
 
 
 def apply_import_batch(db: Session, batch_id: str) -> ImportPreview:
+    """Replace archive tables for offline maintenance, outside the web workflow."""
     batch = db.query(ImportBatch).filter(ImportBatch.id == batch_id).first()
     if not batch:
         raise ValueError(f"Import batch not found: {batch_id}")
@@ -826,3 +837,303 @@ def apply_import_batch(db: Session, batch_id: str) -> ImportPreview:
         raise RuntimeError(f"Failed to apply import batch {batch_id}: {exc}") from exc
 
     return preview
+
+
+CSV_UPDATE_COLUMNS: dict[str, str] = {
+    "shop.name": "shop_name",
+    "shop.branch_name": "branch_name",
+    "shop.area": "area",
+    "shop.category": "category",
+    "shop.address": "address",
+    "shop.phone": "phone",
+    "canonical_url": "canonical_url",
+    "status.is_visited": "is_visited",
+    "visited_at": "visited_at",
+    "rating": "rating",
+    "memo": "memo",
+}
+
+
+def escape_csv_update_value(value: str | None) -> str:
+    text = value or ""
+    prefix_length = len(text) - len(text.lstrip("'"))
+    if prefix_length < len(text) and text[prefix_length] in _CSV_INJECT_CHARS:
+        return "'" + text
+    return text
+
+
+def _unescape_csv_update_value(value: str) -> str:
+    prefix_length = len(value) - len(value.lstrip("'"))
+    if prefix_length and prefix_length < len(value) and value[prefix_length] in _CSV_INJECT_CHARS:
+        return value[1:]
+    return value
+
+
+def _update_text_or_none(value: str) -> str | None:
+    decoded = _unescape_csv_update_value(value)
+    return decoded if decoded else None
+
+
+class CsvShopUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    row_number: int
+    shop_id: int = Field(gt=0)
+    shop_version: int = Field(gt=0)
+    message_id: str
+    shop_name: str | None = Field(default=None, min_length=1, max_length=500)
+    branch_name: str | None = Field(default=None, max_length=255)
+    area: str | None = Field(default=None, max_length=255)
+    category: str | None = Field(default=None, max_length=255)
+    address: str | None = Field(default=None, max_length=2_000)
+    phone: str | None = Field(default=None, max_length=32)
+    canonical_url: str | None = None
+    is_visited: bool | None = None
+    visited_at: datetime | None = None
+    rating: int | None = Field(default=None, ge=1, le=5)
+    memo: str | None = Field(default=None, max_length=20_000)
+
+    @field_validator("message_id", mode="before")
+    @classmethod
+    def validate_message_id(cls, value: object) -> str:
+        return CsvImportRow.validate_message_id(value)
+
+    @field_validator("canonical_url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return CsvImportRow.validate_url(value)
+
+    @field_validator("shop_name")
+    @classmethod
+    def validate_shop_name(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("shop_name cannot contain only whitespace")
+        return value
+
+    @model_validator(mode="after")
+    def validate_required_values(self) -> "CsvShopUpdate":
+        for field in ("shop_name", "is_visited"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be empty")
+        return self
+
+    def changes(self) -> dict[str, str | bool | int | datetime | None]:
+        return self.model_dump(
+            exclude={"row_number", "shop_id", "shop_version", "message_id"},
+            exclude_unset=True,
+        )
+
+
+def _changed_fields(shop: Shop, row: CsvShopUpdate) -> dict[str, str | bool | int | datetime | None]:
+    changed: dict[str, str | bool | int | datetime | None] = {}
+    for field, proposed in row.changes().items():
+        previous = getattr(shop, field)
+        if field == "area" and proposed != previous and isinstance(proposed, str):
+            proposed = canonicalize_area(proposed) or proposed
+        if isinstance(previous, datetime) and isinstance(proposed, datetime):
+            old_utc = previous.replace(tzinfo=previous.tzinfo or timezone.utc).astimezone(timezone.utc)
+            new_utc = proposed.replace(tzinfo=proposed.tzinfo or timezone.utc).astimezone(timezone.utc)
+            if old_utc == new_utc:
+                continue
+        elif previous == proposed:
+            continue
+        changed[field] = proposed
+    return changed
+
+
+@dataclass(frozen=True)
+class ParsedCsvUpdate:
+    filename: str
+    sha256: str
+    rows: tuple[CsvShopUpdate, ...]
+
+
+def parse_csv_update(raw: bytes, filename: str) -> ParsedCsvUpdate:
+    if len(raw) > MAX_FILE_BYTES:
+        raise ImportValidationFailure(["CSVファイルは5MB以下にしてください。"])
+    if not filename.lower().endswith(".csv"):
+        raise ImportValidationFailure(["CSVファイルを指定してください。"])
+    try:
+        decoded = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise ImportValidationFailure(["UTF-8のCSVファイルを指定してください。"]) from exc
+    try:
+        reader = csv.DictReader(io.StringIO(decoded), strict=True)
+        headers = reader.fieldnames or []
+        source_rows = list(reader)
+    except csv.Error as exc:
+        raise ImportValidationFailure([f"CSV形式が不正です: {exc}"]) from exc
+    if len(source_rows) > MAX_ROWS:
+        raise ImportValidationFailure([f"CSVは{MAX_ROWS:,}行以下にしてください。"])
+    required = {"_id", "shop.version", "message_id"}
+    errors: list[str] = []
+    if len(headers) != len(set(headers)):
+        errors.append("同じ列名が重複しています。")
+    missing = required - set(headers)
+    if missing:
+        errors.append(f"必須列がありません: {', '.join(sorted(missing))}。最新のCSVから取得してください。")
+    unsupported = set(headers) - required - set(CSV_UPDATE_COLUMNS)
+    if unsupported:
+        errors.append(
+            f"差分更新では扱えない列です: {', '.join(sorted(unsupported))}。"
+            "必須列と変更する店舗情報の列だけを残してください。審査状態は確認画面で変更してください。"
+        )
+    if not set(headers) & set(CSV_UPDATE_COLUMNS):
+        errors.append("変更する店舗情報の列を1つ以上含めてください。")
+    if errors:
+        raise ImportValidationFailure(errors)
+    rows: list[CsvShopUpdate] = []
+    seen_ids: set[int] = set()
+    for row_number, source in enumerate(source_rows, start=2):
+        try:
+            if None in source or any(value is None for value in source.values()):
+                raise ValueError("列数がヘッダーと一致しません")
+            raw_id = source["_id"].strip()
+            raw_version = source["shop.version"].strip()
+            if not raw_id.isdigit() or not raw_version.isdigit():
+                raise ValueError("_id と shop.version は正の整数で指定してください")
+            values: dict[str, str | bool | int | datetime | None] = {
+                "row_number": row_number,
+                "shop_id": int(raw_id),
+                "shop_version": int(raw_version),
+                "message_id": source["message_id"],
+            }
+            for column, field in CSV_UPDATE_COLUMNS.items():
+                if column not in headers:
+                    continue
+                value = source[column]
+                if field == "is_visited":
+                    values[field] = _parse_required_bool(value, column)
+                elif field == "rating":
+                    values[field] = _parse_rating(value)
+                elif field == "visited_at":
+                    values[field] = _parse_datetime(value, column, required=False)
+                else:
+                    values[field] = _update_text_or_none(value)
+            row = CsvShopUpdate.model_validate(values)
+            if row.shop_id in seen_ids:
+                raise ValueError(f"_id={row.shop_id} が重複しています")
+            seen_ids.add(row.shop_id)
+            rows.append(row)
+        except ValidationError as exc:
+            errors.append(f"{row_number}行目: {_format_validation_error(exc)}")
+        except ValueError as exc:
+            errors.append(f"{row_number}行目: {exc}")
+    if not rows and not errors:
+        errors.append("CSVにデータ行がありません。")
+    if errors:
+        raise ImportValidationFailure(errors[:100])
+    return ParsedCsvUpdate(Path(filename).name, hashlib.sha256(raw).hexdigest().upper(), tuple(rows))
+
+
+def preview_csv_update(db: Session, parsed: ParsedCsvUpdate) -> ImportPreview:
+    errors: list[str] = []
+    changes: list[CsvUpdateChange] = []
+    column_by_field = {field: column for column, field in CSV_UPDATE_COLUMNS.items()}
+    for row in parsed.rows:
+        shop = db.query(Shop).filter(Shop.id == row.shop_id).populate_existing().first()
+        if shop is None:
+            errors.append(f"{row.row_number}行目: _id={row.shop_id} は存在しません。追加はできません。")
+            continue
+        if shop.version != row.shop_version:
+            errors.append(
+                f"{row.row_number}行目: _id={row.shop_id} は更新済みです"
+                f"（CSV version={row.shop_version} / 最新={shop.version}）。再出力して変更内容を確認してください。"
+            )
+        linked = db.query(ShopMention.id).filter(
+            ShopMention.shop_id == row.shop_id, ShopMention.message_id == row.message_id
+        ).first()
+        if linked is None:
+            errors.append(f"{row.row_number}行目: _id={row.shop_id} と message_id の関連が一致しません。")
+        if {"is_visited", "visited_at"} & row.model_fields_set:
+            is_visited = row.is_visited if "is_visited" in row.model_fields_set else shop.is_visited
+            visited_at = row.visited_at if "visited_at" in row.model_fields_set else shop.visited_at
+            if not is_visited and visited_at is not None:
+                errors.append(
+                    f"{row.row_number}行目: status.is_visited=false の店舗に visited_at は設定できません。"
+                    "訪問済みにする場合は status.is_visited=true を、未訪問にする場合は visited_at 列の空欄を指定してください。"
+                )
+        for field, proposed in _changed_fields(shop, row).items():
+            if field == "area" and canonicalize_area(proposed) is None:
+                errors.append(
+                    f"{row.row_number}行目: shop.area は登録済みの市区町村名・駅名を指定してください。空欄にはできません"
+                )
+            if field == "category":
+                from bot.restaurant_extractor import is_known_category
+
+                if not isinstance(proposed, str) or not is_known_category(proposed):
+                    errors.append(
+                        f"{row.row_number}行目: shop.category は確認画面の既定分類を指定してください。空欄にはできません"
+                    )
+            previous = getattr(shop, field)
+            changes.append(CsvUpdateChange(
+                shop_id=row.shop_id, column=column_by_field[field],
+                previous="" if previous is None else str(previous),
+                proposed="" if proposed is None else str(proposed),
+            ))
+        if "canonical_url" in row.model_fields_set:
+            identities = collect_external_identities(
+                external_source=shop.external_source,
+                external_id=shop.external_id,
+                urls=(row.canonical_url,),
+            )
+            if external_identities_conflict(identities):
+                errors.append(f"{row.row_number}行目: canonical_url が既存の店舗識別子と一致しません。")
+    if errors:
+        raise ImportValidationFailure(errors[:100])
+    changed_shop_ids = {change.shop_id for change in changes}
+    return ImportPreview(
+        batch_id="update", filename=parsed.filename, sha256=parsed.sha256,
+        row_count=len(parsed.rows),
+        message_count=len({row.message_id for row in parsed.rows if row.shop_id in changed_shop_ids}),
+        review_count=0, inserted=0, updated=len(changed_shop_ids), deleted=0, changes=tuple(changes),
+    )
+
+
+def apply_csv_update(db: Session, parsed: ParsedCsvUpdate) -> ImportPreview:
+    # Import locally because identity helpers are used by the shared lock module.
+    from services.shop_creation_lock import lock_new_shop_creation
+
+    try:
+        lock_new_shop_creation(db)
+        # Shop versions alone cannot guard a link removed by a review decision.
+        db.query(ShopMention).filter(
+            tuple_(ShopMention.shop_id, ShopMention.message_id).in_(
+                [(row.shop_id, row.message_id) for row in parsed.rows]
+            )
+        ).order_by(ShopMention.id).with_for_update().populate_existing().all()
+        db.query(Shop).filter(
+            Shop.id.in_([row.shop_id for row in parsed.rows])
+        ).order_by(Shop.id).with_for_update().populate_existing().all()
+        preview = preview_csv_update(db, parsed)
+        for row in sorted(parsed.rows, key=lambda item: item.shop_id):
+            shop = db.get(Shop, row.shop_id)
+            if shop is None:
+                raise ImportValidationFailure([f"{row.row_number}行目: _id={row.shop_id} は存在しません"])
+            changes = _changed_fields(shop, row)
+            if not changes:
+                continue
+            statement = (
+                update(Shop)
+                .where(
+                    Shop.id == row.shop_id,
+                    Shop.version == row.shop_version,
+                    exists().where(
+                        ShopMention.shop_id == Shop.id,
+                        ShopMention.message_id == row.message_id,
+                    ),
+                )
+                .values(**changes, version=row.shop_version + 1, updated_at=utc_now())
+                .execution_options(synchronize_session=False)
+            )
+            result = db.execute(statement)
+            if result.rowcount != 1:
+                raise ImportValidationFailure([
+                    f"{row.row_number}行目: _id={row.shop_id} が変更されたため、全行の更新を取り消しました。"
+                ])
+        db.commit()
+        db.expire_all()
+        return preview
+    except Exception:
+        db.rollback()
+        raise

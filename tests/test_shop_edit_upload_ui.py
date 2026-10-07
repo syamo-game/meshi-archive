@@ -72,7 +72,7 @@ def test_admin_editor_submits_photo_with_existing_fields_and_previews_current_im
     assert "data-shop-detail-content" not in html
     assert document.ids["shop-edit-submit"]["type"] == "submit"
     assert '/static/js/area-picker.js?v=1' in html
-    assert '/static/js/shop-edit.js?v=2' in html
+    assert '/static/js/shop-edit.js?v=3' in html
 
 
 def test_editor_renders_photo_error_and_retains_other_inputs_without_current_image() -> None:

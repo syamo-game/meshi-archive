@@ -39,7 +39,7 @@
         {% endif %}
         <div class="place-card__subline d-flex flex-column align-items-start gap-1">
           <span class="star-rating star-rating--readonly place-card__rating{% if not shop.rating %} star-rating--empty{% endif %}" role="img"
-                aria-label="{% if shop.rating %}評価 {{ shop.rating }}点／5点{% else %}未評価{% endif %}">
+              aria-label="{% if shop.rating %}評価 {{ shop.rating }}点/5点{% else %}未評価{% endif %}">
             {% for i in range(1, 6) %}
             <span class="star{% if shop.rating and i <= shop.rating %} star--active{% endif %}" aria-hidden="true">★</span>
             {% endfor %}
@@ -53,7 +53,7 @@
               <span class="place-card__meta-missing">エリア未設定</span>
             {% endif %}
             {% if shop.category %}
-              <span aria-hidden="true">／</span><span>{{ shop.category }}</span>
+            <span aria-hidden="true">/</span><span>{{ shop.category }}</span>
             {% endif %}
           </p>
         </div>

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.orm import Session
 
-from db.models import Base, Message, ReviewEvent, Shop, ShopMention, SourceAsset
+from db.models import Base, DiscordViewer, DiscordViewerGrantEvent, Message, ReviewEvent, Shop, ShopMention, SourceAsset
 from scripts.transfer_database import TransferFailure, transfer_database, verify_databases
 
 
@@ -52,6 +52,13 @@ def _build_source(path: Path) -> None:
         session.flush()
         session.add_all(
             (
+                DiscordViewer(discord_user_id="18446744073709551615"),
+                DiscordViewerGrantEvent(
+                    id=7,
+                    discord_user_id="18446744073709551615",
+                    actor_method="password",
+                    actor_session_hash="a" * 64,
+                ),
                 SourceAsset(
                     id=88,
                     message_id=message.message_id,
@@ -90,6 +97,9 @@ def test_transfer_preserves_rows_and_identifiers(tmp_path: Path) -> None:
         report = transfer_database(source_engine, target_engine)
         assert report.status == "transferred"
         assert {summary.table: summary.rows for summary in report.tables} == {
+            "admin_sessions": 0,
+            "discord_viewers": 1,
+            "discord_viewer_grant_events": 1,
             "login_attempts": 0,
             "import_batches": 0,
             "import_rows": 0,
@@ -105,6 +115,8 @@ def test_transfer_preserves_rows_and_identifiers(tmp_path: Path) -> None:
             "sync_states": 0,
         }
         with Session(target_engine) as session:
+            assert session.get(DiscordViewer, "18446744073709551615") is not None
+            assert session.get(DiscordViewerGrantEvent, 7).actor_session_hash == "a" * 64
             assert session.scalar(select(Shop.id)) == 42
             assert session.scalar(select(ShopMention.id)) == 77
             assert session.scalar(select(SourceAsset.id)) == 88

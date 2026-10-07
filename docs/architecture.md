@@ -19,7 +19,7 @@ PostgreSQL
   └─ Alembic migration
 ```
 
-Web、Discord Bot、DBマイグレーションは別々のプロセスで動かします。ローカル起動ではSQLiteを使えます。本番用のサーバー設定は同梱していません。公開する際はWebをリバースプロキシ経由で提供し、PostgreSQLへの接続を内部ネットワークに制限します。
+本番はDocker Composeで`db`、`migrate`、`web`、`bot`を動かします。Webはリバースプロキシ経由で公開し、PostgreSQLは内部ネットワークだけに接続します。
 
 ## 店舗同定
 
@@ -79,20 +79,29 @@ Web、Discord Bot、DBマイグレーションは別々のプロセスで動か�
 | `review_events` | データ確認で行った判断の履歴 |
 | `shop_redirects` | 統合前の店舗URLから統合先へ移すための対応表 |
 | `import_batches` | CSV検証結果と明示適用の状態 |
-| `import_rows` | CSV検証済みの行と適用する店舗・投稿情報 |
+| `import_rows` | 検証済みCSVの行データと取込バッチとの対応 |
 | `lookup_cache` | URL取得結果と検索候補の期限付きキャッシュ |
-| `login_attempts` | ログイン失敗回数と待機期限 |
+| `login_attempts` | ログイン失敗回数、集計期間、試行を制限する期限 |
+| `admin_sessions` | 管理者セッションのハッシュ、認証方法、有効期限 |
+| `discord_viewers` | DBに登録したDiscord閲覧許可 |
+| `discord_viewer_grant_events` | Discord閲覧許可を付与した操作者と日時の監査記録 |
 
 Discord IDは17〜20桁の文字列として保存します。小数、科学表記、前後空白を許可しません。
 
 ## Web
 
-FastAPIとJinja2で次の画面を提供します。
+FastAPIとJinja2で次の画面と認証経路を提供します。
 
 - `/`：確認済み店舗の一覧、検索、絞り込み、並べ替え
 - `/shop/{id}`：店舗詳細、訪問状態、評価、メモ
 - `/admin/review`：投稿根拠と候補を比較するデータ確認
 - `/admin`：CSVの検証と明示適用
+- `/admin/users`：Discord利用ユーザーの一覧と閲覧許可の追加
+- `/login`：閲覧用パスワードでのログインとDiscordログインへの導線
+- `/admin/login`：管理者パスワードでのログイン
+- `/auth/discord`、`/auth/discord/callback`：Discord認証の開始と結果の受け取り
+- `/logout`：GETで確認画面を表示し、POSTで閲覧・管理者セッションからログアウト
+- `/admin/logout`：POSTで管理者セッションからログアウト
 
 管理操作には管理者認証とCSRF検証が必要です。データ確認の更新は言及と店舗のバージョンを照合し、二重送信や競合更新を拒否します。キューは、外部ID、店舗URL、電話と店名、住所と店名、または店名・支店名・エリアの一致に基づく「同じ店候補」を投稿単位でまとめて表示します。未検証のWeb候補は、候補名の類似度が0.80以上で支店の矛盾と候補内の強い識別情報の競合がない場合に限り、表示上のグループ分けへ使います。表示グループは一括統合や自動承認の根拠にはしません。
 

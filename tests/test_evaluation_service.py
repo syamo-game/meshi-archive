@@ -306,7 +306,7 @@ def test_multiple_evaluation_mentions_do_not_use_shared_canonical_hint(
 
     result = asyncio.run(evaluation_service.evaluate_imported_message(db, message.message_id))
 
-    assert seen_hints == [None, None]
+    assert seen_hints == [None, None, None, None]
     assert result.new_mentions == 2
     assert db.query(Shop).count() == 0
     assert db.query(ShopMention).filter(ShopMention.shop_id.is_(None)).count() == 2
@@ -434,6 +434,7 @@ def test_evaluation_image_path_preserves_verified_collision_candidate(
     ) -> ImageAnalysisResult:
         return ImageAnalysisResult(
             clues=ImageClues(
+                subject_kind="restaurant",
                 usable=True,
                 image_type="receipt",
                 visible_shop_names=["割烹みやび本舗"],
