@@ -1,7 +1,183 @@
 from pathlib import Path
+import shutil
+import subprocess
+
+import pytest
 
 
 MAIN_SCRIPT = Path("web/static/js/main.js")
+
+
+@pytest.mark.parametrize("scenario", [
+    "delete_cancel", "delete_accept", "import_empty", "import_valid",
+    "apply_empty", "apply_cancel", "apply_accept",
+])
+def test_confirmation_and_csv_validation_open_only_the_needed_dialog(
+    scenario: str, tmp_path: Path,
+) -> None:
+    node = shutil.which("node")
+    assert node is not None
+    harness = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const scenario = process.argv[2];
+class Control {
+  constructor() { this.listeners = {}; this.attributes = {}; this.hidden = true; this.files = []; this.focusCount = 0; }
+  addEventListener(type, callback) { (this.listeners[type] ||= []).push(callback); }
+  setAttribute(key, value) { this.attributes[key] = value; }
+  getAttribute(key) { return this.attributes[key]; }
+  removeAttribute(key) { delete this.attributes[key]; }
+  querySelector() { return input; }
+  focus() { this.focusCount += 1; }
+  dispatch(type) {
+    const event = { defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+    for (const listener of this.listeners[type] || []) listener(event);
+    return event;
+  }
+}
+const form = new Control(), input = new Control(), error = new Control();
+form.attributes['data-confirm-message'] = 'Delete synthetic shop and its saved memo; keep original posts?';
+const kind = scenario.split('_')[0];
+const elements = new Map(kind === 'import'
+  ? [['import-form', form], ['import-file-error', error]]
+  : kind === 'apply' ? [['import-apply-form', form], ['apply-file-error', error]] : []);
+const document = {
+  querySelector: () => null,
+  querySelectorAll: selector => selector === 'form[data-confirm-message]' && kind === 'delete' ? [form] : [],
+  getElementById: id => elements.get(id) || null, addEventListener() {},
+};
+const confirmations = [];
+const pageEvents = new Map();
+const window = {
+  location: { hash: '', search: '' }, sessionStorage: { getItem: () => null, removeItem() {} },
+  addEventListener(type, callback) { (pageEvents.get(type) || pageEvents.set(type, []).get(type)).push(callback); },
+  requestAnimationFrame: callback => callback(),
+  alert() { assert.fail('File errors and success must not open alerts'); },
+  prompt() { assert.fail('No input popup is needed'); },
+  confirm(message) { confirmations.push(message); return scenario.endsWith('_accept'); },
+};
+vm.runInNewContext(fs.readFileSync('web/static/js/main.js', 'utf8'), {
+  document, window, console, URL, URLSearchParams, fetch() { assert.fail('Validation must not send an API request'); },
+});
+if (!scenario.endsWith('_empty')) input.files = [{ name: 'synthetic.csv' }];
+const event = form.dispatch('submit');
+if (kind === 'delete') {
+  assert.equal(confirmations.length, 1, 'A delete submission needs exactly one confirmation');
+  assert.equal(event.defaultPrevented, scenario.endsWith('_cancel'));
+} else if (scenario.endsWith('_empty')) {
+  assert.equal(event.defaultPrevented, true);
+  assert.equal(confirmations.length, 0);
+  assert.equal(error.hidden, false);
+  assert.equal(input.attributes['aria-invalid'], 'true');
+  assert.equal(input.focusCount, 1);
+  input.files = [{ name: 'synthetic.csv' }]; input.dispatch('change');
+  assert.equal(error.hidden, true);
+  assert.equal(input.attributes['aria-invalid'], undefined);
+} else if (kind === 'import') {
+  assert.equal(event.defaultPrevented, false);
+  assert.equal(confirmations.length, 0);
+} else {
+  assert.equal(confirmations.length, 1, 'CSV apply keeps one explicit confirmation');
+  assert.match(confirmations[0], /空欄の項目は消去/);
+  assert.equal(event.defaultPrevented, scenario.endsWith('_cancel'));
+}
+if (['delete_accept', 'apply_accept'].includes(scenario)) {
+  const repeated = form.dispatch('submit');
+  assert.equal(repeated.defaultPrevented, true, 'A second submit before navigation must be blocked');
+  assert.equal(confirmations.length, 1, 'A repeated submit must not open another dialog');
+  for (const callback of pageEvents.get('pageshow') || []) callback();
+  const afterBack = form.dispatch('submit');
+  assert.equal(afterBack.defaultPrevented, false, 'Browser back must allow an intentional new submit');
+  assert.equal(confirmations.length, 2);
+}
+"""
+    path = tmp_path / "popup-validation.cjs"
+    path.write_text(harness, encoding="utf-8")
+    result = subprocess.run(
+        [node, str(path), scenario], capture_output=True, text=True, encoding="utf-8", timeout=15,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("scenario", ["sequence", "conflict", "response_lost"])
+def test_inline_actions_preserve_screen_versions_and_do_not_replay_conflicts(scenario: str, tmp_path: Path) -> None:
+    node = shutil.which("node")
+    assert node is not None
+    harness = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const scenario = process.argv[2];
+class Element {
+  constructor() { this.dataset = {}; this.disabled = false; this.children = []; this.textContent = ''; this.attributes = {}; this.classList = { toggle() {}, remove() {} }; }
+  setAttribute(k, v) { this.attributes[k] = v; }
+  getAttribute(k) { return this.attributes[k]; }
+  removeAttribute(k) { delete this.attributes[k]; }
+  appendChild(child) { this.children.push(child); }
+  focus() {}
+  remove() { elements.delete(this.id); }
+}
+const button = new Element();
+button.dataset = {shopId: '1', shopVersion: '1', visited: 'false'};
+const container = new Element();
+container.dataset = {shopId: '1', shopVersion: '1', rating: '3'};
+const stars = [1,2,3,4,5].map(value => { const s = new Element(); s.dataset.value = String(value); s.closest = q => q.includes('.star-rating') ? (q === '.star-rating' ? container : s) : null; return s; });
+container.querySelectorAll = () => stars;
+button.closest = q => q === '.btn-visit-toggle' ? button : null;
+const elements = new Map();
+const handlers = new Map();
+const main = { prepend: box => elements.set(box.id, box) };
+const document = {
+  activeElement: null, body: {}, documentElement: {},
+  querySelector: q => q.startsWith('.main-content') ? main : null,
+  querySelectorAll: q => q === '[data-shop-version]' ? [button, container] : [],
+  getElementById: id => elements.get(id) || null,
+  createElement: () => new Element(), contains: () => true,
+  addEventListener: (event, fn) => { if (!handlers.has(event)) handlers.set(event, []); handlers.get(event).push(fn); },
+};
+const window = { location: {hash:'',search:''}, sessionStorage: {getItem:()=>null,removeItem(){}}, addEventListener(){}, requestAnimationFrame: fn => fn() };
+let version = 1, applied = 0, visited = false;
+const calls = [];
+async function fetchRequest(url, options) {
+  calls.push({url,options});
+  const expected = Number(options.headers['X-Shop-Version']);
+  if (scenario === 'conflict' || expected !== version) return {ok:false,status:409,json:async()=>({detail:'Updated by another user'})};
+  applied += 1; version += 1;
+  if (url.endsWith('/visited')) visited = !visited;
+  if (scenario === 'response_lost' && calls.length === 1) throw new Error('Response lost');
+  return {ok:true,status:200,json:async()=>url.endsWith('/visited') ? {is_visited:visited,visited_at:'2026-10-04',version} : {rating:JSON.parse(options.body).rating,version}};
+}
+vm.runInNewContext(fs.readFileSync('web/static/js/main.js','utf8'),{document,window,fetch:fetchRequest,console,URLSearchParams,URL});
+const flush = () => new Promise(resolve=>setImmediate(resolve));
+async function click(target) { for (const fn of handlers.get('click')) fn({target,button:0}); await flush(); }
+(async()=>{
+  await click(button);
+  assert.equal(calls[0].options.headers['X-Shop-Version'],'1');
+  if (scenario === 'sequence') {
+    assert.equal(button.dataset.shopVersion,'2');
+    assert.equal(container.dataset.shopVersion,'2');
+    await click(stars[4]);
+    assert.equal(calls[1].options.headers['X-Shop-Version'],'2');
+    assert.equal(button.dataset.shopVersion,'3');
+    assert.equal(container.dataset.rating,5);
+    assert.equal(applied,2);
+    return;
+  }
+  assert.equal(button.dataset.shopVersion,'1');
+  assert.equal(button.dataset.visited,'false');
+  assert.equal(calls.length,1,'A failure must not automatically replay');
+  if (scenario === 'response_lost') { await click(button); assert.equal(calls[1].options.headers['X-Shop-Version'],'1'); assert.equal(applied,1); assert.equal(visited,true); }
+  else assert.equal(applied,0);
+  assert.match(elements.get('global-action-error').textContent,/最新/);
+  assert.equal(elements.get('global-action-error').children[0].target,'_blank');
+  assert.equal(button.dataset.shopVersion,'1','A conflict must not silently adopt a new version');
+})().catch(error=>{console.error(error);process.exitCode=1;});
+"""
+    path = tmp_path / "inline-actions.cjs"
+    path.write_text(harness, encoding="utf-8")
+    result = subprocess.run([node, str(path), scenario], capture_output=True, text=True, encoding="utf-8", timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_list_uses_explicit_server_pagination() -> None:
@@ -106,8 +282,10 @@ def test_visible_filters_keep_focus_without_resize_toggles() -> None:
 def test_result_navigation_restores_focus_after_full_page_load() -> None:
     script = MAIN_SCRIPT.read_text(encoding="utf-8")
 
-    assert "window.sessionStorage.setItem(resultFocusStorageKey, 'true')" in script
-    assert "window.sessionStorage.getItem(resultFocusStorageKey) === 'true'" in script
+    assert "window.sessionStorage.setItem(resultFocusStorageKey, target)" in script
+    assert "window.sessionStorage.getItem(resultFocusStorageKey)" in script
+    assert "saveResultFocusRequest('filter')" in script
+    assert "requestedFocus !== 'filter' && !focusFilterFromHash" in script
     assert "window.sessionStorage.removeItem(resultFocusStorageKey)" in script
     assert "console.error('Result focus request could not be saved'" in script
     assert "console.error('Result focus request could not be restored'" in script
@@ -133,8 +311,8 @@ def test_filter_form_resets_browser_restored_values_to_server_state() -> None:
 def test_inline_admin_actions_send_csrf_and_report_failures() -> None:
     script = MAIN_SCRIPT.read_text(encoding="utf-8")
 
-    assert "headers: csrfHeaders()" in script
-    assert "headers: csrfHeaders({ 'Content-Type': 'application/json' })" in script
+    assert "headers: csrfHeaders({ 'X-Shop-Version': String(expectedVersion) })" in script
+    assert "headers: csrfHeaders({ 'Content-Type': 'application/json', 'X-Shop-Version': String(expectedVersion) })" in script
     assert "Visit status request failed" in script
     assert "Rating request failed" in script
     assert "showActionError" in script

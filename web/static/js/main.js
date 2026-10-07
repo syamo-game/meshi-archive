@@ -3,6 +3,28 @@
 (function () {
   'use strict';
 
+  /** @type {HTMLDetailsElement | null} */
+  const accountMenu = document.querySelector('details.site-account-menu');
+  if (accountMenu) {
+    document.addEventListener('click', function (event) {
+      if (event.target instanceof Node && !accountMenu.contains(event.target)) {
+        accountMenu.open = false;
+      }
+    });
+    accountMenu.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape' && accountMenu.open) {
+        event.preventDefault();
+        accountMenu.open = false;
+        accountMenu.querySelector('summary').focus();
+      }
+    });
+    accountMenu.addEventListener('focusout', function (event) {
+      if (event.relatedTarget instanceof Node && !accountMenu.contains(event.relatedTarget)) {
+        accountMenu.open = false;
+      }
+    });
+  }
+
   var csrfMeta = document.querySelector('meta[name="csrf-token"]');
   var csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
 
@@ -14,6 +36,8 @@
     return headers;
   }
 
+  class ShopConflictError extends Error {}
+
   function readJson(response) {
     return response.json().catch(function (error) {
       throw new Error(
@@ -21,13 +45,14 @@
       );
     }).then(function (payload) {
       if (!response.ok) {
+        if (response.status === 409) throw new ShopConflictError(payload.detail || '店舗情報が更新されています。');
         throw new Error(payload.detail || payload.error || ('HTTP ' + response.status));
       }
       return payload;
     });
   }
 
-  function showActionError(message) {
+  function showActionError(message, shopId) {
     var box = document.getElementById('global-action-error');
     if (!box) {
       box = document.createElement('div');
@@ -38,6 +63,14 @@
       if (mainContainer) mainContainer.prepend(box);
     }
     box.textContent = message;
+    if (shopId) {
+      const link = document.createElement('a');
+      link.href = '/shop/' + encodeURIComponent(shopId) + '?edit=true';
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = ' 最新の店舗情報を別のタブで確認';
+      box.appendChild(link);
+    }
     box.tabIndex = -1;
     box.focus();
   }
@@ -47,27 +80,40 @@
     if (box) box.remove();
   }
 
+  function syncActionVersions(shopId, expectedVersion, version) {
+    if (!Number.isSafeInteger(version) || version <= expectedVersion) {
+      throw new Error('Invalid shop version response payload');
+    }
+    document.querySelectorAll('[data-shop-version]').forEach(function (control) {
+      if (control.dataset.shopId === shopId && Number(control.dataset.shopVersion) === expectedVersion) {
+        control.dataset.shopVersion = String(version);
+      }
+    });
+  }
+
   var resultHeading = document.getElementById('result-heading');
   var resultStatus = document.getElementById('result-status');
   var searchResults = document.getElementById('search-results');
   var resultFocusStorageKey = 'meshi-archive:focus-search-results';
 
-  function saveResultFocusRequest() {
+  /** @param {'filter'|'results'} target @returns {void} */
+  function saveResultFocusRequest(target = 'results') {
     try {
-      window.sessionStorage.setItem(resultFocusStorageKey, 'true');
+      window.sessionStorage.setItem(resultFocusStorageKey, target);
     } catch (error) {
       console.error('Result focus request could not be saved', { error: error.message });
     }
   }
 
+  /** @returns {string|null} */
   function takeResultFocusRequest() {
     try {
-      var requested = window.sessionStorage.getItem(resultFocusStorageKey) === 'true';
+      var requested = window.sessionStorage.getItem(resultFocusStorageKey);
       if (requested) window.sessionStorage.removeItem(resultFocusStorageKey);
       return requested;
     } catch (error) {
       console.error('Result focus request could not be restored', { error: error.message });
-      return false;
+      return null;
     }
   }
 
@@ -85,14 +131,15 @@
     if (resultStatus) resultStatus.textContent = '検索しています。';
   }
 
-  if (takeResultFocusRequest()) {
+  const requestedFocus = takeResultFocusRequest();
+  var focusFilterFromHash = window.location.hash === '#q-input';
+  if (requestedFocus && requestedFocus !== 'filter' && !focusFilterFromHash) {
     focusResultHeading('検索結果を更新しました。');
   }
-
-  var focusFilterFromHash = window.location.hash === '#q-input';
   var filterForm = document.getElementById('filter-form');
   if (filterForm) {
-    if (focusFilterFromHash) {
+    if (focusFilterFromHash || requestedFocus === 'filter') {
+      if (requestedFocus && resultStatus) resultStatus.textContent = '検索結果を更新しました。';
       var filterFocusTarget = document.getElementById('q-input');
       if (filterFocusTarget) {
         window.requestAnimationFrame(function () {
@@ -101,7 +148,7 @@
       }
     }
     filterForm.addEventListener('submit', function () {
-      saveResultFocusRequest();
+      saveResultFocusRequest('filter');
       setResultsLoading();
     });
     window.addEventListener('pageshow', function (event) {
@@ -131,11 +178,19 @@
   });
 
   document.querySelectorAll('form[data-confirm-message]').forEach(function (form) {
+    let submitting = false;
+    window.addEventListener('pageshow', function () { submitting = false; });
     form.addEventListener('submit', function (event) {
+      if (submitting) {
+        event.preventDefault();
+        return;
+      }
       var message = form.getAttribute('data-confirm-message');
       if (message && !window.confirm(message)) {
         event.preventDefault();
+        return;
       }
+      submitting = true;
     });
   });
 
@@ -144,13 +199,14 @@
     if (!button || button.disabled) return;
 
     var shopId = button.dataset.shopId;
+    const expectedVersion = Number(button.dataset.shopVersion);
     var restoreButtonFocus = document.activeElement === button;
     clearActionError();
     button.disabled = true;
     button.setAttribute('aria-busy', 'true');
     fetch('/shop/' + shopId + '/visited', {
       method: 'POST',
-      headers: csrfHeaders(),
+      headers: csrfHeaders({ 'X-Shop-Version': String(expectedVersion) }),
     })
       .then(readJson)
       .then(function (data) {
@@ -164,6 +220,7 @@
         ) {
           throw new Error('Invalid visit status response payload');
         }
+        syncActionVersions(shopId, expectedVersion, data.version);
         var wasVisited = button.dataset.visited === 'true';
         button.dataset.visited = data.is_visited ? 'true' : 'false';
         button.textContent = data.is_visited ? '訪問済み' : '未訪問';
@@ -185,7 +242,10 @@
           endpoint: '/shop/' + shopId + '/visited',
           error: error.message,
         });
-        showActionError('訪問状況を更新できませんでした。時間をおいて、もう一度お試しください。');
+        showActionError(error instanceof ShopConflictError
+          ? '店舗情報が更新されています。最新の内容を確認して一覧を読み直してから操作してください。'
+          : '訪問状況を更新できませんでした。時間をおいて、もう一度お試しください。',
+        error instanceof ShopConflictError ? shopId : null);
       })
       .finally(function () {
         button.disabled = false;
@@ -227,6 +287,7 @@
     if (container.dataset.busy === 'true') return;
 
     var shopId = container.dataset.shopId;
+    const expectedVersion = Number(container.dataset.shopVersion);
     var clicked = parseInt(star.dataset.value, 10);
     var current = parseInt(container.dataset.rating, 10) || 0;
     var newRating = (clicked === current) ? 0 : clicked;
@@ -241,7 +302,7 @@
 
     fetch('/shop/' + shopId + '/rating', {
       method: 'POST',
-      headers: csrfHeaders({ 'Content-Type': 'application/json' }),
+      headers: csrfHeaders({ 'Content-Type': 'application/json', 'X-Shop-Version': String(expectedVersion) }),
       body: JSON.stringify({ rating: newRating }),
     })
       .then(readJson)
@@ -252,6 +313,7 @@
         ) {
           throw new Error('Invalid rating response payload');
         }
+        syncActionVersions(shopId, expectedVersion, data.version);
         var rating = data.rating === null ? 0 : data.rating;
         container.dataset.rating = rating;
         container.querySelectorAll('.star').forEach(function (item, index) {
@@ -270,7 +332,10 @@
           endpoint: '/shop/' + shopId + '/rating',
           error: error.message,
         });
-        showActionError('評価を更新できませんでした。時間をおいて、もう一度お試しください。');
+        showActionError(error instanceof ShopConflictError
+          ? '店舗情報が更新されています。最新の内容を確認して一覧を読み直してから操作してください。'
+          : '評価を更新できませんでした。時間をおいて、もう一度お試しください。',
+        error instanceof ShopConflictError ? shopId : null);
       })
       .finally(function () {
         container.dataset.busy = 'false';
@@ -290,21 +355,49 @@
 
   var importForm = document.getElementById('import-form');
   if (importForm) {
+    const fileInput = importForm.querySelector('input[type="file"]');
+    const fileError = document.getElementById('import-file-error');
+    fileInput.addEventListener('change', function () {
+      fileError.hidden = true;
+      fileInput.removeAttribute('aria-invalid');
+    });
     importForm.addEventListener('submit', function (event) {
-      var fileInput = importForm.querySelector('input[type="file"]');
       if (!fileInput || !fileInput.files.length) {
         event.preventDefault();
-        window.alert('CSVファイルを選択してください。');
+        fileError.hidden = false;
+        fileInput.setAttribute('aria-invalid', 'true');
+        fileInput.focus();
       }
     });
   }
 
   var importApplyForm = document.getElementById('import-apply-form');
   if (importApplyForm) {
+    let submitting = false;
+    window.addEventListener('pageshow', function () { submitting = false; });
+    const applyFileInput = importApplyForm.querySelector('input[type="file"]');
+    const applyFileError = document.getElementById('apply-file-error');
+    applyFileInput.addEventListener('change', function () {
+      applyFileError.hidden = true;
+      applyFileInput.removeAttribute('aria-invalid');
+    });
     importApplyForm.addEventListener('submit', function (event) {
-      if (!window.confirm('検証済みCSVの内容で店舗データを置き換えます。適用しますか？')) {
+      if (submitting) {
         event.preventDefault();
+        return;
       }
+      if (!applyFileInput || !applyFileInput.files.length) {
+        event.preventDefault();
+        applyFileError.hidden = false;
+        applyFileInput.setAttribute('aria-invalid', 'true');
+        applyFileInput.focus();
+        return;
+      }
+      if (!window.confirm('表示した店舗・項目だけを更新します。空欄の項目は消去されます。適用しますか？')) {
+        event.preventDefault();
+        return;
+      }
+      submitting = true;
     });
   }
 
@@ -524,6 +617,7 @@
     setDialogLoading();
 
     fetch(requestUrl, {
+      cache: 'no-store',
       headers: { 'X-Requested-With': 'XMLHttpRequest' },
       credentials: 'same-origin',
       signal: activeRequest.signal,

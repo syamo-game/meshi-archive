@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+{% set admin_ui = request.url.path.startswith("/admin") and request.session.get("admin_authenticated") and request.url.path != "/admin/login" %}
 {% set public_ui = request.url.path == '/' or request.url.path.startswith('/shop/') %}
 <html lang="ja">
 <head>
@@ -8,15 +9,15 @@
   <title>{% block title %}Meshi Archive{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/vendor/bootstrap-5.3.8/bootstrap.min.css">
-  <link rel="stylesheet" href="/static/css/explorer.css?v=9">
+  <link rel="stylesheet" href="/static/css/explorer.css?v=14">
   {% if not public_ui %}
-  <link rel="stylesheet" href="/static/css/admin.css?v=2">
+  <link rel="stylesheet" href="/static/css/admin.css?v=13">
   {% endif %}
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍚</text></svg>">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg?v=2">
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body class="{% if admin_ui %}admin-layout {% endif %}{% block body_class %}{% endblock %}">
   <a href="#main-content" class="skip-link visually-hidden-focusable btn btn-primary position-absolute top-0 start-0 m-2">メインコンテンツへスキップ</a>
 
   <header class="site-header navbar bg-body border-bottom" role="banner">
@@ -24,48 +25,35 @@
       <a href="/" class="site-header__logo navbar-brand fw-bold me-0" aria-label="Meshi Archive トップページへ">
         <span>Meshi Archive</span>
       </a>
-      {% if request.url.path != '/' %}
-      <nav class="site-nav" aria-label="サイトナビゲーション">
-        <ul role="list" class="nav nav-pills gap-1">
-          <li>
-            <a href="/" class="nav-link">
-              ホーム
-            </a>
-          </li>
-          {% if not public_ui %}
-          <li>
-            <a href="/admin" class="nav-link{% if request.url.path == '/admin' or request.url.path.startswith('/admin/') %} active{% endif %}"
-               {% if request.url.path in ['/admin', '/admin/'] %}aria-current="page"{% endif %}>
-              管理
-            </a>
-          </li>
+      <details class="site-account-menu ms-auto">
+        <summary class="site-account-menu__toggle" aria-label="メニュー" aria-controls="account-menu-links">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16"></path>
+          </svg>
+        </summary>
+        <nav id="account-menu-links" class="site-account-menu__links" aria-label="アカウント">
+          {% if request.session.get("admin_authenticated") %}
+          <a href="/admin"{% if request.url.path in ['/admin', '/admin/'] %} aria-current="page"{% endif %}>管理画面</a>
           {% endif %}
-        </ul>
-      </nav>
-      {% endif %}
+          {% if request.session.get("authenticated") or request.session.get("admin_authenticated") %}
+          <a href="/logout">ログアウト</a>
+          {% else %}
+          <a href="/login">ログイン</a>
+          {% endif %}
+        </nav>
+      </details>
     </div>
   </header>
+  {% if admin_ui %}
+  {% include "admin_nav.html" %}
+  {% endif %}
 
   <main id="main-content" class="main-content flex-grow-1 py-4">
-    <div class="container{% if request.url.path == '/' or request.url.path.startswith('/admin/review') %}-fluid{% endif %} px-3 px-lg-4">
+    <div class="container{% if request.url.path == '/' or admin_ui %}-fluid{% endif %} px-3 px-lg-4">
       {% block content %}{% endblock %}
     </div>
   </main>
 
-  <footer class="site-footer border-top py-3 mt-4" role="contentinfo">
-    <div class="container-fluid px-3 px-lg-4 d-flex flex-wrap align-items-center justify-content-between gap-3 site-footer__inner">
-      <p class="site-footer__text small text-body-secondary mb-0">Meshi Archive</p>
-      {% if public_ui %}
-      <nav class="d-flex flex-wrap gap-3" aria-label="管理者向け">
-        {% if request.session.get("admin_authenticated") %}
-        <a href="/admin/review" class="site-footer__link link-secondary link-offset-2 small">データ確認</a>
-        {% endif %}
-        <a href="/admin" class="site-footer__link link-secondary link-offset-2 small">管理画面</a>
-      </nav>
-      {% endif %}
-    </div>
-  </footer>
-
-  <script src="/static/js/main.js?v=22"></script>
+  <script src="/static/js/main.js?v=28"></script>
 </body>
 </html>

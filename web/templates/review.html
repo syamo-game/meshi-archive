@@ -1,129 +1,81 @@
 {% extends "base.html" %}
-
-{% block title %}データ確認 — Meshi Archive{% endblock %}
-
+{% block title %}登録内容の確認 — Meshi Archive{% endblock %}
 {% block content %}
-<nav aria-label="パンくず">
-  <ol class="breadcrumb small mb-3">
-    <li class="breadcrumb-item"><a href="/admin" class="link-secondary link-offset-2">管理</a></li>
-    <li class="breadcrumb-item active" aria-current="page">データ確認</li>
-  </ol>
-</nav>
-<div class="page-header mb-4">
-  <h1 class="page-title h4 fw-bold mb-2">データ確認</h1>
-  <p class="text-body-secondary mb-0">元の投稿と店舗情報を見比べて、登録内容を確認します。</p>
+<div class="admin-page-heading">
+  <h1 class="admin-page-title mb-0">登録内容の確認</h1>
+  <p class="admin-page-count" aria-label="未確認項目の全体数">未確認 <strong id="count-unresolved">—</strong> 件</p>
 </div>
-
-<form id="review-filter" class="review-filter" autocomplete="off">
-  <input id="review-scope" name="scope" type="hidden" value="identity">
-  <fieldset class="review-scope">
-    <legend class="form-label fs-6 fw-semibold">確認する内容</legend>
-    <div id="review-scope-switch" class="review-scope-switch">
-      <button id="review-scope-identity" type="button" class="btn btn-outline-secondary text-start" aria-pressed="true">
-        <strong class="d-block">店・支店を確認</strong>
-        <span class="d-block small mt-1">投稿に出てくるお店と、登録先のお店が合っているか確認します。</span>
-      </button>
-      <button id="review-scope-metadata" type="button" class="btn btn-outline-secondary text-start" aria-pressed="false">
-        <strong class="d-block">エリア・カテゴリを確認</strong>
-        <span class="d-block small mt-1">登録されたエリアとカテゴリが合っているか確認します。</span>
-      </button>
-    </div>
-  </fieldset>
-  <div>
-    <label for="review-status" class="form-label">確認状況</label>
-    <select id="review-status" name="status" class="form-select">
-      <option value="pending">未確認</option>
-      <option value="deferred">あとで確認</option>
-      <option value="approved">確認済み</option>
-      <option value="rejected">お店ではないと判断</option>
-    </select>
-  </div>
-  <div class="review-filter__search">
-    <label for="review-query" class="form-label">店名検索</label>
-    <input id="review-query" name="q" class="form-control" type="search" placeholder="店名">
-  </div>
-  <button id="review-filter-submit" type="submit" class="btn btn-primary">絞り込む</button>
-</form>
-
-<div class="review-results mb-3">
-  <p class="mb-1" role="status"><span id="review-result-context">店・支店を確認 · 未確認</span>：<strong id="review-result-count">—</strong>件</p>
-  <p class="small text-body-secondary mb-0">1つの投稿に2店あれば2件と数えます。同じお店でも、別の投稿に出てくる場合はそれぞれ1件です。</p>
-</div>
-
-<details class="review-shortcuts">
-  <summary>キーボードで操作する</summary>
-  <p id="review-shortcuts" class="mt-2 mb-0">
-    <kbd>↑</kbd>/<kbd>↓</kbd> または <kbd>J</kbd>/<kbd>K</kbd> で移動　
-    <kbd>Home</kbd>/<kbd>End</kbd> で先頭・末尾　
-    <kbd>A</kbd> 変更せず確認を終える　<kbd>D</kbd> あとで確認　<kbd>X</kbd> お店ではないと判断
-  </p>
-</details>
-
-<div class="review-workspace border rounded bg-body" tabindex="0" aria-describedby="review-shortcuts"
-     aria-keyshortcuts="J K ArrowUp ArrowDown Home End A D X">
-  <aside class="review-queue-panel" aria-labelledby="review-queue-heading">
-    <h2 id="review-queue-heading" class="review-panel-title h6 fw-bold">1 確認する項目</h2>
-    <div id="review-queue" class="review-queue list-group" role="listbox" aria-label="データ確認対象"></div>
-    <button id="review-load-more" type="button" class="btn btn-outline-secondary btn-sm" hidden>続きを読み込む</button>
+{% if read_only %}<p class="alert alert-warning" role="status">現在は読取専用です。変更はできません。</p>{% endif %}
+<div class="review-workspace" data-read-only="{{ 'true' if read_only else 'false' }}" tabindex="0" aria-label="登録内容の確認" aria-keyshortcuts="J K ArrowUp ArrowDown Home End A X">
+  <aside class="review-queue-panel">
+    <h2 class="visually-hidden">確認する店舗</h2>
+    <form id="review-filter" class="review-toolbar" autocomplete="off">
+      <input id="review-scope" name="scope" type="hidden" value="all">
+      <label class="visually-hidden" for="review-query">店名</label><input id="review-query" name="q" class="form-control" type="search" placeholder="店名">
+      <details class="review-filter-menu"><summary>絞り込み</summary><div>
+        <label for="review-status" class="form-label">確認状況</label><select id="review-status" name="status" class="form-select mb-2"><option value="unresolved">未確認</option><option value="approved">確認済み</option><option value="rejected">削除済み</option></select>
+        <div id="review-scope-switch" class="d-grid gap-2"><button id="review-scope-all" type="button" class="btn btn-outline-secondary" aria-pressed="true">すべて</button><button id="review-scope-identity" type="button" class="btn btn-outline-secondary" aria-pressed="false">店・支店</button><button id="review-scope-metadata" type="button" class="btn btn-outline-secondary" aria-pressed="false">エリア・カテゴリ</button></div>
+        <button id="review-filter-submit" type="submit" class="btn btn-outline-secondary mt-2">適用</button>
+      </div></details>
+    </form>
+    <p id="review-results" class="small px-3" role="status" hidden><span id="review-result-context"></span>：<strong id="review-result-count">—</strong>件</p>
+    <div id="review-queue" class="review-queue list-group list-group-flush" role="listbox" aria-label="確認する店舗"></div>
+    <button id="review-load-more" type="button" class="btn btn-outline-secondary btn-sm m-3" hidden>続きを読み込む</button>
   </aside>
-
-  <section class="review-evidence-panel" aria-labelledby="review-evidence-heading">
-    <h2 id="review-evidence-heading" class="review-panel-title h6 fw-bold">2 元の投稿</h2>
-    <div id="review-empty" class="text-body-secondary small py-3">確認する項目を選択してください。</div>
-    <div id="review-evidence" hidden>
-      <div class="mb-3">
-        <h3 class="h6 mb-1">確認に回った理由</h3>
-        <p id="review-difference" class="small mb-0"></p>
-      </div>
-      <p id="review-source-warning" class="alert alert-warning small" role="status" hidden></p>
-      <div class="review-meta-line">
-        <a id="review-discord-link" class="link-secondary link-offset-2" target="_blank" rel="noopener noreferrer">Discordで開く ↗</a>
-      </div>
-      <pre id="review-message-content" class="review-message bg-body-tertiary rounded p-3"></pre>
-      <div id="review-assets" class="review-assets"></div>
-      <dl class="review-facts">
-        <div><dt>投稿中の店名</dt><dd id="review-extracted-name"></dd></div>
-        <div><dt>支店名</dt><dd id="review-extracted-branch"></dd></div>
-        <div><dt>エリア</dt><dd id="review-extracted-area"></dd></div>
-        <div><dt>カテゴリ</dt><dd id="review-extracted-category"></dd></div>
-        <div><dt>投稿元URL</dt><dd id="review-source-url"></dd></div>
-        <div id="review-group-row" hidden><dt>関連する項目</dt><dd id="review-group"></dd></div>
-      </dl>
-      <details class="review-processing-details mt-3">
-        <summary>処理の詳細</summary>
-        <dl class="review-facts mt-2">
-          <div><dt>投稿ID</dt><dd id="review-message-id" class="font-monospace text-break"></dd></div>
-          <div><dt>確認理由のコード</dt><dd id="review-difference-code" class="font-monospace"></dd></div>
-          <div><dt>情報の取得方法</dt><dd id="review-extraction-source" class="font-monospace"></dd></div>
-          <div><dt>自動判定の説明</dt><dd id="review-confidence"></dd></div>
-          <div><dt>関連づけの理由</dt><dd id="review-group-reason"></dd></div>
-          <div><dt>取得・処理エラー</dt><dd id="review-extraction-error"></dd></div>
-        </dl>
-      </details>
-    </div>
-  </section>
-
-  <section class="review-decision-panel" aria-labelledby="review-decision-heading">
-    <h2 id="review-decision-heading" class="review-panel-title h6 fw-bold">3 保存する店舗情報</h2>
+  <section class="review-decision-panel">
+    <button id="review-back" class="admin-text-action review-mobile-back" type="button">一覧へ戻る</button>
+    <p id="review-empty" class="text-body-secondary py-4" role="status">確認する項目を読み込んでいます。</p>
     <div id="review-decision" hidden>
-      <div id="review-candidates" class="review-candidates"></div>
-
+      <div class="review-detail-heading"><h2 id="review-current-name" tabindex="-1" class="h4 fw-bold mb-0"></h2><span class="small text-body-secondary"><span class="text-danger">*</span> 必須</span><button id="review-ai-search" class="admin-text-action ms-auto" type="button" disabled><svg class="review-action-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7V3m0 4h-4 M20 7a8 8 0 1 0 1 8"/></svg><span data-busy-label>AIで再読み込み</span></button></div>
+      <div id="review-evidence" class="review-source"><pre id="review-message-content" tabindex="0"></pre><a id="review-discord-link" class="link-secondary" target="_blank" rel="noopener noreferrer">元投稿 ↗</a></div>
+      <p id="review-source-warning" class="small text-danger" role="status" hidden></p>
+      <div id="review-edit-conflicts" class="alert alert-warning" role="status" hidden></div>
       <form id="review-edit-form" class="review-edit-form">
-        <h3 class="h6 fw-bold mb-0">店舗情報を確認・修正</h3>
-        <p id="review-edit-scope-hint" class="form-text mb-0"></p>
-        <label class="form-label mb-0">店名<input name="shop_name" class="form-control" required></label>
-        <label class="form-label mb-0">支店名<input name="branch_name" class="form-control"></label>
-        <label class="form-label mb-0">エリア<input name="area" class="form-control" required></label>
-        <label class="form-label mb-0">カテゴリ<input name="category" class="form-control" required></label>
-        <label class="form-label mb-0">住所<input name="address" class="form-control"></label>
-        <label class="form-label mb-0">電話番号<input name="phone" class="form-control"></label>
-        <label class="form-label mb-0">店舗URL<input name="canonical_url" type="url" class="form-control"></label>
-        <button id="review-edit-submit" type="submit" class="btn btn-primary">修正して確認を終える</button>
+        <div class="review-entry-grid">
+          <div class="review-fields">
+            <label class="form-label">店名 <span class="text-danger">*</span><input name="shop_name" class="form-control" maxlength="500" required></label>
+            <label class="form-label">支店<input name="branch_name" class="form-control" maxlength="255"></label>
+            <label class="form-label">エリア <span class="text-danger">*</span><input name="area" class="form-control" maxlength="255" required></label>
+            <label class="form-label">カテゴリ <span class="text-danger">*</span><input name="category" list="review-category-options" class="form-control" maxlength="255" required></label>
+          </div>
+          <div class="review-photo-field"><span class="form-label d-block">写真</span><div class="review-photo-frame ratio ratio-16x9"><a id="review-photo-link" target="_blank" rel="noopener noreferrer" hidden><img id="review-photo" alt="登録する店舗写真"></a><span id="review-photo-empty">写真なし</span><label id="review-photo-selection" class="review-photo-selection" hidden><input id="review-photo-select" type="checkbox" aria-describedby="review-photo-selection-status"><span>この写真を使う</span></label><button id="review-photo-previous" class="review-photo-arrow review-photo-arrow--previous" type="button" aria-label="前の写真" hidden><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg></button><button id="review-photo-next" class="review-photo-arrow review-photo-arrow--next" type="button" aria-label="次の写真" hidden><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button></div><p id="review-photo-position" class="small text-center text-body-secondary mt-2" aria-live="polite"></p><p id="review-photo-selection-status" class="small text-body-secondary" role="status" aria-live="polite" hidden></p><p id="review-photo-error" class="small text-danger" role="alert" hidden>写真を取得できませんでした。写真を選び直すか再試行してください。</p><button id="review-photo-retry" type="button" class="admin-text-action small" hidden>写真を再試行</button></div>
+        </div>
+        <input name="address" type="hidden"><input name="phone" type="hidden"><input name="canonical_url" type="hidden">
+        <datalist id="review-category-options">{% for value in category_values %}<option value="{{ value }}"></option>{% endfor %}</datalist>
+        <label class="form-label review-supplement-label" for="review-supplement">補足</label><textarea id="review-supplement" class="form-control" rows="3" maxlength="4000" placeholder="場所・支店などの追加情報"></textarea><input id="review-reference-url" type="hidden">
       </form>
+      <div id="review-ai-results" class="small" aria-live="polite"></div>
+      <div id="review-legacy-tools" hidden inert><div id="review-candidates"></div><p id="review-issues" class="small"></p><p id="review-edit-scope-hint" class="small"></p><div id="review-assets"></div><dl class="review-facts"><div><dt>店名</dt><dd id="review-extracted-name"></dd></div><div><dt>支店</dt><dd id="review-extracted-branch"></dd></div><div><dt>エリア</dt><dd id="review-extracted-area"></dd></div><div><dt>カテゴリ</dt><dd id="review-extracted-category"></dd></div><div><dt>出典</dt><dd id="review-source-url"></dd></div><div id="review-group-row" hidden><dt>関連項目</dt><dd id="review-group"></dd></div></dl><p id="review-difference" class="small"></p><dl class="review-facts"><div><dt>投稿ID</dt><dd id="review-message-id"></dd></div><div><dt>確認理由</dt><dd id="review-difference-code"></dd></div><div><dt>取得方法</dt><dd id="review-extraction-source"></dd></div><div><dt>判定根拠</dt><dd id="review-confidence"></dd></div><div><dt>関連根拠</dt><dd id="review-group-reason"></dd></div><div><dt>取得エラー</dt><dd id="review-extraction-error"></dd></div></dl>
+      <details id="review-link-section" class="mb-3">
+        <summary>この投稿だけを既存店舗に関連付ける</summary>
+        <p class="small">選択中の確認項目1件だけの関連先を変更します。同じ元投稿に複数のお店がある場合も、ほかの項目は移しません。店舗の新規作成・削除は行いません。</p>
+        <form id="review-link-form">
+          <label for="review-link-target" class="form-label">関連付け先の店舗ID</label>
+          <input id="review-link-target" name="target_shop_id" type="number" min="1" step="1" class="form-control" aria-describedby="review-link-help" required>
+          <p id="review-link-help" class="form-text">既存店舗の詳細ページのURL <code>/shop/123</code> にある数字を入力してください。</p>
+          <label for="review-link-note" class="form-label">この店舗と判断した根拠（必須）</label>
+          <textarea id="review-link-note" name="note" class="form-control" rows="3" maxlength="2000" required></textarea>
+          <p id="review-link-draft-hint" class="form-text" role="status" hidden>店舗情報を編集中です。入力を保存するか元の値に戻してから関連付けてください。入力は保持しています。</p>
+          <button id="review-link-preview-submit" type="submit" class="btn btn-outline-secondary mt-2">関連付けの内容を確認</button>
+          <div id="review-link-preview" class="mt-3" aria-live="polite" hidden>
+            <h3 class="h6">現在の関連先</h3>
+            <div id="review-link-source" class="text-break"></div>
+            <h3 class="h6">今回の関連付け先</h3>
+            <div id="review-link-target-preview" class="text-break"></div>
+            <p id="review-link-counts" class="small"></p>
+            <p id="review-link-status" class="small"></p>
+            <p class="small">両店舗の訪問状態・訪問日・評価・メモ・名称などの保存値と、ほかの投稿の関連先は保持します。元投稿・添付・確認履歴も残ります。店・支店の同定だけを確認済みにし、エリア・カテゴリの確認状態は変更しません。</p>
+            <p id="review-link-empty-warning" class="alert alert-warning" hidden>元の店舗に関連する確認項目が0件になります。店舗自体は削除しません。</p>
+            <p class="small">関連件数・代表投稿・公開一覧への表示は、この1件の移動により変わる場合があります。両店舗の情報を開いている別の古いフォームでは、次の保存時に競合が表示されます。</p>
+            <label class="form-check-label d-flex align-items-start gap-2"><input id="review-link-confirm" type="checkbox" class="form-check-input">表示した両店舗と根拠を確認し、この確認項目1件だけを関連付けます。</label>
+            <button id="review-link-apply" type="button" class="btn btn-primary mt-2" disabled>この投稿だけを関連付ける</button>
+          </div>
+        </form>
+      </details>
 
       <details class="review-merge">
         <summary>重複した店舗をまとめる</summary>
-        <p class="small">同じお店が重複して登録されている場合に使います。投稿を残す店舗へ移し、元の店舗を削除します。</p>
+        <p class="small">同じお店が重複して登録されている場合に使います。投稿を残す店舗へ移し、元の店舗を削除します。統合前の情報は確認履歴へ保存しますが、画面から元に戻す機能はありません。</p>
         <form id="review-merge-form">
           <label class="form-label mb-0">残す店舗のID<input name="target_shop_id" type="number" min="1" class="form-control" aria-describedby="review-merge-help" required></label>
           <p id="review-merge-help" class="form-text mb-0">残す店舗の詳細ページを開き、URLの <code>/shop/123</code> にある数字（この例では123）を入力してください。</p>
@@ -138,34 +90,12 @@
         </form>
       </details>
 
-      <p id="review-edit-hint" class="form-text">入力を変更した場合は「修正して確認を終える」で保存してください。</p>
-      <div class="review-actions">
-        <button id="review-approve" type="button" class="btn btn-outline-secondary" aria-describedby="review-edit-hint">変更せず確認を終える</button>
-        <button id="review-defer" type="button" class="btn btn-outline-secondary">あとで確認</button>
-        <button id="review-reject" type="button" class="btn btn-danger">お店ではないと判断</button>
       </div>
+      <div class="review-actions"><button id="review-reject" type="button" class="admin-text-action text-danger">削除</button><button id="review-edit-submit" type="submit" form="review-edit-form" class="btn btn-primary ms-auto" disabled>登録</button></div>
     </div>
-    <div id="review-error" class="alert alert-danger mt-3 mb-0" role="alert" tabindex="-1" hidden>
-      <p class="mb-2">
-        <span class="me-1" aria-hidden="true">⚠</span>
-        <span id="review-error-text" class="text-break"></span>
-      </p>
-      <button id="review-retry" type="button" class="btn btn-primary btn-sm">再試行</button>
-    </div>
-    <div id="review-notice" class="alert alert-success mt-3 mb-0" role="status" hidden>
-      <span id="review-notice-text"></span>
-    </div>
+    <div id="review-error" class="alert alert-danger mt-3" role="alert" tabindex="-1" hidden><p id="review-error-text" class="text-break mb-2"></p><button id="review-retry" type="button" class="btn btn-outline-secondary btn-sm">再試行</button></div>
+    <div id="review-notice" class="small mt-3" role="status" hidden><span id="review-notice-text"></span></div>
   </section>
 </div>
-
-<details class="review-processing-summary mt-3">
-  <summary>投稿の取得・処理状況（全体）</summary>
-  <p class="small text-body-secondary mt-2">現在の絞り込みとは別に、全体の取得・処理状況を表示しています。確認項目と投稿では数え方が異なり、同じ投稿が両方に含まれる場合もあるため、合計する件数ではありません。</p>
-  <dl class="review-processing-counts mb-0">
-    <div><dt>取得エラーのある確認項目</dt><dd><strong id="count-unavailable">—</strong>件</dd></div>
-    <div><dt>処理に失敗した投稿</dt><dd><strong id="count-failed">—</strong>件</dd></div>
-  </dl>
-</details>
-
-<script src="/static/js/review.js?v=13"></script>
+<script src="/static/js/review.js?v=23"></script>
 {% endblock %}

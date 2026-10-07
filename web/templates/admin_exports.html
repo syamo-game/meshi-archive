@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}データ出力 — Meshi Archive{% endblock %}
+{% block content %}
+<h1 class="admin-page-title">データ出力</h1>
+<div class="admin-export-list">
+  <section class="admin-export" aria-labelledby="export-heading">
+    <div><h2 id="export-heading" class="admin-section-title">店舗一覧</h2><p>登録済みの店舗情報を、1店舗につき1行で出力します。</p></div>
+    <a href="/export.csv" class="btn btn-outline-secondary" aria-label="店舗一覧のCSVをダウンロード">CSVをダウンロード</a>
+  </section>
+  <section class="admin-export" aria-labelledby="audit-heading">
+    <div><h2 id="audit-heading" class="admin-section-title">登録内容の確認記録</h2><p>店舗と関連付けていない項目も含め、1確認項目につき1行で出力します。</p><p class="admin-export-note">写真の実データと操作履歴の全文は含みません。</p></div>
+    <a href="/admin/review/audit.csv" class="btn btn-outline-secondary" aria-label="登録内容の確認記録のCSVをダウンロード">CSVをダウンロード</a>
+  </section>
+  <p class="admin-export-edit">店舗情報を変更する場合は、<a href="/admin/shops/bulk" class="link-secondary">店舗情報の一括編集</a>を使ってください。</p>
+</div>
+{% endblock %}

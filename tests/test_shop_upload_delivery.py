@@ -73,7 +73,6 @@ def add_shop(
 def test_uploaded_photo_requires_login_and_delivers_the_saved_bytes(
     db: Session, photo: UploadedShopImage, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(home, "WEB_PASSWORD", "required")
     add_shop(db, photo)
     with image_client(db) as client:
         assert client.get(photo.public_url).status_code == 401
@@ -93,7 +92,6 @@ def test_uploaded_photo_is_private_until_both_reviews_are_approved(
     db: Session, photo: UploadedShopImage, monkeypatch: pytest.MonkeyPatch,
     identity_status: str, metadata_status: str,
 ) -> None:
-    monkeypatch.setattr(home, "WEB_PASSWORD", "required")
     add_shop(db, photo, identity_status=identity_status, metadata_status=metadata_status)
     with image_client(db) as client:
         client.post("/test-login/member")
@@ -106,8 +104,7 @@ def test_uploaded_photo_cannot_combine_approvals_from_different_mentions(
     db: Session, photo: UploadedShopImage, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     shop = add_shop(db, photo, identity_status="pending")
     db.add(ShopMention(
         message=shop.mentions[0].message, shop=shop, occurrence_index=1,
@@ -115,6 +112,7 @@ def test_uploaded_photo_cannot_combine_approvals_from_different_mentions(
     ))
     db.commit()
     with image_client(db) as client:
+        client.post("/test-login/member")
         assert client.get(photo.public_url).status_code == 404
 
 
@@ -122,8 +120,7 @@ def test_another_public_shop_in_the_same_post_does_not_publish_the_upload(
     db: Session, photo: UploadedShopImage, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     private_shop = add_shop(db, photo, identity_status="pending")
     message = private_shop.mentions[0].message
     public_shop = Shop(shop_name="同じ投稿の別店舗")
@@ -138,6 +135,7 @@ def test_another_public_shop_in_the_same_post_does_not_publish_the_upload(
     db.add(asset)
     db.commit()
     with image_client(db) as client:
+        client.post("/test-login/member")
         assert client.get(photo.public_url).status_code == 404
         private_shop.mentions[0].review_status = "approved"
         db.commit()
@@ -150,7 +148,6 @@ def test_another_public_shop_in_the_same_post_does_not_publish_the_upload(
 def test_admin_still_needs_a_current_shop_reference_and_existing_file(
     db: Session, photo: UploadedShopImage, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(home, "WEB_PASSWORD", "required")
     with image_client(db) as client:
         client.post("/test-login/admin")
         assert client.get(photo.public_url).status_code == 404
@@ -169,10 +166,10 @@ def test_deleting_a_shop_stops_delivery_without_removing_its_file(
     db: Session, photo: UploadedShopImage, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     shop = add_shop(db, photo)
     with image_client(db) as client:
+        client.post("/test-login/member")
         assert client.get(photo.public_url).status_code == 200
         db.delete(shop)
         db.commit()

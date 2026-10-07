@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import csv
+import io
+import json
 from collections.abc import Generator
 
 import pytest
@@ -21,6 +24,8 @@ from db.models import (
     ShopMention,
 )
 from web.routers import review
+from services.extraction_safety import EVENT_EXCLUDED
+from services.review_audit import export_review_audit
 
 
 def create_test_app(db: Session) -> FastAPI:
@@ -39,6 +44,233 @@ def create_test_app(db: Session) -> FastAPI:
     app.include_router(review.router)
     app.dependency_overrides[review.get_db] = override_db
     return app
+
+
+@pytest.mark.parametrize("metadata_status", ["pending", "approved", "deferred"])
+def test_event_exclusions_leave_only_the_metadata_review_scope(
+    metadata_status: str,
+) -> None:
+    engine = create_engine(
+        "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    permanent_shop = Shop(shop_name="Verified permanent shop", area="銀座", category="寿司")
+    rows: list[tuple[str, str | None, Shop | None]] = [
+        ("rejected", EVENT_EXCLUDED, None),
+        ("rejected", None, None),
+        ("rejected", "legacy_review", None),
+        ("rejected", EVENT_EXCLUDED, permanent_shop),
+        ("pending", EVENT_EXCLUDED, None),
+        ("approved", EVENT_EXCLUDED, None),
+    ]
+    mentions: list[ShopMention] = []
+    for index, (identity_status, reason, shop) in enumerate(rows):
+        message = Message(
+            message_id=f"8934567890123456{index}", content="催事と出店元の記録",
+            fetch_error="Missing source" if index == 0 else None,
+            processing_status="failed" if index == 0 else "succeeded",
+        )
+        mention = ShopMention(
+            message=message, shop=shop, occurrence_index=0, extracted_name=f"Target {index}",
+            review_status=identity_status, resolution_status="invalid" if index == 0 else "ambiguous",
+            metadata_review_status=metadata_status, difference_type=reason,
+            metadata_difference_type="missing_area", extraction_source="test",
+            extraction_error=(
+                'evidence_review:{"codes":["event_excluded"],"reasons":["催事会場は登録対象外です。出店元の常設店舗を特定できません。"]}'
+                if index == 0 else None
+            ),
+        )
+        db.add(mention)
+        mentions.append(mention)
+    db.commit()
+    excluded_id = mentions[0].id
+    expected_ids = [mention.id for mention in mentions[1:]]
+    try:
+        client = TestClient(create_test_app(db))
+        client.get("/test/session")
+        endpoint = f"/api/admin/reviews?scope=metadata&status={metadata_status}"
+        result = client.get(endpoint)
+        assert result.status_code == 200
+        payload = result.json()
+        assert payload["total_count"] == 5
+        assert [item["id"] for item in payload["items"]] == expected_ids
+        assert payload["counters"][metadata_status] == 5
+        assert payload["counters"]["source_unavailable"] == 1
+        assert payload["counters"]["failed"] == 1
+        page = client.get(endpoint + f"&q=Target&source=test&reason=missing_area&limit=1&cursor={excluded_id}").json()
+        assert page["total_count"] == 5
+        assert [item["id"] for item in page["items"]] == expected_ids[:1]
+        assert page["next_cursor"] == expected_ids[0]
+        unavailable = client.get(endpoint + "&reason=source_unavailable").json()
+        assert unavailable["total_count"] == 0
+        assert unavailable["counters"]["source_unavailable"] == 1
+
+        rejected = client.get("/api/admin/reviews?scope=identity&status=rejected").json()
+        assert rejected["total_count"] == rejected["counters"]["rejected"] == 4
+        excluded = client.get(f"/api/admin/reviews/{excluded_id}").json()
+        assert excluded["difference_type"] == EVENT_EXCLUDED
+        assert excluded["extraction_error"] == "催事会場は登録対象外です。出店元の常設店舗を特定できません。"
+        assert "evidence_review:" not in excluded["extraction_error"]
+        assert db.query(ShopMention).count() == 6
+        assert db.query(Message).count() == 6
+        assert db.query(Shop).count() == 1
+        assert mentions[0].metadata_review_status == metadata_status
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_review_error_display_handles_legacy_and_malformed_structured_errors() -> None:
+    assert review._extraction_error_display(None) is None
+    assert review._extraction_error_display("本文を確認してください") == "本文を確認してください"
+    for malformed in [
+        "{", "null", "[]", '{"codes": ["unknown"]}',
+        '{"codes": "unknown", "reasons": ["確認理由"]}',
+        '{"codes": [1], "reasons": ["確認理由"]}',
+        '{"codes": ["unknown"], "reasons": "確認理由"}',
+        '{"codes": ["unknown"], "reasons": [null]}',
+        '{"codes": ["unknown"], "reasons": [" "]}',
+    ]:
+        assert review._extraction_error_display("evidence_review:" + malformed) == (
+            "この項目は確認待ちです。原文・添付と候補を確認してください。"
+        )
+
+
+def test_review_serializes_japanese_reasons_without_changing_db_or_audit() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    raw_error = "evidence_review:" + json.dumps({
+        "codes": ["non_store_subject", "future_code"],
+        "reasons": [" 商品への言及です。 ", "販売店を確認してください。", "商品への言及です。"],
+    }, ensure_ascii=False)
+    try:
+        with Session(engine) as db:
+            mention = ShopMention(
+                message=Message(message_id="82345678901234569", content="原文"),
+                occurrence_index=0, extracted_name="商品名", extraction_source="test",
+                extraction_error=raw_error, review_status="pending",
+            )
+            db.add(mention)
+            db.commit()
+            item = review._review_item(mention, None)
+            assert item.extraction_error == "商品への言及です。 / 販売店を確認してください。"
+            assert mention.extraction_error == raw_error
+            exported = next(csv.DictReader(io.StringIO(export_review_audit(db).content.decode("utf-8-sig"))))
+            assert exported["extraction_error"] == raw_error
+    finally:
+        engine.dispose()
+
+
+def test_shared_shop_review_returns_fresh_values_and_recovers_without_lost_updates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_READ_ONLY", "false")
+    engine = create_engine(
+        "sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    shop = Shop(
+        shop_name="Shared shop", area="神田", category="和食", address="Original address",
+        memo="Keep this memo", is_visited=True, rating=4,
+    )
+    mentions = [
+        ShopMention(
+            message=Message(message_id=f"8234567890123456{index}", content="Test post"),
+            shop=shop, occurrence_index=0, extracted_name="Shared shop",
+            review_status="pending", metadata_review_status="pending", extraction_source="test",
+        )
+        for index in range(2)
+    ]
+    db.add_all(mentions)
+    db.commit()
+    headers = {"X-CSRF-Token": "test-csrf"}
+    try:
+        client = TestClient(create_test_app(db))
+        endpoint = f"/api/admin/reviews/{mentions[1].id}"
+        assert client.get(endpoint).status_code == 403
+        client.get("/test/session")
+        queue = client.get("/api/admin/reviews?scope=metadata&limit=1")
+        assert queue.headers["cache-control"] == "private, no-store"
+        assert len(queue.json()["items"]) == 1
+        shop_payload: dict[str, str] = {
+            "shop_name": "Shared shop", "area": "神田", "category": "和食", "address": "Corrected address",
+        }
+        payload: dict[str, str | int | dict[str, str]] = {
+            "action": "edit_and_approve", "scope": "metadata",
+            "expected_version": 1, "shop_version": 1,
+            "shop": shop_payload,
+        }
+        original_payload = {**payload, "shop": dict(shop_payload)}
+        first = client.post(f"/api/admin/reviews/{mentions[0].id}/decision", json=payload, headers=headers)
+        assert first.status_code == 200
+        assert first.json()["shop"]["version"] == 2
+        assert first.json()["shop"]["address"] == "Corrected address"
+        stale = client.post(endpoint + "/decision", json=payload, headers=headers)
+        assert stale.status_code == 409
+        assert stale.json()["detail"]["code"] == "stale_shop"
+        assert db.query(ReviewEvent).count() == 1
+
+        latest = client.get(endpoint)
+        assert latest.status_code == 200
+        assert latest.headers["cache-control"] == "private, no-store"
+        assert latest.json()["version"] == 1
+        assert latest.json()["shop"]["version"] == 2
+        assert latest.json()["shop"]["address"] == "Corrected address"
+        payload["shop_version"] = 2
+        shop_payload["phone"] = "03-1234-5678"
+        saved = client.post(endpoint + "/decision", json=payload, headers=headers)
+        assert saved.status_code == 200
+        assert saved.json()["shop"]["version"] == 3
+        assert saved.json()["shop"]["address"] == "Corrected address"
+        assert saved.json()["shop"]["phone"] == "0312345678"
+        approved = client.get(endpoint)
+        assert approved.json()["metadata_review_status"] == "approved"
+        assert shop.memo == "Keep this memo"
+        assert shop.is_visited and shop.rating == 4
+        assert db.query(ReviewEvent).count() == 2
+        replay = client.post(
+            f"/api/admin/reviews/{mentions[0].id}/decision", json=original_payload, headers=headers,
+        )
+        assert replay.status_code == 409
+        assert replay.json()["detail"]["code"] == "stale_mention"
+        assert db.query(ReviewEvent).count() == 2
+        assert shop.version == 3
+        assert shop.phone == "0312345678"
+        assert shop.address == "Corrected address"
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_review_validation_identifies_area_and_suggests_managed_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("APP_READ_ONLY", "false")
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    try:
+        client = TestClient(create_test_app(db))
+        client.get("/test/session")
+        response = client.post(
+            "/api/admin/reviews/1/decision",
+            headers={"X-CSRF-Token": "test-csrf"},
+            json={
+                "action": "edit_and_approve", "expected_version": 1, "shop_version": 1,
+                "shop": {"shop_name": "Test", "area": "神田淡路町", "category": "和食"},
+            },
+        )
+        assert response.status_code == 422
+        problem = response.json()["detail"][0]
+        assert problem["loc"][-1] == "area"
+        assert "候補:" in problem["msg"]
+        assert "神田" in problem["msg"]
+        assert db.query(ReviewEvent).count() == 0
+    finally:
+        db.close()
+        engine.dispose()
 
 
 def test_review_api_requires_admin_csrf_and_rejects_double_submit(
@@ -75,7 +307,7 @@ def test_review_api_requires_admin_csrf_and_rejects_double_submit(
         client.get("/test/session")
         queue = client.get("/api/admin/reviews")
         assert queue.status_code == 200
-        assert queue.json()["scope"] == ReviewScope.IDENTITY.value
+        assert queue.json()["scope"] == "all"
         assert queue.json()["total_count"] == 1
         assert queue.json()["counters"]["pending"] == 1
 
@@ -102,6 +334,7 @@ def test_review_api_requires_admin_csrf_and_rejects_double_submit(
             headers={"X-CSRF-Token": "test-csrf"},
         )
         assert duplicate.status_code == 409
+        assert duplicate.json()["detail"]["code"] == "stale_mention"
     finally:
         db.close()
         engine.dispose()

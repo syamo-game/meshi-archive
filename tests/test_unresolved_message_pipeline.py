@@ -129,6 +129,9 @@ def source_discovery_extraction(
                     source_url=SOURCE_URL,
                     needs_review=False,
                     confidence_reason="出典URLに店名と所在地がある",
+                    subject_kind="restaurant",
+                    identity_evidence="explicit",
+                    name_evidence=f"{shop_name} {area}",
                 )
             ],
         ),
@@ -1114,6 +1117,7 @@ def image_analysis_result(
 ) -> ImageAnalysisResult:
     return ImageAnalysisResult(
         clues=ImageClues(
+            subject_kind="restaurant",
             usable=True,
             image_type="receipt",
             visible_shop_names=names,
@@ -1165,7 +1169,7 @@ def test_unresolved_restaurant_message_becomes_pending_review(
 
 
 @pytest.mark.parametrize("extraction", [unresolved_extraction, ignored_extraction])
-def test_message_transaction_uses_legacy_hint_only_for_candidate_search(
+def test_legacy_hint_without_source_identity_evidence_stays_pending(
     db_factory: sessionmaker[Session],
     monkeypatch: pytest.MonkeyPatch,
     extraction: Callable[[], ExtractionCallResult],
@@ -1236,16 +1240,15 @@ def test_message_transaction_uses_legacy_hint_only_for_candidate_search(
             )
         )
         mention = db.query(ShopMention).filter_by(message_id=MESSAGE_ID).one()
-        shop = db.query(Shop).filter_by(id=mention.shop_id).one()
-
         assert result.ignored is False
-        assert result.shop_ids == (shop.id,)
-        assert result.pending_mention_ids == ()
+        assert result.shop_ids == ()
+        assert result.pending_mention_ids == (mention.id,)
         assert mention.extraction_source == "legacy_hint"
-        assert mention.review_status == "approved"
+        assert mention.review_status == "pending"
         assert "新規抽出結果" in (mention.confidence_reason or "")
-        assert shop.shop_name == "浅草橋 焼肉はな"
-        assert shop.area == "浅草橋"
+        assert "identity_unclear" in (mention.extraction_error or "")
+        assert mention.extracted_name == legacy_hint.shop_name
+        assert db.query(Shop).count() == 0
     finally:
         db.close()
 
@@ -1948,6 +1951,7 @@ def test_image_phone_match_can_select_one_approved_existing_shop(
         assert image_urls == (IMAGE_URL,)
         return ImageAnalysisResult(
             clues=ImageClues(
+                subject_kind="restaurant",
                 usable=True,
                 image_type="receipt",
                 visible_shop_names=["浅草橋 焼肉はな"],
@@ -2145,6 +2149,7 @@ def test_image_and_server_structured_phone_match_can_create_shop(
     ) -> ImageAnalysisResult:
         return ImageAnalysisResult(
             clues=ImageClues(
+                subject_kind="restaurant",
                 usable=True,
                 image_type="sign",
                 visible_shop_names=["浅草橋 焼肉はな"],
@@ -2205,6 +2210,7 @@ def test_image_name_alone_does_not_create_shop(
     ) -> ImageAnalysisResult:
         return ImageAnalysisResult(
             clues=ImageClues(
+                subject_kind="restaurant",
                 usable=True,
                 image_type="sign",
                 visible_shop_names=["浅草橋 焼肉はな"],
@@ -2237,6 +2243,7 @@ def test_image_name_alone_does_not_create_shop(
 def test_multiple_image_shop_names_never_share_phone_or_auto_resolve() -> None:
     result = ImageAnalysisResult(
         clues=ImageClues(
+            subject_kind="restaurant",
             usable=True,
             image_type="menu",
             visible_shop_names=["店舗A", "店舗B"],

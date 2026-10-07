@@ -114,6 +114,7 @@ def add_shop(db: Session, area: str | None = "銀座") -> Shop:
 
 def edit_area(db: Session, shop: Shop, area: str | None) -> Response:
     return shop_edit(
+        expected_version=str(shop.version),
         shop_id=shop.id,
         request=make_request(f"/shop/{shop.id}/edit", admin=True),
         shop_name=shop.shop_name,

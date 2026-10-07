@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}利用ユーザー — Meshi Archive{% endblock %}
+{% macro icon(kind) -%}
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{% if kind == "add" %}<path d="M12 5v14M5 12h14"/>{% elif kind == "edit" %}<path d="m16 3 5 5-12 12H4v-5L16 3Z"/><path d="m13 6 5 5"/>{% else %}<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/>{% endif %}</svg>
+{%- endmacro %}
+{% block content %}
+<div class="admin-page-heading admin-users-heading">
+  <h1 class="admin-page-title mb-0">利用ユーザー</h1>
+  <button id="add-user-button" type="button" class="admin-text-action" aria-controls="add-user" aria-expanded="{{ 'true' if adding else 'false' }}" {% if read_only or not storage_available %}disabled{% endif %}>{{ icon("add") }}<span>ユーザー追加</span></button>
+</div>
+{% if read_only %}<div class="alert alert-warning" role="status">現在は読取専用モードです。ユーザーの追加・変更・削除はできません。</div>{% endif %}
+{% if not discord_configured %}<div class="alert alert-warning" role="status">Discordログインは現在無効です。有効になるまで利用できません。</div>{% endif %}
+{% if error %}<div id="discord-user-error" class="alert alert-danger" role="alert">{{ error }}</div>{% endif %}
+{% if notice %}<div class="alert alert-success" role="status">{{ notice }}</div>{% endif %}
+{% if change_result %}
+<div class="alert alert-success" role="status">
+{% if change_result.saved %}ユーザー {{ change_result.replacement_user_id or change_result.user_id }} の変更を保存しました。
+{% elif change_result.replacement_user_id %}ユーザー {{ change_result.user_id }} を {{ change_result.replacement_user_id }} に変更しました。
+{% else %}ユーザー {{ change_result.user_id }} の利用許可を削除しました。{% endif %}
+</div>
+{% endif %}
+{% if result %}<div class="alert alert-success" role="status">{% if result.created %}ユーザー {{ result.user_id }} を{{ "管理者" if result.is_admin else "閲覧ユーザー" }}として追加しました。{% else %}ユーザー {{ result.user_id }} はすでに登録されています。権限を変える場合は編集してください。{% endif %}</div>{% endif %}
+<section id="discord-users" class="admin-users-list" aria-labelledby="allowed-users-heading">
+  <p id="allowed-users-heading" class="admin-list-count text-body-secondary">{{ entries|length if entries is not none else '—' }}人</p>
+  <table class="table align-middle mb-0 discord-users-table">
+    <thead><tr><th scope="col">DiscordユーザーID</th><th scope="col">権限</th><th scope="col" class="text-center">操作</th></tr></thead>
+    <tbody>
+      <tr id="add-user" class="discord-user-row discord-user-row--editing" {% if not adding %}hidden{% endif %}>
+        <td>
+          <label id="add-user-heading" class="visually-hidden" for="discord-user-id">追加するDiscordユーザーID</label>
+          <input id="discord-user-id" name="discord_user_id" type="text" form="add-user-form" inputmode="numeric" pattern="[1-9][0-9]{16,19}" autocomplete="off" spellcheck="false" required class="form-control" value="{{ user_id }}" placeholder="DiscordユーザーID" aria-describedby="discord-user-hint{% if error and adding %} discord-user-error{% endif %}" {% if read_only or not storage_available %}disabled{% endif %}>
+          <p id="discord-user-hint" class="form-text mb-0">Discordからコピーした17〜20桁のID</p>
+        </td>
+        <td><label class="visually-hidden" for="add-user-role">追加するユーザーの権限</label><select id="add-user-role" name="role" form="add-user-form" class="form-select" {% if read_only or not storage_available %}disabled{% endif %}><option value="viewer" {% if selected_role == 'viewer' %}selected{% endif %}>閲覧</option><option value="admin" {% if selected_role == 'admin' %}selected{% endif %}>管理者</option></select></td>
+        <td><form id="add-user-form" method="post" action="/admin/users" class="discord-user-actions" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" class="btn btn-primary" {% if read_only or not storage_available %}disabled{% endif %}>保存</button>
+          <button type="button" class="admin-text-action" data-user-cancel>キャンセル</button>
+        </form></td>
+      </tr>
+      {% for entry in entries or [] %}
+      {% set editing = editing_user_id == entry.user_id %}
+      <tr class="discord-user-row{% if editing %} discord-user-row--editing{% endif %}" data-user-id="{{ entry.user_id }}">
+        <td><span data-user-display {% if editing %}hidden{% endif %}>{{ entry.user_id }}</span>
+          {% if entry.source == 'database' %}
+          <label class="visually-hidden" for="user-id-{{ entry.user_id }}" data-user-editor {% if not editing %}hidden{% endif %}>DiscordユーザーID</label>
+          <input id="user-id-{{ entry.user_id }}" name="replacement_user_id" type="text" form="user-form-{{ entry.user_id }}" class="form-control" inputmode="numeric" pattern="[1-9][0-9]{16,19}" autocomplete="off" spellcheck="false" required value="{{ replacement_user_id if editing else entry.user_id }}" data-user-editor {% if not editing %}hidden{% endif %} {% if read_only or not storage_available %}disabled{% endif %}>
+          {% endif %}
+        </td>
+        <td><span data-user-display {% if editing %}hidden{% endif %}>{{ '管理者' if entry.is_admin else '閲覧' }}</span>
+          {% if entry.source == 'database' %}
+          {% set row_role = selected_role if editing else ('admin' if entry.is_admin else 'viewer') %}
+          <label class="visually-hidden" for="user-role-{{ entry.user_id }}" data-user-editor {% if not editing %}hidden{% endif %}>権限</label>
+          <select id="user-role-{{ entry.user_id }}" name="role" form="user-form-{{ entry.user_id }}" class="form-select" data-user-editor {% if not editing %}hidden{% endif %} {% if read_only or not storage_available %}disabled{% endif %}><option value="viewer" {% if row_role == 'viewer' %}selected{% endif %}>閲覧</option><option value="admin" {% if row_role == 'admin' %}selected{% endif %}>管理者</option></select>
+          {% endif %}
+        </td>
+        <td>
+          {% if entry.source == 'database' %}
+          <form id="user-form-{{ entry.user_id }}" method="post" action="/admin/users/{{ entry.user_id }}/change" class="discord-user-actions" novalidate>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="expected_generation" value="{{ entry.generation }}">
+            <button type="button" class="admin-text-action discord-user-icon" data-user-edit data-user-display aria-label="{{ entry.user_id }}を編集" title="編集" {% if editing %}hidden{% endif %} {% if read_only or not storage_available %}disabled{% endif %}>{{ icon("edit") }}</button>
+            <button type="submit" name="action" value="revoke" class="admin-text-action discord-user-icon text-danger" data-user-delete data-user-display formnovalidate aria-label="{{ entry.user_id }}の利用許可を削除" title="削除" {% if editing %}hidden{% endif %} {% if read_only or not storage_available %}disabled{% endif %}>{{ icon("delete") }}</button>
+            <button type="submit" name="action" value="save" class="btn btn-primary" data-user-editor {% if not editing %}hidden{% endif %} {% if read_only or not storage_available %}disabled{% endif %}>保存</button>
+            <button type="button" class="admin-text-action" data-user-cancel data-user-editor {% if not editing %}hidden{% endif %}>キャンセル</button>
+          </form>
+          {% else %}<span class="text-body-secondary small">初期設定で固定</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+      {% if entries is not none and not entries %}<tr id="users-empty"><td colspan="3" class="text-body-secondary py-4">ユーザーはまだ登録されていません。</td></tr>{% endif %}
+    </tbody>
+  </table>
+</section>
+<script src="/static/js/admin-users.js?v=1" defer></script>
+{% endblock %}

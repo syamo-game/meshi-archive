@@ -13,7 +13,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from db.database import SessionLocal, init_db
 from services.login_throttle import purge_expired_attempts
 from services.security_config import validate_web_security
+from web.discord_session import DiscordGrantMiddleware
 from web.routers import admin, auth_discord, home, review, shop_images
+from web.routers import review_suggestions
 
 logger = logging.getLogger(__name__)
 validate_web_security()
@@ -44,6 +46,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app = FastAPI(title="Meshi Database", docs_url=None, redoc_url=None)
 
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(DiscordGrantMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=SECRET_KEY,
@@ -69,3 +72,4 @@ app.include_router(shop_images.router)
 app.include_router(auth_discord.router)
 app.include_router(admin.router, prefix="/admin")
 app.include_router(review.router)
+app.include_router(review_suggestions.router)

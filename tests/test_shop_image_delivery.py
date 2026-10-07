@@ -6,7 +6,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import create_engine
@@ -54,6 +54,11 @@ def image_client(db: Session) -> TestClient:
     app.add_middleware(SessionMiddleware, secret_key="image-delivery-test")
     app.include_router(shop_images.router)
 
+    @app.post("/test-login/member")
+    def login(request: Request) -> dict[str, bool]:
+        request.session.update(authenticated=True, discord_user_id="123456789012345678")
+        return {"ok": True}
+
     def session() -> Generator[Session, None, None]:
         yield db
 
@@ -73,8 +78,7 @@ def test_first_image_request_downloads_saves_and_reuses_the_processed_photo(
 ) -> None:
     monkeypatch.setenv("SHOP_IMAGE_CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     asset = add_image(db)
     requests: list[str] = []
     original_client = httpx.AsyncClient
@@ -88,6 +92,7 @@ def test_first_image_request_downloads_saves_and_reuses_the_processed_photo(
 
     monkeypatch.setattr(shop_image_cache.httpx, "AsyncClient", download_client)
     with image_client(db) as client:
+        client.post("/test-login/member")
         url = shop_image_cache.processed_image_public_url(asset.url)
         first = client.get(url)
         second = client.get(url)
@@ -110,12 +115,12 @@ def test_image_needs_both_approvals_even_when_a_cached_file_exists(
 ) -> None:
     monkeypatch.setenv("SHOP_IMAGE_CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     asset = add_image(db, review_status=review_status, metadata_review_status=metadata_status)
     cached = shop_image_cache.processed_image_path(asset.url)
     cached.write_bytes(shop_image_cache.crop_image_bytes(png_bytes()))
     with image_client(db) as client:
+        client.post("/test-login/member")
         response = client.get(shop_image_cache.processed_image_public_url(asset.url))
     assert response.status_code == 404
 
@@ -124,8 +129,7 @@ def test_images_from_separately_approved_mentions_are_not_public(
     db: Session, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     asset = add_image(db, review_status="pending")
     db.add(ShopMention(
         message=asset.message, shop=Shop(shop_name="別の候補"), occurrence_index=1,
@@ -133,6 +137,7 @@ def test_images_from_separately_approved_mentions_are_not_public(
     ))
     db.commit()
     with image_client(db) as client:
+        client.post("/test-login/member")
         response = client.get(shop_image_cache.processed_image_public_url(asset.url))
     assert response.status_code == 404
 
@@ -141,12 +146,11 @@ def test_image_delivery_requires_login_and_a_registered_safe_filename(
     db: Session, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     asset = add_image(db)
-    monkeypatch.setattr(home, "WEB_PASSWORD", "required")
     with image_client(db) as client:
         assert client.get(shop_image_cache.processed_image_public_url(asset.url)).status_code == 401
         monkeypatch.setenv("APP_ENV", "development")
-        monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-        monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
+        client.post("/test-login/member")
         for filename in ("0" * 64 + ".webp", "..%2Fsecret", "photo.webp", "..%5Csecret"):
             assert client.get("/media/shop-images/" + filename).status_code == 404
 
@@ -156,8 +160,7 @@ def test_failed_download_is_logged_and_can_be_retried(
 ) -> None:
     monkeypatch.setenv("SHOP_IMAGE_CACHE_DIR", str(tmp_path))
     monkeypatch.setenv("APP_ENV", "development")
-    monkeypatch.setenv("ALLOW_ANONYMOUS_READ", "true")
-    monkeypatch.setattr(home, "WEB_PASSWORD", None)
+
     asset = add_image(db)
     original_client = httpx.AsyncClient
     request_count: int = 0
@@ -174,6 +177,7 @@ def test_failed_download_is_logged_and_can_be_retried(
 
     monkeypatch.setattr(shop_image_cache.httpx, "AsyncClient", download_client)
     with image_client(db) as client:
+        client.post("/test-login/member")
         url = shop_image_cache.processed_image_public_url(asset.url)
         failed = client.get(url)
         assert failed.status_code == 502

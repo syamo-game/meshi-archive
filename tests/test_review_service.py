@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from pathlib import Path
+from threading import Event
 
 import pytest
 from pydantic import ValidationError
@@ -34,6 +37,7 @@ from services.review_service import (
     apply_review_decision,
 )
 from services import mention_reevaluation, review_service
+from services.extraction_safety import EVENT_EXCLUDED
 
 
 @pytest.fixture
@@ -1544,6 +1548,121 @@ def create_shopless_mention(db: Session, suffix: int) -> ShopMention:
     return mention
 
 
+def create_excluded_event(db: Session) -> ShopMention:
+    mention = create_shopless_mention(db, 95)
+    mention.extracted_name = "Temporary Venue"
+    mention.extracted_branch_name = "Event hall"
+    mention.extracted_area = "銀座"
+    mention.extracted_category = "寿司"
+    mention.review_status = "rejected"
+    mention.resolution_status = "invalid"
+    mention.metadata_review_status = "deferred"
+    mention.difference_type = EVENT_EXCLUDED
+    mention.extraction_error = 'evidence_review:{"codes":["event_excluded"],"reasons":["出店元未特定"]}'
+    mention.candidates.append(ResolutionCandidate(
+        name="Temporary Venue", rank=1, area="銀座", category="寿司", name_similarity_milli=1000,
+    ))
+    db.commit()
+    return mention
+
+
+@pytest.mark.parametrize("action", ["approve_current", "approve_candidate", "defer", "metadata_approve"])
+def test_excluded_event_cannot_recreate_venue_by_approval_or_deferral(db: Session, action: str) -> None:
+    mention = create_excluded_event(db)
+    decision: ApproveCurrentDecision | ApproveCandidateDecision | DeferDecision
+    if action == "approve_candidate":
+        decision = ApproveCandidateDecision(action=action, expected_version=1, candidate_id=mention.candidates[0].id)
+    elif action == "defer":
+        decision = DeferDecision(action=action, expected_version=1)
+    else:
+        decision = ApproveCurrentDecision(
+            action="approve_current", expected_version=1,
+            scope="metadata" if action == "metadata_approve" else "identity",
+        )
+    with pytest.raises(ReviewConflictError) as conflict:
+        apply_review_decision(db, mention.id, decision)
+    assert conflict.value.code == "event_origin_required"
+    db.rollback()
+    assert (mention.shop_id, mention.review_status, mention.version) == (None, "rejected", 1)
+    assert mention.metadata_review_status == "deferred"
+    assert "出店元未特定" in mention.extraction_error
+    assert len(mention.candidates) == 1
+    assert db.query(Shop).count() == db.query(ReviewEvent).count() == 0
+
+
+@pytest.mark.parametrize("changed_field", ["none", "area", "category", "normalization"])
+def test_excluded_event_edit_requires_more_than_venue_or_classification_values(
+    db: Session, changed_field: str,
+) -> None:
+    mention = create_excluded_event(db)
+    editable = EditableShop(
+        shop_name="  TEMPORARY Venue  " if changed_field == "normalization" else mention.extracted_name,
+        branch_name=mention.extracted_branch_name,
+        area="神田" if changed_field == "area" else "銀座",
+        category="和食" if changed_field == "category" else "寿司",
+    )
+    with pytest.raises(ReviewConflictError) as conflict:
+        apply_review_decision(db, mention.id, EditAndApproveDecision(
+            action="edit_and_approve", expected_version=1, shop=editable,
+        ))
+    assert conflict.value.code == "event_origin_required"
+    db.rollback()
+    assert mention.shop_id is None and mention.review_status == "rejected"
+    assert db.query(Shop).count() == db.query(ReviewEvent).count() == 0
+
+
+@pytest.mark.parametrize("origin_field", ["shop_name", "branch_name", "address", "phone", "canonical_url"])
+def test_excluded_event_allows_explicit_manual_origin_details(db: Session, origin_field: str) -> None:
+    mention = create_excluded_event(db)
+    editable = EditableShop(
+        shop_name="Verified permanent shop" if origin_field == "shop_name" else mention.extracted_name,
+        branch_name="本店" if origin_field == "branch_name" else mention.extracted_branch_name,
+        area="銀座", category="寿司",
+        address="Verified permanent address" if origin_field == "address" else None,
+        phone="03-1234-5678" if origin_field == "phone" else None,
+        canonical_url="https://official.example/origin" if origin_field == "canonical_url" else None,
+    )
+    result = apply_review_decision(db, mention.id, EditAndApproveDecision(
+        action="edit_and_approve", expected_version=1, shop=editable,
+    ))
+    assert result.review_status == "approved"
+    assert mention.shop is not None
+    assert mention.message.content == "A restaurant recommendation"
+    assert "出店元未特定" in mention.extraction_error
+    assert db.query(ReviewEvent).count() == 1
+
+
+def test_excluded_event_can_be_explicitly_linked_to_existing_permanent_shop(db: Session) -> None:
+    mention = create_excluded_event(db)
+    target = Shop(shop_name="Verified permanent shop", area="銀座", category="寿司", memo="Keep memo", rating=4)
+    db.add(target)
+    db.commit()
+    result = apply_review_decision(db, mention.id, MergeDecision(
+        action="merge", expected_version=1, target_shop_id=target.id, target_version=1,
+        is_visited=False, memo=target.memo, rating=target.rating,
+    ))
+    assert result.shop_id == target.id and result.review_status == "approved"
+    assert db.query(Shop).count() == 1
+    assert target.memo == "Keep memo" and target.rating == 4
+    assert mention.message.content == "A restaurant recommendation"
+
+
+@pytest.mark.parametrize("action", ["approve_current", "approve_candidate"])
+def test_event_origin_guard_does_not_block_already_linked_shops(db: Session, action: str) -> None:
+    mention = create_excluded_event(db)
+    mention.shop = Shop(shop_name="Existing permanent shop", area="銀座", category="寿司")
+    db.commit()
+    shop_id = mention.shop_id
+    decision = (
+        ApproveCandidateDecision(action="approve_candidate", expected_version=1, shop_version=1, candidate_id=mention.candidates[0].id)
+        if action == "approve_candidate"
+        else ApproveCurrentDecision(action="approve_current", expected_version=1, shop_version=1)
+    )
+    result = apply_review_decision(db, mention.id, decision)
+    assert result.review_status == "approved" and result.shop_id == shop_id
+    assert db.query(Shop).count() == 1
+
+
 def test_identity_approve_current_creates_shop_from_extracted_values(db: Session) -> None:
     mention = create_shopless_mention(db, 10)
 
@@ -2192,7 +2311,7 @@ def test_metadata_edit_rejects_strong_identity_collision(db: Session) -> None:
     db.add(target)
     db.commit()
 
-    with pytest.raises(ReviewConflictError, match="kind=strong_identity"):
+    with pytest.raises(ReviewConflictError, match="kind=strong_identity") as conflict:
         apply_review_decision(
             db,
             mention.id,
@@ -2212,6 +2331,7 @@ def test_metadata_edit_rejects_strong_identity_collision(db: Session) -> None:
             ),
         )
 
+    assert conflict.value.code == "shop_collision"
     assert mention.shop.phone is None
     assert mention.metadata_review_status == MetadataReviewStatus.PENDING.value
 
@@ -2465,7 +2585,7 @@ def test_shopless_metadata_and_unresolved_identity_cannot_create_shop(
     db: Session,
 ) -> None:
     metadata_mention = create_shopless_mention(db, 20)
-    with pytest.raises(ReviewConflictError, match="has no shop"):
+    with pytest.raises(ReviewConflictError, match="has no shop") as missing_shop:
         apply_review_decision(
             db,
             metadata_mention.id,
@@ -2476,6 +2596,7 @@ def test_shopless_metadata_and_unresolved_identity_cannot_create_shop(
             ),
         )
 
+    assert missing_shop.value.code == "missing_shop"
     unresolved_mention = create_shopless_mention(db, 21)
     unresolved_mention.extracted_name = "（店舗名未特定）"
     unresolved_mention.difference_type = "extraction_not_found"
@@ -2508,6 +2629,133 @@ def test_approve_current_rejects_stale_shop_version(db: Session) -> None:
         )
 
     assert mention.review_status == ReviewStatus.PENDING.value
+
+
+def test_merge_target_version_conflict_requires_refreshing_target(db: Session) -> None:
+    mention = create_mention(db, 90)
+    target = Shop(shop_name="Another shop", area="神田", category="和食", version=2, memo="Keep latest memo")
+    db.add(target)
+    db.commit()
+    source_id = mention.shop_id
+    with pytest.raises(ReviewConflictError) as conflict:
+        apply_review_decision(
+            db, mention.id,
+            MergeDecision(
+                action="merge", expected_version=1, shop_version=1,
+                target_shop_id=target.id, target_version=1,
+                is_visited=False, memo="Stale memo",
+            ),
+        )
+    assert conflict.value.code == "stale_merge_target"
+    assert mention.shop_id == source_id
+    assert target.memo == "Keep latest memo"
+    assert db.query(Shop).count() == 2
+    assert db.query(ReviewEvent).count() == 0
+
+
+@pytest.mark.parametrize("same_mention", [True, False])
+def test_simultaneous_review_saves_do_not_apply_a_stale_shared_shop_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, same_mention: bool,
+) -> None:
+    engine = create_engine(f"sqlite:///{(tmp_path / 'review-race.db').as_posix()}")
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine)
+    with factory() as seed:
+        first = create_mention(seed, 91, "Concurrent shop")
+        first_id = first.id
+        second = ShopMention(
+            message=Message(message_id="82345678901234567", content="Another post"),
+            shop=first.shop, occurrence_index=0, extracted_name="Concurrent shop",
+            review_status="pending", metadata_review_status="pending", extraction_source="test",
+        )
+        seed.add(second)
+        seed.commit()
+        second_id = first_id if same_mention else second.id
+        shop_id = first.shop_id
+
+    first_loaded = Event()
+    second_loaded = Event()
+    original_load = review_service._load_source_shop_for_update
+
+    def coordinated_load(session: Session, mention: ShopMention, version: int | None) -> Shop | None:
+        shop = original_load(session, mention, version)
+        if session.info["writer"] == "first":
+            first_loaded.set()
+            second_loaded.wait(timeout=1)
+        else:
+            second_loaded.set()
+        return shop
+
+    monkeypatch.setattr(review_service, "_load_source_shop_for_update", coordinated_load)
+
+    def save(writer: str, mention_id: int) -> str:
+        with factory(info={"writer": writer}) as session:
+            try:
+                apply_review_decision(
+                    session, mention_id,
+                    EditAndApproveDecision(
+                        action="edit_and_approve", scope="metadata",
+                        expected_version=1, shop_version=1,
+                        shop=EditableShop(
+                            shop_name="Concurrent shop", area="銀座", category="寿司", address=writer,
+                        ),
+                    ),
+                )
+            except ReviewConflictError as exc:
+                session.rollback()
+                return exc.code
+            return "saved"
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first_save = pool.submit(save, "first", first_id)
+            assert first_loaded.wait(timeout=5)
+            second_save = pool.submit(save, "second", second_id)
+            results = [first_save.result(timeout=10), second_save.result(timeout=10)]
+        assert results == ["saved", "stale_mention" if same_mention else "stale_shop"]
+        with factory() as verify:
+            shop = verify.get(Shop, shop_id)
+            assert shop is not None
+            assert shop.address == "first"
+            assert shop.version == 2
+            assert verify.query(ReviewEvent).count() == 1
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("changed_record", ["mention", "shop"])
+def test_preloaded_review_objects_cannot_bypass_latest_database_versions(
+    db: Session, changed_record: str,
+) -> None:
+    mention = create_mention(db, 92, "Cached shop")
+    mention_id = mention.id
+    shop = mention.shop
+    assert shop is not None
+    shop_id = shop.id
+    assert mention.version == shop.version == 1
+    with Session(bind=db.get_bind()) as other:
+        if changed_record == "mention":
+            updated_mention = other.get(ShopMention, mention_id)
+            assert updated_mention is not None
+            updated_mention.version = 2
+            updated_mention.review_status = "deferred"
+        else:
+            updated_shop = other.get(Shop, shop_id)
+            assert updated_shop is not None
+            updated_shop.version = 2
+            updated_shop.address = "Saved elsewhere"
+        other.commit()
+
+    with pytest.raises(ReviewConflictError) as conflict:
+        apply_review_decision(
+            db, mention_id,
+            ApproveCurrentDecision(action="approve_current", expected_version=1, shop_version=1),
+        )
+    assert conflict.value.code == ("stale_mention" if changed_record == "mention" else "stale_shop")
+    db.rollback()
+    assert db.query(ReviewEvent).count() == 0
+    assert mention.review_status == ("deferred" if changed_record == "mention" else "pending")
+    assert shop.address == ("Saved elsewhere" if changed_record == "shop" else None)
 
 
 def test_shop_mutations_reject_missing_or_stale_shop_versions(db: Session) -> None:

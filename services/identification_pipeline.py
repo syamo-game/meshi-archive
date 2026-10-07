@@ -40,6 +40,7 @@ from bot.restaurant_extractor import (
     fetch_html_document,
     fetch_structured_candidates,
     is_known_category,
+    require_extraction_evidence,
     search_restaurant_candidates,
 )
 from db.models import (
@@ -61,6 +62,7 @@ from db.models import (
     SourceAsset,
     utc_now,
 )
+from services.category_normalization import canonicalize_category
 from services.import_service import (
     MESSAGE_ID_RE,
     classify_legacy_url,
@@ -68,6 +70,19 @@ from services.import_service import (
     external_identities_conflict,
     extract_external_identity,
     preferred_external_identity,
+)
+from services.extraction_safety import (
+    EVENT_EXCLUDED,
+    EvidenceAssessment,
+    assess_mention_evidence,
+    evidence_review_error,
+    event_exclusion_assessment,
+    event_origin_quotes_match,
+    image_evidence_assessment,
+    input_evidence_assessment,
+    operating_status_note,
+    requires_manual_evidence_review,
+    source_requires_fresh_extraction,
 )
 from services.page_evidence import (
     extract_restaurant_page_evidence,
@@ -251,7 +266,8 @@ class MessageEnvelope(BaseModel):
     channel_id: str
     content: str = Field(min_length=1, max_length=100_000)
     created_at: datetime
-    assets: tuple[SourceAssetInput, ...] = Field(default_factory=tuple, max_length=50)
+    assets: tuple[SourceAssetInput, ...] = Field(default_factory=tuple)
+    omitted_asset_count: int = Field(default=0, ge=0)
 
     @field_validator("message_id", "channel_id")
     @classmethod
@@ -317,6 +333,7 @@ class SourceDiscoveryEvidence:
     source_urls: tuple[str, ...]
     input_source_urls: tuple[str, ...]
     documents: tuple[SourceDiscoveryDocument, ...]
+    input_truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -369,6 +386,7 @@ class _OperationalJournal:
     runs: list[_ProcessingRunSnapshot] = field(default_factory=list)
     caches: dict[tuple[str, str], _CacheSnapshot] = field(default_factory=dict)
     invalidated_caches: set[tuple[str, str]] = field(default_factory=set)
+    defer_writes: bool = False
 
 
 _ACTIVE_OPERATIONAL_JOURNAL: ContextVar[_OperationalJournal | None] = ContextVar(
@@ -436,8 +454,9 @@ def _record_metrics(
         latency_ms=metrics.latency_ms,
         estimated_cost_microusd=metrics.estimated_cost_microusd,
     )
-    db.add(_processing_run(snapshot))
     journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
+    if journal is None or not journal.defer_writes:
+        db.add(_processing_run(snapshot))
     if journal is not None:
         journal.runs.append(snapshot)
     for attempt in range(2, metrics.api_attempts + 1):
@@ -455,7 +474,8 @@ def _record_metrics(
             estimated_cost_microusd=0,
             error=f"attempt={attempt}; cost included in aggregate metrics",
         )
-        db.add(_processing_run(retry_snapshot))
+        if journal is None or not journal.defer_writes:
+            db.add(_processing_run(retry_snapshot))
         if journal is not None:
             journal.runs.append(retry_snapshot)
 
@@ -480,8 +500,9 @@ def _record_failure(
         estimated_cost_microusd=0,
         error=f"{type(error).__name__}: {error}",
     )
-    db.add(_processing_run(snapshot))
     journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
+    if journal is None or not journal.defer_writes:
+        db.add(_processing_run(snapshot))
     if journal is not None:
         journal.runs.append(snapshot)
 
@@ -526,7 +547,19 @@ def _replace_source_assets(
     db.add_all(rows)
 
 
+def _envelope_input_assessment(
+    envelope: MessageEnvelope, *, source_input_truncated: bool = False,
+) -> EvidenceAssessment:
+    return input_evidence_assessment(
+        envelope.content,
+        omitted_asset_count=max(envelope.omitted_asset_count, len(envelope.assets) - 50),
+        source_input_truncated=source_input_truncated,
+    )
+
+
 def _source_identity_for_reuse(envelope: MessageEnvelope) -> SourceIdentity | None:
+    if _envelope_input_assessment(envelope).requires_review or source_requires_fresh_extraction(envelope.content):
+        return None
     identities: dict[tuple[str, str, str], SourceIdentity] = {}
     source_asset_count = 0
     for asset in envelope.assets:
@@ -609,6 +642,7 @@ def _find_source_reuse_match(
         if (
             mention.review_status != ReviewStatus.APPROVED.value
             or mention.shop_id is None
+            or requires_manual_evidence_review(mention.extraction_error)
         ):
             return None
         reusable_mentions.append(mention)
@@ -777,7 +811,8 @@ def _source_discovery_evidence(
             )
         )
     parts.append(f"[Discord Message]\n{envelope.content}")
-    input_text = "\n".join(parts)[:SOURCE_DISCOVERY_MAX_INPUT_CHARS]
+    full_input_text = "\n".join(parts)
+    input_text = full_input_text[:SOURCE_DISCOVERY_MAX_INPUT_CHARS]
     normalized = re.sub(r"\s+", " ", input_text).strip()
     digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
     content_urls = extract_http_urls(envelope.content)
@@ -803,6 +838,11 @@ def _source_discovery_evidence(
         source_urls=excluded_source_urls,
         input_source_urls=tuple(asset.url for asset in selected),
         documents=tuple(documents),
+        input_truncated=(
+            len(selected_by_url) > len(selected)
+            or len(full_input_text) > SOURCE_DISCOVERY_MAX_INPUT_CHARS
+            or any(len(asset.description or "") > 8_000 for asset in selected)
+        ),
     )
 
 
@@ -813,6 +853,26 @@ def _cache_key(kind: str, value: str) -> str:
 
 def _get_cache(db: Session, kind: str, value: str) -> LookupCache | None:
     key = _cache_key(kind, value)
+    journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
+    if journal is not None and journal.defer_writes:
+        staged = journal.caches.get((kind, value))
+        if staged is not None:
+            return LookupCache(
+                cache_key=key,
+                kind=kind,
+                payload=staged.payload,
+                expires_at=utc_now() + timedelta(days=CACHE_DAYS),
+                created_at=utc_now(),
+            )
+        if (kind, value) in journal.invalidated_caches:
+            return None
+        # Evidence reads must not flush staged work before an external await.
+        with db.no_autoflush:
+            return (
+                db.query(LookupCache)
+                .filter(LookupCache.cache_key == key, LookupCache.expires_at > utc_now())
+                .first()
+            )
     return (
         db.query(LookupCache)
         .filter(LookupCache.cache_key == key, LookupCache.expires_at > utc_now())
@@ -821,6 +881,10 @@ def _get_cache(db: Session, kind: str, value: str) -> LookupCache | None:
 
 
 def _put_cache(db: Session, kind: str, value: str, payload: str) -> None:
+    journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
+    if journal is not None and journal.defer_writes:
+        journal.caches[(kind, value)] = _CacheSnapshot(kind=kind, value=value, payload=payload)
+        return
     key = _cache_key(kind, value)
     existing = db.query(LookupCache).filter(LookupCache.cache_key == key).first()
     expires_at = utc_now() + timedelta(days=CACHE_DAYS)
@@ -837,16 +901,20 @@ def _put_cache(db: Session, kind: str, value: str, payload: str) -> None:
                 expires_at=expires_at,
             )
         )
-    journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
     if journal is not None:
         snapshot = _CacheSnapshot(kind=kind, value=value, payload=payload)
         journal.caches[(kind, value)] = snapshot
 
 
 def _delete_cache(db: Session, kind: str, value: str, cached: LookupCache) -> None:
+    journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
+    if journal is not None and journal.defer_writes:
+        key = (kind, value)
+        journal.invalidated_caches.add(key)
+        journal.caches.pop(key, None)
+        return
     db.delete(cached)
     db.flush()
-    journal = _ACTIVE_OPERATIONAL_JOURNAL.get()
     if journal is not None:
         key = (kind, value)
         journal.invalidated_caches.add(key)
@@ -1078,6 +1146,8 @@ async def _source_mention_is_grounded(
     evidence: SourceDiscoveryEvidence,
     search_source_urls: tuple[str, ...],
 ) -> tuple[bool, str | None]:
+    if evidence.input_truncated:
+        return False, "検索入力で省略された本文・出典があり、根拠の全体を確認できない"
     if mention.source_url is None:
         return False, "店舗ごとの元出典URLがない"
     mention_source_identity = _citation_url_identity(mention.source_url)
@@ -1266,7 +1336,7 @@ async def _source_discovery_message(
             evidence.cache_value,
             cached_result.model_dump_json(),
         )
-    discovered_message = cached_result.message
+    discovered_message = require_extraction_evidence(cached_result.message)
     validated_mentions: list[ExtractedMention] = []
     grounding_reasons: list[str] = []
     for mention in discovered_message.mentions:
@@ -3077,7 +3147,7 @@ def _new_shop_from_candidate(
             shop_name=shop_name,
             branch_name=mention.branch_name,
             area=canonicalize_area(mention.area),
-            category=mention.category,
+            category=canonicalize_category(mention.category) or mention.category,
             is_visited=False,
         )
     canonical_url = candidate.canonical_url
@@ -3111,7 +3181,10 @@ def _new_shop_from_candidate(
         shop_name=shop_name,
         branch_name=mention.branch_name,
         area=area,
-        category=candidate.category or mention.category,
+        category=(
+            canonicalize_category(candidate.category or mention.category)
+            or candidate.category or mention.category
+        ),
         address=candidate.address,
         phone=normalize_phone(candidate.phone),
         canonical_url=canonical_url,
@@ -3119,6 +3192,173 @@ def _new_shop_from_candidate(
         external_id=external_id,
         is_visited=False,
     )
+
+
+@dataclass(frozen=True)
+class _EventOriginResolution:
+    extracted: ExtractedMention | None = None
+    candidates: tuple[PipelineCandidate, ...] = ()
+    shop_id: int | None = None
+    shop_version: int | None = None
+    new_candidate: PipelineCandidate | None = None
+    reason: str | None = None
+
+
+async def _prepare_event_origin(
+    db: Session, message_id: str, event: ExtractedMention, content: str,
+    *, assets: tuple[SourceAssetInput, ...] = (),
+    input_assessment: EvidenceAssessment = EvidenceAssessment(),
+) -> _EventOriginResolution:
+    origin = event.event_origin
+    if origin is None or not origin.is_unique or input_assessment.requires_review:
+        return _EventOriginResolution(reason="出店元の常設店舗・支店を一意に確認できません。")
+    same_name_shops = [
+        shop for shop in db.query(Shop).all()
+        if normalize_name(shop.shop_name) == normalize_name(origin.shop_name)
+    ]
+    if not origin.branch_name and (
+        len(same_name_shops) > 1 or any(shop.branch_name for shop in same_name_shops)
+    ):
+        return _EventOriginResolution(reason="同名の支店があり、催事の出店元支店を特定できません。")
+    permitted_urls = {*extract_http_urls(content), *(asset.url for asset in assets)}
+    permitted_urls.update(shop.canonical_url for shop in same_name_shops if shop.canonical_url)
+    source_texts: dict[str, str] = {}
+    for url in (origin.relation_source_url, origin.permanent_source_url):
+        if not url or url in source_texts:
+            continue
+        try:
+            ExtractedMention.validate_source_url(url)
+            permitted = url in permitted_urls
+            if not permitted:
+                return _EventOriginResolution(reason="出店元の出典URLを元投稿・既存店舗情報から確認できません。")
+            document = await fetch_html_document(url)
+        except (ExtractionError, httpx.HTTPError, ValueError):
+            return _EventOriginResolution(reason="出店元の根拠ページを取得できません。")
+        if _citation_url_identity(document.final_url) != _citation_url_identity(url):
+            return _EventOriginResolution(reason="出店元の根拠ページが別URLへ転送されました。")
+        page = extract_restaurant_page_evidence(document.html, document.final_url)
+        source_texts[url] = "\n".join(page.text_blocks)
+    if not event_origin_quotes_match(
+        name=origin.shop_name, branch=origin.branch_name, area=origin.area,
+        relation_evidence=origin.relation_evidence, permanent_evidence=origin.permanent_evidence,
+        relation_text=source_texts.get(origin.relation_source_url or "", content),
+        permanent_text=source_texts.get(origin.permanent_source_url or "", content),
+    ):
+        return _EventOriginResolution(reason="催事と出店元の関係、常設店舗・支店の引用根拠が一致しません。")
+    extracted = ExtractedMention(
+        shop_name=origin.shop_name, branch_name=origin.branch_name, area=origin.area,
+        category=event.category, subject_kind="restaurant", identity_evidence="explicit",
+        name_evidence=origin.permanent_evidence, branch_evidence=origin.permanent_evidence,
+        source_url=origin.permanent_source_url, needs_review=False,
+        confidence_reason=(
+            f"催事の出店元常設店舗を確認。関係: {origin.relation_evidence} / "
+            f"常設店舗: {origin.permanent_evidence} / "
+            f"出典: {origin.relation_source_url or '元投稿'} / {origin.permanent_source_url or '元投稿'}"
+        )[:2_000],
+    )
+    existing, blocking = _find_existing_shop_from_mention(db, extracted, None)
+    if existing is not None:
+        return _EventOriginResolution(extracted, shop_id=existing.id, shop_version=existing.version)
+    if blocking:
+        return _EventOriginResolution(extracted, reason=blocking)
+    candidates: list[PipelineCandidate] = []
+    if origin.permanent_source_url:
+        candidates.extend(await _structured_candidates(db, message_id, origin.permanent_source_url))
+    if not candidates:
+        batch = await _web_candidates(db, message_id, extracted)
+        candidates.extend(batch.candidates)
+        for url in _candidate_verification_urls(extracted, batch.candidates):
+            candidates.extend(await _structured_candidates(db, message_id, url))
+    candidates = _dedupe_candidates(candidates)
+    existing, blocking = _find_existing_shop(db, extracted, candidates)
+    if existing is not None:
+        return _EventOriginResolution(extracted, tuple(candidates), existing.id, existing.version)
+    candidate = None if blocking else _candidate_for_new_shop(extracted, candidates)
+    if candidate is None and not blocking:
+        candidate = _top_web_candidate_for_new_shop(extracted, candidates)
+        if candidate is not None:
+            candidate, blocking = await _verify_web_candidate_page(
+                db, message_id, extracted, candidate, candidates=candidates,
+            )
+    if candidate is None or not candidate.is_verified:
+        return _EventOriginResolution(extracted, tuple(candidates), reason=blocking or "常設店舗を確定できる候補がありません。")
+    return _EventOriginResolution(extracted, tuple(candidates), new_candidate=candidate)
+
+
+def _event_origin_mention_row(
+    db: Session, message: Message, event: ExtractedMention, result: _EventOriginResolution,
+    *, occurrence: int, source_url: str | None, extraction_source: str,
+    previous: ShopMention | None = None,
+) -> ShopMention:
+    chosen: Shop | None = None
+    if result.extracted is not None and (result.shop_id is not None or result.new_candidate is not None):
+        lock_new_shop_creation(db)
+        if not result.extracted.branch_name:
+            matches = [
+                shop for shop in db.query(Shop).populate_existing().all()
+                if normalize_name(shop.shop_name) == normalize_name(result.extracted.shop_name)
+            ]
+            if len(matches) > 1 or any(shop.branch_name for shop in matches):
+                result = _EventOriginResolution(
+                    extracted=result.extracted, candidates=result.candidates,
+                    reason="保存前の再確認で出店元の支店が一意に定まりません。",
+                )
+    used_existing = result.shop_id is not None
+    if result.shop_id is not None:
+        chosen = db.query(Shop).filter(Shop.id == result.shop_id).with_for_update().populate_existing().first()
+        if chosen is None or chosen.version != result.shop_version:
+            chosen = None
+        elif db.query(ShopMention).filter(
+            ShopMention.shop_id == chosen.id, ShopMention.review_status == ReviewStatus.APPROVED.value,
+        ).with_for_update().populate_existing().first() is None:
+            chosen = None
+    elif result.new_candidate is not None and result.extracted is not None:
+        candidate, collision, _blocked = _guard_new_shop_creation_or_link(
+            db, result.extracted, result.new_candidate, None,
+        )
+        if collision is not None:
+            chosen = collision
+            used_existing = True
+        elif candidate is not None:
+            chosen = _new_shop_from_candidate(result.extracted, candidate)
+            db.add(chosen)
+            db.flush()
+    excluded = chosen is None
+    extracted = (result.extracted or event) if chosen is not None else event
+    metadata_status, metadata_difference = _metadata_review_state(
+        chosen.area if chosen is not None else None,
+        chosen.category if chosen is not None else None,
+    )
+    assessment = event_exclusion_assessment(result.reason) if excluded else EvidenceAssessment()
+    values = dict(
+        message=message, shop=chosen, occurrence_index=occurrence,
+        extracted_name=extracted.shop_name, extracted_branch_name=extracted.branch_name,
+        extracted_area=extracted.area, extracted_category=extracted.category,
+        source_url=source_url, extraction_source=extraction_source,
+        resolution_status=ResolutionStatus.INVALID.value if excluded else ResolutionStatus.RESOLVED.value,
+        review_status=ReviewStatus.REJECTED.value if excluded else ReviewStatus.APPROVED.value,
+        metadata_review_status=MetadataReviewStatus.DEFERRED.value if excluded else metadata_status.value,
+        metadata_difference_type=None if excluded else metadata_difference,
+        difference_type=EVENT_EXCLUDED if excluded else None,
+        extraction_error=evidence_review_error(assessment),
+        confidence_reason=" / ".join((extracted.confidence_reason, *assessment.reasons))[:2_000],
+        resolution_method=None if excluded else ResolutionMethod.AUTOMATIC.value,
+        resolution_basis=None if excluded else (
+            ResolutionBasis.EXISTING_SHOP.value if used_existing else ResolutionBasis.VERIFIED_CANDIDATE.value
+        ),
+        reviewed_at=utc_now(),
+        metadata_reviewed_at=utc_now() if not excluded and metadata_status == MetadataReviewStatus.APPROVED else None,
+    )
+    mention = previous or ShopMention()
+    for key, value in values.items():
+        setattr(mention, key, value)
+    if previous is not None:
+        mention.version += 1
+    db.add(mention)
+    db.flush()
+    if result.candidates and result.extracted is not None and not mention.candidates:
+        _store_candidates(db, mention, result.extracted, list(result.candidates), result.new_candidate if chosen is not None else None)
+    return mention
 
 
 def _candidates_from_image(
@@ -3404,13 +3644,14 @@ async def _process_image_only_message(
     unresolved_reason: str,
     *,
     allow_automatic_resolution: bool = True,
+    input_assessment: EvidenceAssessment = EvidenceAssessment(),
     commit: bool = True,
 ) -> MessageProcessResult:
     candidates: list[PipelineCandidate] = []
     selected_candidate: PipelineCandidate | None = None
     chosen_shop: Shop | None = None
     resolution_basis: ResolutionBasis | None = None
-    reason_parts = [unresolved_reason]
+    reason_parts = [unresolved_reason, *input_assessment.reasons]
 
     try:
         image_result = await analyze_restaurant_images(None, image_urls[:1])
@@ -3419,13 +3660,42 @@ async def _process_image_only_message(
         raise
     _record_metrics(db, envelope.message_id, "image_analysis", image_result.metrics)
     reason_parts.append(f"画像補助: {image_result.clues.reason}")
+    image_assessment = image_evidence_assessment(
+        image_result.clues.subject_kind,
+        content=envelope.content,
+        unresolved_reason=unresolved_reason,
+        input_assessment=input_assessment,
+    )
+    reason_parts.extend(reason for reason in image_assessment.reasons if reason not in reason_parts)
     candidates.extend(_candidates_from_image(image_result, image_urls[0]))
     candidates = _dedupe_candidates(candidates)
     image_candidate = _single_image_candidate(candidates)
+    if image_assessment.is_event_excluded:
+        event = ExtractedMention(
+            shop_name=image_candidate.name if image_candidate is not None else UNRESOLVED_SHOP_LABEL,
+            needs_review=True, confidence_reason=unresolved_reason,
+            subject_kind="event", event_origin=image_result.clues.event_origin,
+        )
+        origin_result = await _prepare_event_origin(
+            db, envelope.message_id, event, envelope.content,
+            assets=envelope.assets, input_assessment=input_assessment,
+        )
+        event_row = _event_origin_mention_row(
+            db, message, event, origin_result, occurrence=0,
+            source_url=source_url, extraction_source="responses_vision",
+        )
+        message.processing_status = ProcessingStatus.SUCCEEDED.value
+        message.processed_at = utc_now()
+        db.commit() if commit else db.flush()
+        return MessageProcessResult(
+            envelope.message_id, (event_row.shop_id,) if event_row.shop_id is not None else (), (), False,
+        )
     image_mention: ExtractedMention | None = None
     image_blocking_reason: str | None = None
-    automatic_image_allowed = len(image_urls) == 1 and allow_automatic_resolution
-    if not automatic_image_allowed:
+    automatic_image_allowed = (
+        len(image_urls) == 1 and allow_automatic_resolution and not image_assessment.requires_review
+    )
+    if len(image_urls) != 1 or not allow_automatic_resolution:
         reason_parts.append("複数画像の対応関係を検証できないため自動確定しない")
 
     if image_candidate is not None:
@@ -3436,7 +3706,13 @@ async def _process_image_only_message(
             category=None,
             needs_review=True,
             confidence_reason=image_result.clues.reason,
+            subject_kind=image_result.clues.subject_kind,
+            operating_status=image_result.clues.operating_status,
+            operating_status_evidence=image_result.clues.operating_status_evidence,
         )
+        status_note = operating_status_note(image_mention)
+        if status_note:
+            reason_parts.append(status_note)
     if automatic_image_allowed and image_candidate is not None:
         (
             existing_shop,
@@ -3556,7 +3832,10 @@ async def _process_image_only_message(
         resolution_basis=(resolution_basis.value if resolution_basis is not None else None),
         difference_type=difference_type,
         extraction_source="responses_vision",
-        extraction_error=None if automatically_resolved else unresolved_reason,
+        extraction_error=(
+            evidence_review_error(image_assessment)
+            or (None if automatically_resolved else unresolved_reason)
+        ),
         confidence_reason=" / ".join(reason_parts),
         reviewed_at=utc_now() if automatically_resolved else None,
         metadata_reviewed_at=(
@@ -3639,6 +3918,7 @@ async def _process_message_transaction(
             db.delete(mention)
     db.flush()
     _replace_source_assets(db, envelope.message_id, envelope.assets)
+    input_assessment = _envelope_input_assessment(envelope)
 
     try:
         source_reuse_match = _find_source_reuse_match(db, envelope)
@@ -3673,6 +3953,10 @@ async def _process_message_transaction(
             if discovery_message is not None
             else ()
         )
+        input_assessment = _envelope_input_assessment(
+            envelope,
+            source_input_truncated=bool(discovery_evidence and discovery_evidence.input_truncated),
+        )
         using_source_discovery = bool(discovered_mentions)
         source_discovery_attempted = discovery_message is not None
         using_untrusted_mentions = (
@@ -3685,34 +3969,25 @@ async def _process_message_transaction(
         )
         fallback_effective_mentions = (
             tuple(
-                ExtractedMention(
-                    shop_name=mention.shop_name,
-                    branch_name=mention.branch_name,
-                    area=mention.area,
-                    category=mention.category,
-                    source_url=mention.source_url,
-                    needs_review=True,
-                    confidence_reason=_fallback_confidence_reason(
-                        mention.confidence_reason,
-                        fallback_context,
-                    ),
+                mention.model_copy(
+                    update={
+                        "needs_review": True,
+                        "confidence_reason": _fallback_confidence_reason(
+                            mention.confidence_reason,
+                            fallback_context,
+                        ),
+                    }
                 )
-                for mention in fallback_mentions
+                for mention in require_extraction_evidence(
+                    ExtractedMessage(is_restaurant_message=True, mentions=list(fallback_mentions))
+                ).mentions
             )
             if using_fallback_mentions
             else ()
         )
         discovery_effective_mentions = (
             tuple(
-                ExtractedMention(
-                    shop_name=mention.shop_name,
-                    branch_name=mention.branch_name,
-                    area=mention.area,
-                    category=mention.category,
-                    source_url=mention.source_url,
-                    needs_review=True,
-                    confidence_reason=mention.confidence_reason,
-                )
+                mention.model_copy(update={"needs_review": True})
                 for mention in discovered_mentions
             )
             if using_source_discovery
@@ -3726,7 +4001,11 @@ async def _process_message_transaction(
         is_restaurant_message = extraction.message.is_restaurant_message or bool(
             discovery_message and discovery_message.is_restaurant_message
         )
-        if not is_restaurant_message and not effective_mentions:
+        event_context = image_evidence_assessment(
+            "unknown", content=envelope.content,
+            unresolved_reason=extraction.message.unresolved_reason or extraction.message.ignore_reason or "",
+        ).is_event_excluded
+        if not is_restaurant_message and not effective_mentions and not input_assessment.requires_review and not event_context:
             message.is_target = False
             message.processing_status = ProcessingStatus.IGNORED.value
             message.processed_at = utc_now()
@@ -3760,6 +4039,8 @@ async def _process_message_transaction(
                 extraction.message.unresolved_reason
                 or "飲食店への言及ですが、投稿から店舗名を特定できませんでした。"
             )
+            if input_assessment.requires_review:
+                unresolved_reason = " / ".join((unresolved_reason, *input_assessment.reasons))
             if canonical_assets_ambiguous:
                 unresolved_reason = (
                     f"{unresolved_reason} / "
@@ -3774,8 +4055,22 @@ async def _process_message_transaction(
                     source_url,
                     unresolved_reason,
                     allow_automatic_resolution=not canonical_assets_ambiguous,
+                    input_assessment=input_assessment,
                     commit=commit,
                 )
+            if event_context:
+                event = ExtractedMention(
+                    shop_name=UNRESOLVED_SHOP_LABEL, needs_review=True,
+                    subject_kind="event", confidence_reason=unresolved_reason,
+                )
+                _event_origin_mention_row(
+                    db, message, event, _EventOriginResolution(), occurrence=0,
+                    source_url=source_url, extraction_source="responses_structured",
+                )
+                message.processing_status = ProcessingStatus.SUCCEEDED.value
+                message.processed_at = utc_now()
+                db.commit() if commit else db.flush()
+                return MessageProcessResult(envelope.message_id, (), (), False)
             mention_row = ShopMention(
                 message_id=envelope.message_id,
                 shop_id=None,
@@ -3791,7 +4086,7 @@ async def _process_message_transaction(
                     if source_discovery_attempted
                     else "responses_structured"
                 ),
-                extraction_error=unresolved_reason,
+                extraction_error=evidence_review_error(input_assessment) or unresolved_reason,
                 confidence_reason=unresolved_reason,
             )
             db.add(mention_row)
@@ -3814,6 +4109,64 @@ async def _process_message_transaction(
         image_result: ImageAnalysisResult | None = None
 
         for occurrence, extracted in enumerate(effective_mentions):
+            note = operating_status_note(extracted)
+            if note:
+                extracted = extracted.model_copy(
+                    update={"confidence_reason": f"{extracted.confidence_reason} / {note}"}
+                )
+            mention_input_assessment = _envelope_input_assessment(
+                envelope,
+                source_input_truncated=bool(discovery_evidence and discovery_evidence.input_truncated),
+            )
+            safety_assessment = assess_mention_evidence(
+                extracted,
+                envelope.content,
+                input_assessment=mention_input_assessment,
+                source_grounded=using_source_discovery and extracted.source_url is not None,
+            )
+            if safety_assessment.is_event_excluded:
+                origin_result = await _prepare_event_origin(
+                    db, envelope.message_id, extracted, envelope.content,
+                    assets=envelope.assets, input_assessment=mention_input_assessment,
+                )
+                event_row = _event_origin_mention_row(
+                    db, message, extracted, origin_result, occurrence=occurrence,
+                    source_url=extracted.source_url if using_source_discovery else source_url,
+                    extraction_source="responses_source_discovery" if using_source_discovery else "responses_structured",
+                )
+                if event_row.shop_id is not None:
+                    shop_ids.append(event_row.shop_id)
+                continue
+            if safety_assessment.requires_review:
+                metadata_status, metadata_difference = _metadata_review_state(
+                    extracted.area, extracted.category
+                )
+                mention_row = ShopMention(
+                    message_id=envelope.message_id,
+                    occurrence_index=occurrence,
+                    shop_id=None,
+                    extracted_name=extracted.shop_name,
+                    extracted_branch_name=extracted.branch_name,
+                    extracted_area=extracted.area,
+                    extracted_category=extracted.category,
+                    source_url=extracted.source_url if using_source_discovery else source_url,
+                    resolution_status=ResolutionStatus.AMBIGUOUS.value,
+                    review_status=ReviewStatus.PENDING.value,
+                    metadata_review_status=metadata_status.value,
+                    metadata_difference_type=metadata_difference,
+                    difference_type="evidence_review",
+                    extraction_source=(
+                        "legacy_hint" if using_fallback_mentions
+                        else "responses_source_discovery" if using_source_discovery
+                        else "responses_structured"
+                    ),
+                    extraction_error=evidence_review_error(safety_assessment),
+                    confidence_reason=" / ".join((extracted.confidence_reason, *safety_assessment.reasons))[:2_000],
+                )
+                db.add(mention_row)
+                db.flush()
+                pending_ids.append(mention_row.id)
+                continue
             candidates: list[PipelineCandidate] = []
             automatic_evidence_candidate: PipelineCandidate | None = None
             mention_canonical_hint = (
@@ -4059,6 +4412,7 @@ async def _process_message_transaction(
                     elif collision_reason is not None:
                         creation_blocked_reason = collision_reason
             image_reason: str | None = None
+            image_assessment = EvidenceAssessment()
             if (
                 existing_shop is None
                 and new_candidate is None
@@ -4081,8 +4435,25 @@ async def _process_message_transaction(
                         "image_analysis",
                         image_result.metrics,
                     )
-                image_reason_parts = [image_result.clues.reason]
-                if not automatic_image_allowed:
+                image_assessment = image_evidence_assessment(image_result.clues.subject_kind)
+                if image_assessment.is_event_excluded:
+                    event = extracted.model_copy(update={
+                        "subject_kind": "event", "event_origin": image_result.clues.event_origin,
+                    })
+                    origin_result = await _prepare_event_origin(
+                        db, envelope.message_id, event, envelope.content,
+                        assets=envelope.assets, input_assessment=mention_input_assessment,
+                    )
+                    event_row = _event_origin_mention_row(
+                        db, message, event, origin_result, occurrence=occurrence,
+                        source_url=source_url, extraction_source="responses_vision",
+                    )
+                    if event_row.shop_id is not None:
+                        shop_ids.append(event_row.shop_id)
+                    continue
+                automatic_image_allowed = automatic_image_allowed and not image_assessment.requires_review
+                image_reason_parts = [image_result.clues.reason, *image_assessment.reasons]
+                if len(image_urls) != 1:
                     image_reason_parts.append(
                         "複数画像の対応関係を検証できないため自動確定しない"
                     )
@@ -4244,6 +4615,10 @@ async def _process_message_transaction(
                 reason_parts.append(f"未知エリア: {final_area}")
 
             difference_type = None if automatically_resolved else "new_ambiguous"
+            if image_assessment.requires_review:
+                difference_type = "evidence_review"
+            if image_assessment.is_event_excluded:
+                difference_type = EVENT_EXCLUDED
 
             mention_row = ShopMention(
                 message_id=envelope.message_id,
@@ -4261,14 +4636,14 @@ async def _process_message_transaction(
                 resolution_status=(
                     ResolutionStatus.RESOLVED.value
                     if automatically_resolved
-                    else ResolutionStatus.AMBIGUOUS.value
+                    else ResolutionStatus.INVALID.value if image_assessment.is_event_excluded else ResolutionStatus.AMBIGUOUS.value
                 ),
                 review_status=(
                     ReviewStatus.APPROVED.value
                     if automatically_resolved
-                    else ReviewStatus.PENDING.value
+                    else ReviewStatus.REJECTED.value if image_assessment.is_event_excluded else ReviewStatus.PENDING.value
                 ),
-                metadata_review_status=metadata_status.value,
+                metadata_review_status=MetadataReviewStatus.DEFERRED.value if image_assessment.is_event_excluded else metadata_status.value,
                 metadata_difference_type=metadata_difference,
                 resolution_method=(
                     ResolutionMethod.AUTOMATIC.value if automatically_resolved else None
@@ -4286,6 +4661,7 @@ async def _process_message_transaction(
                         else "responses_structured"
                     )
                 ),
+                extraction_error=evidence_review_error(image_assessment),
                 confidence_reason=" / ".join(reason_parts),
                 reviewed_at=utc_now() if automatically_resolved else None,
                 metadata_reviewed_at=(
@@ -4305,7 +4681,7 @@ async def _process_message_transaction(
             )
             if chosen_shop is not None:
                 shop_ids.append(chosen_shop.id)
-            if not automatically_resolved:
+            if not automatically_resolved and not image_assessment.is_event_excluded:
                 pending_ids.append(mention_row.id)
 
         message.processing_status = ProcessingStatus.SUCCEEDED.value

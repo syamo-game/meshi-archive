@@ -7,6 +7,7 @@ from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
 from bot.restaurant_extractor import is_known_category
+from services.extraction_safety import requires_manual_evidence_review
 from db.models import (
     CandidateProvenance,
     MetadataReviewStatus,
@@ -355,6 +356,8 @@ def _reusable_resolution_basis(
     target_shop: Shop,
     approved_shops: tuple[Shop, ...],
 ) -> ResolutionBasis | None:
+    if requires_manual_evidence_review(mention.extraction_error):
+        return None
     if mention.shop_id not in {None, target_shop.id}:
         return None
     verified_candidates = tuple(

@@ -1,10 +1,11 @@
 import csv
+import hashlib
 import ipaddress
 import io
 import logging
 import os
 from collections.abc import Generator, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date, datetime, timezone
 from typing import Annotated, Optional, TypedDict
 from urllib.parse import parse_qsl, unquote, urlencode, urlparse
@@ -16,10 +17,12 @@ from sqlalchemy import and_, case, func, literal, or_
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Query as SqlAlchemyQuery
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 from sqlalchemy.sql.elements import ColumnElement
 from starlette.responses import Response
 
 from db.database import SessionLocal
+from services.admin_sessions import revoke_admin_session
 from db.models import (
     AssetKind,
     FetchStatus,
@@ -45,8 +48,6 @@ from web.area_groups import (
     group_areas,
 )
 from web.csrf import get_csrf_token, verify_csrf_token
-from web.password_login import authenticate_password
-from services.security_config import anonymous_read_enabled
 from web.read_only import require_writable
 from web.region_master import Municipality
 from services.resolution import normalize_phone
@@ -68,7 +69,6 @@ templates.env.globals["area_display_label"] = area_display_label
 templates.env.globals["area_filter_label"] = area_filter_label
 logger = logging.getLogger(__name__)
 
-WEB_PASSWORD = os.getenv("WEB_PASSWORD")
 DISCORD_GUILD_ID = os.getenv("DISCORD_GUILD_ID")
 DISCORD_CHANNEL_ID = os.getenv("DISCORD_CHANNEL_ID")
 
@@ -379,10 +379,18 @@ def _source_link_label(source_url: str, source_is_map: bool) -> str:
     if unquote(parsed.path).lower().endswith(".pdf"):
         return "PDF"
     if hostname in {"x.com", "www.x.com", "twitter.com", "www.twitter.com"}:
-        parts: list[str] = parsed.path.strip("/").split("/")
-        if len(parts) >= 3 and parts[1] == "status" and parts[2].isdigit():
-            return "Xの投稿"
         return "X"
+    if hostname in {"mobile.x.com", "mobile.twitter.com"}:
+        parts: list[str] = parsed.path.strip("/").split("/")
+        is_status_post = len(parts) >= 3 and parts[1] == "status" and parts[2].isdigit()
+        is_web_post = (
+            len(parts) >= 4
+            and parts[:3] == ["i", "web", "status"]
+            and parts[3].isdigit()
+        )
+        if is_status_post or is_web_post:
+            return "X"
+        return hostname
     if hostname == "tabelog.com" or hostname.endswith(".tabelog.com"):
         return "食べログ"
     if hostname == "dancyu.jp" or hostname.endswith(".dancyu.jp"):
@@ -522,8 +530,6 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def _is_authenticated(request: Request) -> bool:
-    if not WEB_PASSWORD and anonymous_read_enabled():
-        return True
     return bool(request.session.get("authenticated")) or is_admin(request)
 
 
@@ -917,6 +923,32 @@ class ShopEditValues:
     rating: str
     is_visited: bool
     visited_at: str
+    expected_version: str = ""
+
+
+_SHOP_EDIT_FIELDS: dict[str, str] = {
+    "shop_name": "店名", "area": "エリア", "category": "カテゴリ", "url": "店舗URL",
+    "address": "住所", "phone": "電話番号", "memo": "メモ", "rating": "評価",
+    "is_visited": "訪問済み", "visited_at": "訪問日",
+}
+
+
+def _shop_edit_values(shop: Shop) -> ShopEditValues:
+    return ShopEditValues(
+        shop_name=shop.shop_name, area=shop.area or "", category=shop.category or "",
+        url=shop.canonical_url or "", address=shop.address or "", phone=shop.phone or "",
+        memo=shop.memo or "", rating=str(shop.rating) if shop.rating is not None else "",
+        is_visited=shop.is_visited,
+        visited_at=shop.visited_at.strftime("%Y-%m-%d") if shop.visited_at else "",
+        expected_version=str(shop.version),
+    )
+
+
+def _parse_shop_version(value: str | None) -> int | None:
+    if value is None or not value.isascii() or not value.isdecimal() or len(value) > 19:
+        return None
+    parsed = int(value)
+    return parsed if parsed > 0 else None
 
 
 class ShopEditErrors(TypedDict, total=False):
@@ -942,18 +974,7 @@ def _render_shop_page(
     status_code: int = 200,
 ) -> Response:
     public_mention = _public_mention(shop)
-    values = edit_values or ShopEditValues(
-        shop_name=shop.shop_name,
-        area=shop.area or "",
-        category=shop.category or "",
-        url=shop.canonical_url or "",
-        address=shop.address or "",
-        phone=shop.phone or "",
-        memo=shop.memo or "",
-        rating=str(shop.rating) if shop.rating is not None else "",
-        is_visited=shop.is_visited,
-        visited_at=shop.visited_at.strftime("%Y-%m-%d") if shop.visited_at else "",
-    )
+    values = edit_values or _shop_edit_values(shop)
     discord_url = None
     base = _discord_base_url()
     primary_mention = public_mention or shop.primary_mention()
@@ -979,6 +1000,8 @@ def _render_shop_page(
             "edit_values": values,
             "edit_errors": edit_errors or {},
             "edit_failure": edit_failure,
+            "conflict_values": _shop_edit_values(shop) if status_code == 409 else None,
+            "edit_field_labels": _SHOP_EDIT_FIELDS,
             "discord_url": discord_url,
             "saved": saved,
             "return_to": return_to,
@@ -1022,6 +1045,40 @@ def shop_detail(
     return _render_shop_page(request, shop, db, safe_return_to, saved=saved, edit_mode=edit)
 
 
+@router.get("/shop/{shop_id}/edit-snapshot")
+def shop_edit_snapshot(shop_id: int, request: Request, db: Session = Depends(get_db)) -> Response:
+    if not is_admin(request):
+        raise HTTPException(status_code=403, detail="Administrator authentication required")
+    shop = db.query(Shop).filter(Shop.id == shop_id).populate_existing().first()
+    if shop is None:
+        raise HTTPException(status_code=404, detail="Shop not found")
+    values = asdict(_shop_edit_values(shop))
+    values.pop("expected_version")
+    return JSONResponse(
+        {"version": shop.version, "values": values, "image_url": _shop_links(shop, None)["image_url"]},
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
+_SHOP_WRITE_CONFLICT = "店舗情報が更新されています。入力内容を保持したまま、別の画面で最新の内容を確認してください。"
+
+
+def _reserve_shop_version(db: Session, shop: Shop) -> bool:
+    expected_version = shop.version
+    updated = (
+        db.query(Shop)
+        .filter(Shop.id == shop.id, Shop.version == expected_version)
+        .update({Shop.version: Shop.version + 1}, synchronize_session=False)
+    )
+    if updated != 1:
+        logger.info(
+            "Shop write conflict: shop_id=%s expected_version=%s", shop.id, expected_version,
+        )
+        return False
+    set_committed_value(shop, "version", expected_version + 1)
+    return True
+
+
 @router.post("/shop/{shop_id}/edit")
 def shop_edit(
     shop_id: int,
@@ -1040,6 +1097,10 @@ def shop_edit(
     return_to: Annotated[str, Form()] = "/",
     db: Session = Depends(get_db),
     photo: Annotated[UploadFile | None, File()] = None,
+    expected_version: Annotated[str, Form()] = "",
+    confirmed_version: Annotated[str, Form()] = "",
+    confirm_conflict: Annotated[str, Form()] = "",
+    conflict_choices: Annotated[list[str] | None, Form()] = None,
 ) -> Response:
     if not is_admin(request):
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -1089,7 +1150,32 @@ def shop_edit(
         rating=rating or "",
         is_visited=is_visited is not None,
         visited_at=visited_at or "",
+        expected_version=expected_version,
     )
+    current_values = _shop_edit_values(shop)
+    if (
+        _parse_shop_version(expected_version) != shop.version
+        and confirm_conflict == "on"
+        and _parse_shop_version(confirmed_version) == shop.version
+    ):
+        differences = {
+            field for field in _SHOP_EDIT_FIELDS
+            if getattr(values, field) != getattr(current_values, field)
+        }
+        choices = dict(choice.split(":", 1) for choice in (conflict_choices or []) if ":" in choice)
+        if all(choices.get(field) in {"input", "latest"} for field in differences):
+            values = replace(values, **{
+                field: getattr(current_values, field)
+                for field in differences if choices[field] == "latest"
+            }, expected_version=confirmed_version)
+    if _parse_shop_version(values.expected_version) != shop.version:
+        return _shop_edit_error(
+            request, shop, db, safe_return_to, values, {},
+            detail=_SHOP_WRITE_CONFLICT, status_code=409,
+        )
+    shop_name, area, category, url = values.shop_name, values.area, values.category, values.url
+    address, phone, memo = values.address, values.phone, values.memo
+    rating, visited_at = values.rating, values.visited_at
     errors: ShopEditErrors = {}
     cleaned_name = shop_name.strip()
     if not cleaned_name:
@@ -1145,6 +1231,12 @@ def shop_edit(
         finally:
             photo.file.close()
     try:
+        if not _reserve_shop_version(db, shop):
+            db.rollback()
+            return _shop_edit_error(
+                request, shop, db, safe_return_to, values, {},
+                detail=_SHOP_WRITE_CONFLICT, status_code=409,
+            )
         shop.shop_name = cleaned_name
         shop.area = cleaned_area
         if cleaned_area is None:
@@ -1168,7 +1260,6 @@ def shop_edit(
         shop.rating = cleaned_rating
         shop.is_visited = values.is_visited
         shop.visited_at = cleaned_visited_at
-        shop.version += 1
         db.commit()
     except SQLAlchemyError:
         db.rollback()
@@ -1202,7 +1293,9 @@ def _shop_edit_error(
         )
     return _render_shop_page(
         request, shop, db, return_to,
-        edit_values=values, edit_errors=errors, edit_failure=detail, status_code=status_code,
+        edit_values=values, edit_errors=errors,
+        edit_failure=detail + (" 選択した写真は保存されていません。最新値を確認した後に写真を再選択してください。" if status_code == 409 else ""),
+        status_code=status_code,
     )
 
 
@@ -1237,7 +1330,7 @@ def toggle_visited(
     shop_id: int,
     request: Request,
     db: Session = Depends(get_db),
-):
+) -> Response:
     if not is_admin(request):
         return JSONResponse({"error": "forbidden"}, status_code=403)
     require_writable()
@@ -1246,18 +1339,35 @@ def toggle_visited(
     if not shop:
         return JSONResponse({"error": "not found"}, status_code=404)
 
-    shop.is_visited = not shop.is_visited
-    if shop.is_visited:
-        if not shop.visited_at:
-            shop.visited_at = datetime.now(timezone.utc)
-    else:
-        shop.visited_at = None
-    shop.version += 1
-    db.commit()
+    if _parse_shop_version(request.headers.get("x-shop-version")) != shop.version:
+        return JSONResponse(
+            {"error": "conflict", "detail": _SHOP_WRITE_CONFLICT}, status_code=409,
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    try:
+        if not _reserve_shop_version(db, shop):
+            db.rollback()
+            return JSONResponse(
+                {"error": "conflict", "detail": _SHOP_WRITE_CONFLICT}, status_code=409,
+                headers={"Cache-Control": "private, no-store"},
+            )
+        shop.is_visited = not shop.is_visited
+        if shop.is_visited:
+            if not shop.visited_at:
+                shop.visited_at = datetime.now(timezone.utc)
+        else:
+            shop.visited_at = None
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Shop visit storage failed: shop_id=%s", shop_id)
+        return JSONResponse({"error": "storage unavailable"}, status_code=503)
 
     return JSONResponse({
         "is_visited": shop.is_visited,
         "visited_at": shop.visited_at.strftime("%Y-%m-%d") if shop.visited_at else None,
+        "version": shop.version,
     })
 
 
@@ -1266,7 +1376,7 @@ async def set_rating(
     shop_id: int,
     request: Request,
     db: Session = Depends(get_db),
-):
+) -> Response:
     if not is_admin(request):
         return JSONResponse({"error": "forbidden"}, status_code=403)
     require_writable()
@@ -1284,13 +1394,31 @@ async def set_rating(
     if not shop:
         return JSONResponse({"error": "not found"}, status_code=404)
 
-    shop.rating = rating if rating > 0 else None
-    shop.version += 1
-    db.commit()
-    return JSONResponse({"rating": shop.rating})
+    if _parse_shop_version(request.headers.get("x-shop-version")) != shop.version:
+        return JSONResponse(
+            {"error": "conflict", "detail": _SHOP_WRITE_CONFLICT}, status_code=409,
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    try:
+        if not _reserve_shop_version(db, shop):
+            db.rollback()
+            return JSONResponse(
+                {"error": "conflict", "detail": _SHOP_WRITE_CONFLICT}, status_code=409,
+                headers={"Cache-Control": "private, no-store"},
+            )
+        shop.rating = rating if rating > 0 else None
+        db.commit()
+    except SQLAlchemyError:
+        db.rollback()
+        logger.exception("Shop rating storage failed: shop_id=%s", shop_id)
+        return JSONResponse({"error": "storage unavailable"}, status_code=503)
+    return JSONResponse({"rating": shop.rating, "version": shop.version})
 
 
 _DISCORD_ERROR_MESSAGES = {
+    "discord_access_unavailable": "利用許可を確認できませんでした。時間をおいて再度お試しください。",
+    "discord_invalid_user_id": "DiscordのユーザーIDを確認できませんでした。もう一度ログインしてください。",
     "discord_unauthorized":     "このDiscordアカウントは登録されていません。管理者にお問い合わせください。",
     "discord_state_mismatch":   "セッションの有効期限が切れた可能性があります。もう一度お試しください。",
     "discord_token_failed":     "Discord認証に失敗しました（トークン取得エラー）。",
@@ -1305,8 +1433,8 @@ _DISCORD_ERROR_MESSAGES = {
 
 
 @router.get("/login")
-def login_page(request: Request, error: Optional[str] = None):
-    if _is_authenticated(request):
+def login_page(request: Request, error: Optional[str] = None) -> Response:
+    if request.session.get("authenticated") or is_admin(request):
         return RedirectResponse("/", status_code=302)
     error_msg = None
     if error:
@@ -1322,33 +1450,28 @@ def login_page(request: Request, error: Optional[str] = None):
     )
 
 
-@router.post("/login")
-def login(
-    request: Request, password: str = Form(""), csrf_token: str = Form(...),
-    db: Session = Depends(get_db),
-) -> Response:
-    verify_csrf_token(request, csrf_token)
-    result = authenticate_password(request, db, "viewer", password, WEB_PASSWORD)
-    if result.authenticated:
-        request.session["authenticated"] = True
-        return RedirectResponse("/", status_code=302)
+@router.get("/logout")
+def logout_page(request: Request) -> Response:
     return templates.TemplateResponse(
-        request=request,
-        name="login.html",
-        context={
-            "error": result.error,
-            "discord_login_enabled": discord_login_enabled(),
-            "csrf_token": get_csrf_token(request),
-        },
-        status_code=result.status_code,
-        headers={"Retry-After": str(result.retry_after)} if result.retry_after else None,
+        request=request, name="logout.html",
+        context={"csrf_token": get_csrf_token(request)},
+        headers={"Cache-Control": "private, no-store"},
     )
 
 
-@router.get("/logout")
-def logout(request: Request):
-    for key in ("authenticated", "admin_authenticated", "discord_user_id", "discord_username"):
+@router.post("/logout")
+def perform_logout(request: Request, csrf_token: str = Form(...)) -> Response:
+    verify_csrf_token(request, csrf_token)
+    if request.session.get("admin_session_token"):
+        try:
+            with SessionLocal() as db:
+                revoke_admin_session(db, request.session)
+        except SQLAlchemyError as exc:
+            logger.error("Admin logout revocation failed: error_type=%s", type(exc).__name__)
+            return Response("ログアウトできませんでした。再試行してください。", status_code=503)
+    for key in ("authenticated", "admin_authenticated", "discord_user_id", "discord_username", "discord_grant_generation"):
         request.session.pop(key, None)
+    request.session.pop("admin_session_token", None)
     return RedirectResponse("/login", status_code=302)
 
 
@@ -1361,7 +1484,7 @@ def export_csv(
     category: Optional[str] = None,
     sort: str = DEFAULT_SORT,
     db: Session = Depends(get_db),
-):
+) -> Response:
     if not is_admin(request):
         return RedirectResponse("/admin/login", status_code=302)
 
@@ -1373,14 +1496,14 @@ def export_csv(
         category,
         sort,
         reviewed_only=False,
-    ).all()
+    ).options(selectinload(Shop.mentions)).all()
 
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow([
         "_id", "@timestamp", "message_id",
         "shop.name", "shop.branch_name", "shop.area", "shop.category",
-        "status.is_visited", "visited_at", "rating", "memo", "url",
+        "status.is_visited", "visited_at", "rating", "memo",
         "source_url", "canonical_url", "shop.address", "shop.phone",
         "shop.external_source", "shop.external_id",
         "review_status", "resolution_status", "metadata_review_status",
@@ -1388,17 +1511,26 @@ def export_csv(
         "reviewed_at", "metadata_reviewed_at",
         "needs_review", "extraction_source", "extraction_error", "confidence_reason",
         "shop.image_key",
+        "shop.version", "shop.updated_at", "mention_id", "mention.version",
+        "shop.mention_count", "shop.identity_pending_count", "shop.identity_deferred_count",
+        "shop.metadata_pending_count", "shop.metadata_deferred_count", "shop.needs_review",
+        "shop.mention_versions",
     ])
 
     def _safe(val: Optional[str]) -> str:
         s = (val or "").strip()
         return f"'{s}" if s and s[0] in _CSV_INJECT_CHARS else s
 
+    def _utc_isoformat(value: datetime) -> str:
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat()
+
+    row_count = 0
     for s in shops:
         mention = s.primary_mention()
         if mention is None:
             continue
-        compatibility_url = s.canonical_url or mention.source_url
         created_at: datetime = s.created_at
         if created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=timezone.utc)
@@ -1414,7 +1546,6 @@ def export_csv(
             s.visited_at.strftime("%Y-%m-%d") if s.visited_at else "",
             s.rating or "",
             _safe(s.memo),
-            _safe(compatibility_url),
             _safe(mention.source_url),
             _safe(s.canonical_url),
             _safe(s.address),
@@ -1446,12 +1577,46 @@ def export_csv(
             _safe(mention.extraction_error),
             _safe(mention.confidence_reason),
             s.image_key or "",
+            s.version,
+            _utc_isoformat(s.updated_at),
+            mention.id,
+            mention.version,
+            len(s.mentions),
+            sum(item.review_status == ReviewStatus.PENDING.value for item in s.mentions),
+            sum(item.review_status == ReviewStatus.DEFERRED.value for item in s.mentions),
+            sum(
+                item.metadata_review_status == MetadataReviewStatus.PENDING.value
+                for item in s.mentions
+            ),
+            sum(
+                item.metadata_review_status == MetadataReviewStatus.DEFERRED.value
+                for item in s.mentions
+            ),
+            s.needs_review,
+            ";".join(
+                f"{item.id}:{item.version}"
+                for item in sorted(s.mentions, key=lambda item: item.id)
+            ),
         ])
+        row_count += 1
 
     # Do not omit the BOM because Excel can misdetect UTF-8 CSV files.
     content = ("\ufeff" + buf.getvalue()).encode("utf-8")
+    content_sha256 = hashlib.sha256(content).hexdigest()
+    exported_at = datetime.now(timezone.utc)
+    filename = f"meshi_archive_{exported_at:%Y%m%dT%H%M%S%fZ}_{content_sha256[:12]}.csv"
     return StreamingResponse(
         iter([content]),
         media_type="text/csv; charset=utf-8-sig",
-        headers={"Content-Disposition": "attachment; filename=meshi_archive.csv"},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "private, no-store, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0",
+            "X-Export-Generated-At": exported_at.isoformat(),
+            "X-Export-Content-SHA256": content_sha256,
+            "X-Export-Row-Count": str(row_count),
+            "X-Export-Row-Unit": "shop",
+            "X-Export-Review-Scope": "representative-mention",
+        },
     )

@@ -155,6 +155,7 @@ def test_clearing_shop_area_reopens_metadata_and_hides_shop(
     db.commit()
 
     shop_edit(
+        expected_version=str(shop.version),
         shop_id=shop.id,
         request=request(f"/shop/{shop.id}/edit", admin=True),
         shop_name=shop.shop_name,

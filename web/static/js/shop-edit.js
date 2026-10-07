@@ -6,6 +6,10 @@
   /** @typedef {HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement|HTMLButtonElement} FormControl */
   /** @typedef {{control: HTMLInputElement|HTMLSelectElement, feedback: HTMLElement}} FieldElements */
   /** @typedef {{detail?: string, errors?: Partial<Record<ErrorField, string>>, redirect_url?: string}} SaveResponse */
+  /** @typedef {'shop_name'|'area'|'category'|'url'|'address'|'phone'|'memo'|'rating'|'is_visited'|'visited_at'} EditableField */
+  /** @typedef {Record<Exclude<EditableField, 'is_visited'>, string> & {is_visited: boolean}} EditValues */
+  /** @typedef {{version: number, values: EditValues, image_url: string|null}} EditSnapshot */
+  /** @typedef {{name: EditableField|'photo', control: HTMLSelectElement}} ConflictChoice */
 
   const form = document.getElementById('shop-edit-form');
   if (!form) return;
@@ -26,7 +30,30 @@
   const emptyPreview = requiredElement('shop-photo-empty');
   const previewLabel = requiredElement('shop-photo-preview-label');
   const errorBox = requiredElement('shop-edit-error');
-  const currentPhoto = preview.getAttribute('data-current-src') || '';
+  let currentPhoto = preview.getAttribute('data-current-src') || '';
+  const expectedVersion = requiredElement('shop-expected-version');
+  const conflictBox = requiredElement('shop-edit-conflicts');
+  const conflictLoad = requiredElement('shop-conflict-load');
+  const conflictFields = requiredElement('shop-conflict-fields');
+  const conflictAccept = requiredElement('shop-conflict-accept');
+  if (!(expectedVersion instanceof HTMLInputElement) || !(conflictLoad instanceof HTMLButtonElement) ||
+      !(conflictAccept instanceof HTMLButtonElement)) throw new Error('Shop conflict controls are invalid');
+  /** @type {Record<EditableField, string>} */
+  const editLabels = {
+    shop_name: '店名', area: 'エリア', category: 'カテゴリ', url: 'URL', address: '住所',
+    phone: '電話番号', memo: 'メモ', rating: '評価', is_visited: '訪問済み', visited_at: '訪問日',
+  };
+  /** @type {Map<EditableField, HTMLInputElement|HTMLSelectElement|HTMLTextAreaElement>} */
+  const editControls = new Map();
+  for (const name of /** @type {EditableField[]} */ (Object.keys(editLabels))) {
+    const control = Array.from(form.elements).find(function (item) {
+      return (item instanceof HTMLInputElement || item instanceof HTMLSelectElement ||
+        item instanceof HTMLTextAreaElement) && item.name === name;
+    });
+    if (!(control instanceof HTMLInputElement) && !(control instanceof HTMLSelectElement) &&
+        !(control instanceof HTMLTextAreaElement)) throw new Error('Shop edit control is missing: ' + name);
+    editControls.set(name, control);
+  }
   const originalLabel = submit.textContent;
   const maxPhotoBytes = 20 * 1024 * 1024;
   const csrfInput = Array.from(form.elements).find(function (control) {
@@ -51,6 +78,127 @@
   const disabledBeforeSave = new Map();
   let busy = false;
   let previewUrl = '';
+  let conflictBlocked = false;
+  /** @type {EditSnapshot|null} */
+  let latestSnapshot = null;
+  /** @type {EditValues|null} */
+  let comparedValues = null;
+  /** @type {File|undefined} */
+  let comparedPhoto;
+  /** @type {ConflictChoice[]} */
+  let conflictChoices = [];
+
+  /** @returns {EditValues} */
+  function readEditValues() {
+    const values = /** @type {EditValues} */ ({});
+    editControls.forEach(function (control, name) {
+      if (name === 'is_visited') {
+        if (!(control instanceof HTMLInputElement)) throw new Error('Shop visit checkbox is invalid');
+        values.is_visited = control.checked;
+      } else values[name] = control.value;
+    });
+    return values;
+  }
+
+  /** @returns {void} */
+  function clearComparison() {
+    latestSnapshot = null;
+    comparedValues = null;
+    comparedPhoto = undefined;
+    conflictChoices = [];
+    conflictFields.replaceChildren();
+    conflictAccept.hidden = true;
+    conflictAccept.disabled = true;
+  }
+
+  /** @returns {void} */
+  function blockForConflict() {
+    conflictBlocked = true;
+    conflictBox.hidden = false;
+    clearComparison();
+    submit.disabled = true;
+  }
+
+  /** @returns {void} */
+  function invalidateComparison() {
+    if (!conflictBlocked || !latestSnapshot) return;
+    clearComparison();
+    showError('入力内容が変わりました。最新値を読み込み直して、残す値を選んでください。');
+  }
+
+  /** @param {EditableField|'photo'} name @param {string} label @param {string} input @param {string} latest @returns {void} */
+  function addConflictChoice(name, label, input, latest) {
+    const container = document.createElement('div');
+    container.className = 'mb-3';
+    const description = document.createElement('p');
+    description.className = 'text-break mb-1';
+    description.style.whiteSpace = 'pre-wrap';
+    description.textContent = label + '\n入力: ' + input + '\n最新: ' + latest;
+    const choiceLabel = document.createElement('label');
+    choiceLabel.className = 'form-label';
+    choiceLabel.htmlFor = 'shop-conflict-' + name;
+    choiceLabel.textContent = label + 'に残す値';
+    const choice = document.createElement('select');
+    choice.id = choiceLabel.htmlFor;
+    choice.className = 'form-select';
+    for (const [value, text] of [['', '選択してください'], ['input', '入力した値を使う'], ['latest', '最新の値を使う']]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = text;
+      choice.append(option);
+    }
+    choice.value = '';
+    conflictChoices.push({ name: name, control: choice });
+    choice.addEventListener('change', function () {
+      conflictAccept.disabled = conflictChoices.some(function (item) {
+        return item.control.value !== 'input' && item.control.value !== 'latest';
+      });
+    });
+    container.append(description, choiceLabel, choice);
+    conflictFields.append(container);
+  }
+
+  /** @param {EditSnapshot} snapshot @returns {void} */
+  function renderComparison(snapshot) {
+    clearComparison();
+    latestSnapshot = snapshot;
+    comparedValues = readEditValues();
+    comparedPhoto = photo.files ? photo.files[0] : undefined;
+    for (const name of /** @type {EditableField[]} */ (Object.keys(editLabels))) {
+      if (comparedValues[name] === snapshot.values[name]) continue;
+      const input = comparedValues[name];
+      const latest = snapshot.values[name];
+      addConflictChoice(name, editLabels[name], typeof input === 'boolean' ? (input ? '訪問済み' : '未訪問') : input || '（空欄）',
+        typeof latest === 'boolean' ? (latest ? '訪問済み' : '未訪問') : latest || '（空欄）');
+    }
+    if (comparedPhoto) addConflictChoice('photo', '写真', comparedPhoto.name, snapshot.image_url ? '保存されている最新の写真' : '写真なし');
+    if (snapshot.image_url) {
+      const latestImage = document.createElement('img');
+      latestImage.src = snapshot.image_url;
+      latestImage.alt = '保存されている最新の写真';
+      latestImage.className = 'img-fluid mb-3';
+      conflictFields.append(latestImage);
+    }
+    if (!conflictChoices.length) {
+      const description = document.createElement('p');
+      description.textContent = '入力内容と最新の値は同じです。確認後、編集を再開できます。';
+      conflictFields.append(description);
+    }
+    conflictAccept.hidden = false;
+    conflictAccept.disabled = conflictChoices.length > 0;
+  }
+
+  /** @param {object} payload @returns {payload is EditSnapshot} */
+  function isEditSnapshot(payload) {
+    if (!payload || Array.isArray(payload) || !('version' in payload) || typeof payload.version !== 'number' ||
+        !Number.isInteger(payload.version) || payload.version < 1 || !('values' in payload) ||
+        !payload.values || typeof payload.values !== 'object' || Array.isArray(payload.values) ||
+        !('image_url' in payload) || (payload.image_url !== null && typeof payload.image_url !== 'string')) return false;
+    const values = payload.values;
+    return Object.keys(editLabels).every(function (name) {
+      return name in values && typeof values[/** @type {keyof typeof values} */ (name)] === (name === 'is_visited' ? 'boolean' : 'string');
+    });
+  }
 
   /** @param {ErrorField} name @param {string|null} message @returns {void} */
   function setFieldError(name, message) {
@@ -93,7 +241,7 @@
       return 'この店舗が見つかりません。別の画面で店舗情報を確認してください。入力内容と写真は保持されています。';
     }
     if (status === 409) {
-      return '店舗情報が更新されています。別の画面で最新の内容を確認してください。入力内容と写真は保持されています。';
+      return '店舗情報が更新されています。入力内容と写真は保持しています。「最新値と比較」で残す値を選んでください。';
     }
     if (typeof detail === 'string' && /[\u3040-\u30ff\u3400-\u9fff]/.test(detail)) return detail;
     if (status === 400) return '入力内容を確認してください。入力内容と写真は保持されています。';
@@ -129,6 +277,7 @@
       disabledBeforeSave.clear();
       submit.textContent = originalLabel;
       submit.removeAttribute('aria-busy');
+      if (conflictBlocked) submit.disabled = true;
     }
   }
 
@@ -173,7 +322,92 @@
       : (currentPhoto ? '現在の写真' : '写真を選ぶと、保存前に確認できます。');
   }
 
-  photo.addEventListener('change', updatePreview);
+  photo.addEventListener('change', function () {
+    updatePreview();
+    invalidateComparison();
+  });
+  for (const eventName of ['input', 'change']) {
+    form.addEventListener(eventName, function (event) {
+      if (Array.from(editControls.values()).some(function (control) { return control === event.target; })) invalidateComparison();
+    });
+  }
+  conflictLoad.addEventListener('click', async function () {
+    if (busy || !conflictBlocked) return;
+    clearComparison();
+    clearErrors();
+    setBusy(true);
+    submit.textContent = '最新値を取得中…';
+    let status = 0;
+    try {
+      const endpoint = form.action.replace(/\/edit$/, '/edit-snapshot');
+      const response = await fetch(endpoint, {
+        method: 'GET', cache: 'no-store', credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+      });
+      status = response.status;
+      if (!response.ok) throw new Error('Shop snapshot request failed: status=' + status);
+      /** @type {object} */
+      const payload = await response.json();
+      if (!isEditSnapshot(payload)) throw new Error('Shop snapshot response is invalid');
+      renderComparison(payload);
+    } catch (error) {
+      console.error('Shop snapshot load failed', { endpoint: form.action, status: status, error: error });
+      showError('最新値を取得できませんでした。入力内容と写真は保持しています。ログインや接続を確認して、もう一度比較してください。');
+    } finally {
+      setBusy(false);
+      // Newly created choices were not part of the disabled-control snapshot.
+      conflictAccept.disabled = !latestSnapshot || conflictChoices.some(function (item) {
+        return item.control.value !== 'input' && item.control.value !== 'latest';
+      });
+      if (!errorBox.hidden) focusError();
+    }
+  });
+  conflictAccept.addEventListener('click', function () {
+    if (busy || !conflictBlocked || !latestSnapshot || !comparedValues || conflictChoices.some(function (item) {
+      return item.control.value !== 'input' && item.control.value !== 'latest';
+    })) return;
+    const currentValues = readEditValues();
+    if (Object.keys(editLabels).some(function (name) {
+      const field = /** @type {EditableField} */ (name);
+      return !comparedValues || currentValues[field] !== comparedValues[field];
+    }) || (photo.files ? photo.files[0] : undefined) !== comparedPhoto) {
+      invalidateComparison();
+      return;
+    }
+    const accepted = latestSnapshot;
+    for (const choice of conflictChoices) {
+      if (choice.control.value !== 'latest') continue;
+      if (choice.name === 'photo') {
+        photo.value = '';
+        continue;
+      }
+      const control = editControls.get(choice.name);
+      if (!control) throw new Error('Shop conflict field is missing: ' + choice.name);
+      if (choice.name === 'is_visited') {
+        if (!(control instanceof HTMLInputElement)) throw new Error('Shop visit checkbox is invalid');
+        control.checked = accepted.values.is_visited;
+      } else {
+        const value = accepted.values[choice.name];
+        if (control instanceof HTMLSelectElement && !Array.from(control.options).some(function (option) { return option.value === value; })) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value || '未設定';
+          control.append(option);
+        }
+        control.value = value;
+      }
+    }
+    currentPhoto = accepted.image_url || '';
+    preview.setAttribute('data-current-src', currentPhoto);
+    expectedVersion.value = String(accepted.version);
+    conflictBlocked = false;
+    conflictBox.hidden = true;
+    clearComparison();
+    clearErrors();
+    updatePreview();
+    submit.disabled = false;
+    submit.focus({ preventScroll: true });
+  });
   preview.addEventListener('error', function () {
     console.error('Shop photo preview failed', { source: preview.getAttribute('src') });
     preview.hidden = true;
@@ -188,6 +422,11 @@
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
     if (busy) return;
+    if (conflictBlocked) {
+      showError('最新値と比較し、残す値を選んでから編集を再開してください。入力内容と写真は保持しています。');
+      focusError();
+      return;
+    }
     clearErrors();
     const selectedPhoto = photo.files ? photo.files[0] : undefined;
     const localPhotoError = photoError(selectedPhoto);
@@ -207,6 +446,7 @@
         headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
       });
       status = response.status;
+      if (status === 409) blockForConflict();
       if (status === 401 || status === 403) {
         const refreshedToken = response.headers.get('X-CSRF-Token');
         if (refreshedToken) csrfInput.value = refreshedToken;

@@ -24,6 +24,33 @@
   <form id="shop-edit-form" method="post" action="/shop/{{ shop.id }}/edit" enctype="multipart/form-data" novalidate>
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="return_to" value="{{ return_to }}">
+    <input id="shop-expected-version" type="hidden" name="expected_version" value="{{ edit_values.expected_version }}">
+    {% if conflict_values %}
+    <fieldset class="alert alert-warning">
+      <legend class="h6">最新の保存値と入力内容を確認してください</legend>
+      <input type="hidden" name="confirmed_version" value="{{ conflict_values.expected_version }}">
+      {% for field, label in edit_field_labels.items() %}
+      {% if (edit_values|attr(field)) != (conflict_values|attr(field)) %}
+      <p class="mb-1 text-break">{{ label }}：入力「{{ edit_values|attr(field) }}」/最新「{{ conflict_values|attr(field) }}」</p>
+      <label class="form-label">{{ label }}に残す値
+        <select name="conflict_choices" class="form-select" required>
+          <option value="">選択してください</option>
+          <option value="{{ field }}:input">入力した値を使う</option>
+          <option value="{{ field }}:latest">最新の値を使う</option>
+        </select>
+      </label>
+      {% endif %}
+      {% endfor %}
+      <label class="d-block"><input type="checkbox" name="confirm_conflict" value="on" required> 最新値と選択内容を確認しました</label>
+      <p class="small mb-0">写真を選択していた場合は、再選択してください。選択後に保存を押すまで反映されません。</p>
+    </fieldset>
+    {% endif %}
+    <section id="shop-edit-conflicts" class="alert alert-warning" hidden>
+      <p>入力内容と写真は保持しています。最新の保存値と比較して、残す値を選んでください。</p>
+      <button id="shop-conflict-load" type="button" class="btn btn-outline-secondary">最新値と比較</button>
+      <div id="shop-conflict-fields" class="mt-3"></div>
+      <button id="shop-conflict-accept" type="button" class="btn btn-outline-secondary" hidden>選択した内容で編集を続ける</button>
+    </section>
 
     <div class="edit-grid row g-3">
       <div class="form-group col-12 col-md-6">
@@ -205,15 +232,15 @@
 
 <section class="card card--danger border-danger-subtle p-3 p-md-4 my-4" aria-labelledby="shop-delete-heading">
   <h2 id="shop-delete-heading" class="card__title card__title--danger h5 text-danger">店舗を削除</h2>
-  <p class="card__desc small text-body-secondary">この操作は取り消せません。</p>
+  <p class="card__desc small text-body-secondary">元投稿・添付・確認履歴は残ります。削除した店舗情報は画面から元に戻せません。</p>
   <form method="post" action="/shop/{{ shop.id }}/delete"
-        data-confirm-message="この店舗を削除します。この操作は取り消せません。">
+        data-confirm-message="店舗「{{ shop.shop_name }}」と、保存済みのメモ・評価・訪問状況・訪問日・写真の登録を削除します。元投稿・添付・確認履歴は残り、この店舗との関連が外れます。画面から元に戻せません。続けますか？">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="return_to" value="{{ return_to }}">
     <button type="submit" class="btn btn--danger btn-danger">この店舗を削除する</button>
   </form>
 </section>
 <script src="/static/js/area-picker.js?v=1" defer></script>
-<script src="/static/js/shop-edit.js?v=2" defer></script>
+<script src="/static/js/shop-edit.js?v=3" defer></script>
 {% endif %}
 {% endblock %}

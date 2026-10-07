@@ -111,6 +111,7 @@ def test_invalid_edit_returns_html_with_all_input_and_field_error(
         "url": "https://example.com/edited", "address": "入力した住所", "phone": "03-1234-5678",
         "memo": "メモの1行目\n2行目 <保持>", "rating": "4", "is_visited": "on",
         "visited_at": "2026-09-01", "csrf_token": "edit-token", "return_to": "/?q=cafe",
+        "expected_version": "1",
     }
     payload[field] = value
     response = client.post(f"/shop/{shop_id}/edit", data=payload, follow_redirects=False)
@@ -143,6 +144,7 @@ def test_all_fields_are_validated_before_modifying_shop_or_mentions(
     response = client.post(f"/shop/{shop_id}/edit", data={
         "shop_name": "", "area": "", "url": "javascript:alert(1)", "rating": "6",
         "is_visited": "on", "visited_at": "invalid", "csrf_token": "edit-token",
+        "expected_version": "1",
     })
     parser = FormFields()
     parser.feed(response.text)
@@ -164,6 +166,7 @@ def test_corrected_edit_saves_the_retained_fields(
         "shop_name": "修正した店名", "area": "銀座", "url": "ftp://example.com",
         "memo": "保持するメモ", "rating": "5", "csrf_token": "edit-token",
     }
+    payload["expected_version"] = "1"
     failed = client.post(f"/shop/{shop_id}/edit", data=payload)
     assert failed.status_code == 400
     parser = FormFields()

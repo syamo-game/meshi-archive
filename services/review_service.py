@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from bot.restaurant_extractor import is_known_category
 from db.models import (
@@ -18,6 +22,7 @@ from db.models import (
     Shop,
     ShopMention,
     ShopRedirect,
+    SourceAsset,
     utc_now,
 )
 from services.import_service import (
@@ -30,20 +35,30 @@ from services.mention_reevaluation import (
     AutomaticMentionResolution,
     auto_resolve_pending_mentions,
 )
-from services.resolution import normalize_phone, normalize_url_identity
+from services.merge_history import snapshot_merge
+from services.extraction_safety import is_event_excluded_registration
+from services.resolution import (
+    normalize_address,
+    normalize_name,
+    normalize_phone,
+    normalize_url_identity,
+)
 from services.shop_creation_lock import (
     find_shop_creation_collision,
     lock_new_shop_creation,
 )
-from web.area_groups import canonicalize_area, is_known_area
+from web.area_groups import CANONICAL_AREAS, area_display_label, canonicalize_area, is_known_area
 
 
+MANUAL_EXCLUDED = "manual_excluded"
 _EXTRACTION_NOT_FOUND = "extraction_not_found"
 _UNRESOLVED_SHOP_LABEL = "（店舗名未特定）"
 
 
 class ReviewConflictError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, code: str = "decision_conflict") -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class ReviewNotFoundError(RuntimeError):
@@ -91,7 +106,15 @@ class EditableShop(BaseModel):
     def validate_area(cls, value: str) -> str:
         canonical = canonicalize_area(value)
         if canonical is None:
-            raise ValueError(f"area must use the managed vocabulary: value={value}")
+            candidates = [
+                area for area in sorted(CANONICAL_AREAS)
+                if area_display_label(area) in value
+            ][:5]
+            hint = "、".join(candidates) if candidates else "登録済みの市区町村名・駅名"
+            raise ValueError(
+                f"エリア「{value}」は登録できる地名にありません。候補: {hint}。"
+                "所在地に合う地名を選んでください。"
+            )
         return canonical
 
 
@@ -110,9 +133,27 @@ class _CandidateShopSnapshot(BaseModel):
     external_id: str | None
 
 
+@dataclass(frozen=True)
+class PreparedReviewPhoto:
+    asset_id: int
+    message_id: str
+    source_url: str
+    image_key: str
+
+
 class EditAndApproveDecision(ShopMutatingDecision):
     action: Literal["edit_and_approve"]
     shop: EditableShop
+    photo_asset_id: int | None = Field(default=None, gt=0)
+    confirm_metadata: bool = False
+    suggestion_evidence_urls: list[HttpUrl] = Field(default_factory=list, max_length=5)
+    suggestion_reason: str | None = Field(default=None, max_length=2_000)
+    supplement: str | None = Field(default=None, max_length=4_000)
+
+
+class ExcludeDecision(ShopMutatingDecision):
+    action: Literal["exclude"]
+    reason: str | None = Field(default=None, max_length=2_000)
 
 
 class MergeDecision(ShopMutatingDecision):
@@ -151,9 +192,25 @@ ReviewDecisionRequest = Annotated[
     | EditAndApproveDecision
     | MergeDecision
     | RejectDecision
+    | ExcludeDecision
     | DeferDecision,
     Field(discriminator="action"),
 ]
+
+
+class ReviewShopSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+    id: int
+    version: int
+    shop_name: str
+    branch_name: str | None
+    area: str | None
+    category: str | None
+    address: str | None
+    phone: str | None
+    canonical_url: str | None
+    image_key: str | None = None
 
 
 class ReviewDecisionResult(BaseModel):
@@ -167,13 +224,21 @@ class ReviewDecisionResult(BaseModel):
     version: int
     automatically_resolved_count: int
     automatically_resolved_mention_ids: tuple[int, ...]
+    shop: ReviewShopSnapshot | None
 
 
 def _load_mention(db: Session, mention_id: int, expected_version: int) -> ShopMention:
+    if db.get_bind().dialect.name == "sqlite":
+        # SQLite ignores FOR UPDATE, so acquire its write lock before checking versions.
+        db.execute(
+            text("UPDATE shop_mentions SET version = version WHERE id = :mention_id"),
+            {"mention_id": mention_id},
+        )
     mention = (
         db.query(ShopMention)
         .filter(ShopMention.id == mention_id)
         .with_for_update()
+        .populate_existing()
         .first()
     )
     if mention is None:
@@ -181,7 +246,8 @@ def _load_mention(db: Session, mention_id: int, expected_version: int) -> ShopMe
     if mention.version != expected_version:
         raise ReviewConflictError(
             f"Review item changed: mention_id={mention_id}, "
-            f"expected_version={expected_version}, actual_version={mention.version}"
+            f"expected_version={expected_version}, actual_version={mention.version}",
+            code="stale_mention",
         )
     return mention
 
@@ -194,12 +260,14 @@ def _load_shop_for_update(
 ) -> Shop:
     if expected_version is None:
         raise ReviewConflictError(
-            f"Shop version is required: role={role}, shop_id={shop_id}"
+            f"Shop version is required: role={role}, shop_id={shop_id}",
+            code="missing_shop_version",
         )
     shop = (
         db.query(Shop)
         .filter(Shop.id == shop_id)
         .with_for_update()
+        .populate_existing()
         .first()
     )
     if shop is None:
@@ -215,12 +283,14 @@ def _validate_shop_version(
 ) -> None:
     if expected_version is None:
         raise ReviewConflictError(
-            f"Shop version is required: role={role}, shop_id={shop.id}"
+            f"Shop version is required: role={role}, shop_id={shop.id}",
+            code="missing_shop_version",
         )
     if shop.version != expected_version:
         raise ReviewConflictError(
             f"Shop changed: role={role}, shop_id={shop.id}, "
-            f"expected_version={expected_version}, actual_version={shop.version}"
+            f"expected_version={expected_version}, actual_version={shop.version}",
+            code="stale_merge_target" if role == "target" else "stale_shop",
         )
 
 
@@ -250,6 +320,7 @@ def _load_merge_shops_for_update(
         .filter(Shop.id.in_(shop_ids))
         .order_by(Shop.id.asc())
         .with_for_update()
+        .populate_existing()
         .all()
     )
     shops_by_id = {shop.id: shop for shop in shops}
@@ -337,6 +408,8 @@ def _approve(mention: ShopMention) -> None:
     if mention.shop is None:
         raise ReviewConflictError(f"Review item has no shop: mention_id={mention.id}")
     mention.review_status = ReviewStatus.APPROVED.value
+    if mention.difference_type == MANUAL_EXCLUDED:
+        mention.difference_type = None
     mention.resolution_status = ResolutionStatus.RESOLVED.value
     mention.resolution_method = ResolutionMethod.MANUAL.value
     mention.reviewed_at = utc_now()
@@ -365,6 +438,7 @@ def _validate_new_shop_creation(
     external_source: str | None,
     external_id: str | None,
     exclude_shop_id: int | None = None,
+    existing_shop: Shop | None = None,
 ) -> None:
     validated_url = _validated_canonical_url(canonical_url)
     validated_evidence_url = _validated_canonical_url(evidence_url)
@@ -374,7 +448,24 @@ def _validate_new_shop_creation(
         urls=(validated_url, validated_evidence_url),
     )
     if external_identities_conflict(candidate_identities):
-        raise ReviewConflictError("Candidate external IDs conflict within one service")
+        raise ReviewConflictError(
+            "Candidate external IDs conflict within one service",
+            code="candidate_identity_conflict",
+        )
+    # Existing duplicates must not block edits that preserve every collision key.
+    if (
+        existing_shop is not None
+        and existing_shop.id == exclude_shop_id
+        and validated_evidence_url is None
+        and shop_name == existing_shop.shop_name
+        and (branch_name or "") == (existing_shop.branch_name or "")
+        and canonicalize_area(area) == canonicalize_area(existing_shop.area)
+        and normalize_address(address) == normalize_address(existing_shop.address)
+        and normalize_phone(phone) == normalize_phone(existing_shop.phone)
+        and normalize_url_identity(validated_url) == normalize_url_identity(existing_shop.canonical_url)
+        and (external_source, external_id) == (existing_shop.external_source, existing_shop.external_id)
+    ):
+        return
     lock_new_shop_creation(db)
     collision = find_shop_creation_collision(
         db,
@@ -392,7 +483,8 @@ def _validate_new_shop_creation(
     if collision is not None:
         raise ReviewConflictError(
             f"New shop conflicts with an existing shop: kind={collision.kind}, "
-            f"shop_id={collision.shop_id}"
+            f"shop_id={collision.shop_id}",
+            code="shop_collision",
         )
 
 
@@ -403,6 +495,8 @@ def _approve_metadata(mention: ShopMention) -> None:
         raise ReviewInvalidDecisionError(
             f"Metadata area is missing: mention_id={mention.id}"
         )
+    if shop is None or not (shop.category or "").strip():
+        raise ReviewInvalidDecisionError(f"Metadata category is missing: mention_id={mention.id}")
     canonical_area = canonicalize_area(area)
     if canonical_area is None:
         raise ReviewInvalidDecisionError(
@@ -526,28 +620,43 @@ def apply_review_decision(
     db: Session,
     mention_id: int,
     decision: ReviewDecisionRequest,
+    *,
+    photo: PreparedReviewPhoto | None = None,
 ) -> ReviewDecisionResult:
     _validate_metadata_action(decision)
-    identity_approval = bool(
-        decision.scope == ReviewScope.IDENTITY.value
-        and isinstance(
-            decision,
-            (
-                ApproveCurrentDecision,
-                ApproveCandidateDecision,
-                EditAndApproveDecision,
-                MergeDecision,
-            ),
-        )
-    )
-    metadata_edit = bool(
-        decision.scope == ReviewScope.METADATA.value
-        and isinstance(decision, EditAndApproveDecision)
-    )
-    if identity_approval or metadata_edit:
-        lock_new_shop_creation(db)
+    # Acquire the shared write lock before locking mentions or shops.
+    lock_new_shop_creation(db)
     mention = _load_mention(db, mention_id, decision.expected_version)
+    if isinstance(decision, EditAndApproveDecision) and decision.photo_asset_id is not None:
+        if photo is None or photo.asset_id != decision.photo_asset_id or photo.message_id != mention.message_id:
+            raise ReviewInvalidDecisionError("写真の登録準備が確認できません。写真を選び直してください。")
+        asset = db.query(SourceAsset).filter(SourceAsset.id == photo.asset_id).with_for_update().populate_existing().first()
+        if asset is None or asset.message_id != mention.message_id or asset.kind != "image" or asset.url != photo.source_url or asset.fetch_status == "unavailable":
+            raise ReviewConflictError("元投稿の写真が変更されています。最新情報を確認してください。", code="stale_mention")
+    elif photo is not None:
+        raise ReviewInvalidDecisionError("写真の対象が登録要求と一致しません。")
+    if is_event_excluded_registration(mention):
+        requires_origin = isinstance(decision, ApproveCurrentDecision | ApproveCandidateDecision)
+        if isinstance(decision, DeferDecision) and decision.scope == ReviewScope.IDENTITY.value:
+            requires_origin = True
+        if isinstance(decision, EditAndApproveDecision) and decision.scope == ReviewScope.IDENTITY.value:
+            requires_origin = bool(
+                normalize_name(decision.shop.shop_name) == normalize_name(mention.extracted_name)
+                and normalize_name(decision.shop.branch_name or "") == normalize_name(mention.extracted_branch_name or "")
+                and not decision.shop.address
+                and not normalize_phone(decision.shop.phone)
+                and not decision.shop.canonical_url
+            )
+        if requires_origin:
+            raise ReviewConflictError(
+                "催事会場は登録対象外です。出店元の常設店舗を根拠付きで確認し、"
+                "店名・支店名を修正するか住所・電話・店舗URLを追加して保存するか、"
+                "確認済みの既存店舗へ関連付けてください。"
+                f" mention_id={mention.id}",
+                code="event_origin_required",
+            )
     previous_shop_id = mention.shop_id
+    previous_shop = ReviewShopSnapshot.model_validate(mention.shop) if mention.shop is not None else None
     selected_shop_id = mention.shop_id
     note: str | None = None
 
@@ -555,7 +664,8 @@ def apply_review_decision(
         if isinstance(decision, ApproveCurrentDecision):
             if mention.shop_id is None:
                 raise ReviewConflictError(
-                    f"Metadata review item has no shop: mention_id={mention.id}"
+                    f"Metadata review item has no shop: mention_id={mention.id}",
+                    code="missing_shop",
                 )
             _load_source_shop_for_update(db, mention, decision.shop_version)
             _approve_metadata(mention)
@@ -563,7 +673,8 @@ def apply_review_decision(
             shop = _load_source_shop_for_update(db, mention, decision.shop_version)
             if shop is None:
                 raise ReviewConflictError(
-                    f"Metadata review item has no shop: mention_id={mention.id}"
+                    f"Metadata review item has no shop: mention_id={mention.id}",
+                    code="missing_shop",
                 )
             editable_url = _editable_canonical_url(decision.shop)
             _validate_new_shop_creation(
@@ -578,6 +689,7 @@ def apply_review_decision(
                 external_source=shop.external_source,
                 external_id=shop.external_id,
                 exclude_shop_id=shop.id,
+                existing_shop=shop,
             )
             _apply_metadata_edit(shop, decision.shop)
             _approve_metadata(mention)
@@ -636,7 +748,10 @@ def apply_review_decision(
             urls=(candidate.canonical_url, candidate.evidence_url),
         )
         if external_identities_conflict(candidate_identities):
-            raise ReviewConflictError("Candidate external IDs conflict within one service")
+            raise ReviewConflictError(
+                "Candidate external IDs conflict within one service",
+                code="candidate_identity_conflict",
+            )
         snapshot = _candidate_shop_snapshot(shop, mention, candidate)
         _validate_new_shop_creation(
             db,
@@ -666,7 +781,11 @@ def apply_review_decision(
         _validate_new_shop_creation(
             db,
             shop_name=decision.shop.shop_name,
-            branch_name=decision.shop.branch_name,
+            branch_name=(
+                decision.shop.branch_name
+                if shop is None or "branch_name" in decision.shop.model_fields_set
+                else shop.branch_name
+            ),
             area=decision.shop.area,
             address=decision.shop.address,
             phone=decision.shop.phone,
@@ -675,6 +794,7 @@ def apply_review_decision(
             external_source=editable_source,
             external_id=editable_id,
             exclude_shop_id=shop.id if shop is not None else None,
+            existing_shop=shop,
         )
         if shop is None:
             shop = Shop(shop_name=decision.shop.shop_name)
@@ -696,6 +816,44 @@ def apply_review_decision(
             decision.target_shop_id,
             decision.target_version,
         )
+        moved_mentions = (
+            tuple(
+                db.query(ShopMention)
+                .filter(ShopMention.shop_id == source.id)
+                .order_by(ShopMention.id)
+                .populate_existing()
+                .all()
+            )
+            if source is not None
+            else (mention,)
+        )
+        note = snapshot_merge(
+            (source, target) if source is not None else (target,),
+            moved_mentions,
+            reason="manual_merge",
+        )
+        for moved in moved_mentions:
+            if moved.id == mention.id:
+                continue
+            moved_version = moved.version
+            reserved = (
+                db.query(ShopMention)
+                .filter(
+                    ShopMention.id == moved.id,
+                    ShopMention.shop_id == moved.shop_id,
+                    ShopMention.version == moved_version,
+                )
+                .update(
+                    {ShopMention.version: ShopMention.version + 1},
+                    synchronize_session=False,
+                )
+            )
+            if reserved != 1:
+                raise ReviewConflictError(
+                    "関連する投稿が更新されています。最新情報を確認してから統合してください。",
+                    code="stale_mention",
+                )
+            set_committed_value(moved, "version", moved_version + 1)
         if source is None:
             mention.shop = target
         else:
@@ -726,8 +884,19 @@ def apply_review_decision(
                     reason="merge",
                 )
             )
-            for source_mention in list(source.mentions):
+            for source_mention in moved_mentions:
                 source_mention.shop = target
+                if source_mention.id != mention.id:
+                    db.add(
+                        ReviewEvent(
+                            mention=source_mention,
+                            scope=ReviewScope.IDENTITY.value,
+                            action="merge_related",
+                            previous_shop_id=source.id,
+                            selected_shop_id=target.id,
+                            note=note,
+                        )
+                    )
         target.is_visited = decision.is_visited
         target.visited_at = decision.visited_at if decision.is_visited else None
         target.rating = decision.rating
@@ -738,6 +907,20 @@ def apply_review_decision(
             db.delete(source)
         _approve(mention)
         _reassess_metadata(mention)
+    elif isinstance(decision, ExcludeDecision):
+        _load_source_shop_for_update(db, mention, decision.shop_version)
+        previous_reason = mention.difference_type
+        mention.review_status = ReviewStatus.REJECTED.value
+        mention.difference_type = MANUAL_EXCLUDED
+        mention.resolution_status = ResolutionStatus.INVALID.value
+        mention.resolution_method = ResolutionMethod.MANUAL.value
+        mention.reviewed_at = utc_now()
+        mention.version += 1
+        note = json.dumps({
+            "reason": decision.reason,
+            "previous_reason": previous_reason,
+            "preserved_shop": previous_shop.model_dump(mode="json") if previous_shop else None,
+        }, ensure_ascii=False)
     elif isinstance(decision, RejectDecision):
         source = _load_source_shop_for_update(db, mention, decision.shop_version)
         mention.shop = None
@@ -757,6 +940,23 @@ def apply_review_decision(
         note = decision.note
     else:
         raise AssertionError(f"Unhandled review decision: {type(decision).__name__}")
+
+    if isinstance(decision, EditAndApproveDecision):
+        if photo is not None and mention.shop is not None:
+            mention.shop.image_key = photo.image_key
+        if decision.confirm_metadata and decision.scope == ReviewScope.IDENTITY.value:
+            _approve_metadata(mention)
+            db.add(ReviewEvent(mention=mention, scope=ReviewScope.METADATA.value,
+                action="edit_and_approve", previous_shop_id=previous_shop_id,
+                selected_shop_id=selected_shop_id, note="店舗情報と写真を確認して登録"))
+        note = json.dumps({
+            "before": previous_shop.model_dump(mode="json") if previous_shop else None,
+            "after": ReviewShopSnapshot.model_validate(mention.shop).model_dump(mode="json") if mention.shop else None,
+            "photo_asset_id": decision.photo_asset_id,
+            "supplement": decision.supplement,
+            "selected_reference_urls": [str(url) for url in decision.suggestion_evidence_urls],
+            "selected_suggestion_reason": decision.suggestion_reason,
+        }, ensure_ascii=False)
 
     db.add(
         ReviewEvent(
@@ -790,4 +990,5 @@ def apply_review_decision(
         version=mention.version,
         automatically_resolved_count=len(automatic_resolution.mention_ids),
         automatically_resolved_mention_ids=automatic_resolution.mention_ids,
+        shop=ReviewShopSnapshot.model_validate(mention.shop) if mention.shop else None,
     )
