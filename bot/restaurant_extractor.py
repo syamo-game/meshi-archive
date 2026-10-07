@@ -10,7 +10,7 @@ import socket
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import TypeVar
+from typing import Literal, TypeVar, cast
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -26,8 +26,21 @@ from web.area_groups import canonicalize_area
 
 logger = logging.getLogger(__name__)
 
-EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "gpt-5.6-luna")
-RESOLUTION_MODEL = os.getenv("RESOLUTION_MODEL", "gpt-5.6-terra")
+ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
+
+
+def _configured_reasoning_effort(name: str) -> ReasoningEffort:
+    value: str = os.getenv(name, "high")
+    if value not in {"low", "medium", "high", "xhigh", "max"}:
+        raise ValueError(f"Unsupported reasoning effort: setting={name}, value={value!r}")
+    return cast(ReasoningEffort, value)
+
+
+EXTRACTION_MODEL: str = os.getenv("EXTRACTION_MODEL", "gpt-6.1-sol")
+RESOLUTION_MODEL: str = os.getenv("RESOLUTION_MODEL", "gpt-6.1-sol")
+EXTRACTION_REASONING_EFFORT: ReasoningEffort = _configured_reasoning_effort("EXTRACTION_REASONING_EFFORT")
+RESOLUTION_REASONING_EFFORT: ReasoningEffort = _configured_reasoning_effort("RESOLUTION_REASONING_EFFORT")
+MAX_AI_OUTPUT_TOKENS: int = 25_000
 AI_MAX_CONCURRENCY = max(1, int(os.getenv("AI_MAX_CONCURRENCY", "2")))
 PROMPT_VERSION = "restaurant-v10"
 CANDIDATE_SEARCH_PROMPT_VERSION = "candidate-search-v7"
@@ -394,7 +407,8 @@ def _estimate_cost_microusd(
     output_tokens: int,
     web_search_calls: int = 0,
 ) -> int:
-    defaults = {
+    defaults: dict[str, tuple[float, float]] = {
+        "gpt-6.1-sol": (2.0, 10.0),
         "gpt-5.6-luna": (1.0, 6.0),
         "gpt-5.6-terra": (2.5, 15.0),
     }
@@ -579,16 +593,20 @@ def _completed_web_search_source_urls(
 
 async def preflight_models() -> None:
     client = _get_client()
-    for model in (EXTRACTION_MODEL, RESOLUTION_MODEL):
+    configurations: tuple[tuple[str, ReasoningEffort], ...] = (
+        (EXTRACTION_MODEL, EXTRACTION_REASONING_EFFORT),
+        (RESOLUTION_MODEL, RESOLUTION_REASONING_EFFORT),
+    )
+    for model, effort in dict.fromkeys(configurations):
         response, _attempts = await _call_with_retry(
             f"model_preflight:{model}",
-            lambda model=model: client.responses.parse(
+            lambda model=model, effort=effort: client.responses.parse(
                 model=model,
                 instructions='For this response-format check, return exactly one JSON object: {"ok": true}. Do not add Markdown or other text.',
                 input="preflight",
                 text_format=ModelPreflight,
-                max_output_tokens=64,
-                reasoning={"effort": "none"},
+                max_output_tokens=MAX_AI_OUTPUT_TOKENS,
+                reasoning={"effort": effort},
                 store=False,
             ),
         )
@@ -623,8 +641,8 @@ async def extract_restaurant_message(text: str) -> ExtractionCallResult:
             instructions=_EXTRACTION_PROMPT,
             input=normalized,
             text_format=ExtractedMessage,
-            max_output_tokens=4_000,
-            reasoning={"effort": "none"},
+            max_output_tokens=MAX_AI_OUTPUT_TOKENS,
+            reasoning={"effort": EXTRACTION_REASONING_EFFORT},
             prompt_cache_key=f"meshi:{PROMPT_VERSION}:extract",
             store=False,
         ),
@@ -639,7 +657,7 @@ async def extract_restaurant_message(text: str) -> ExtractionCallResult:
             EXTRACTION_MODEL,
             started,
             api_attempts=api_attempts,
-            retry_cost_reserve_microusd=150_000,
+            retry_cost_reserve_microusd=500_000,
         ),
     )
 
@@ -662,8 +680,8 @@ async def discover_restaurant_mentions(text: str) -> ExtractionCallResult:
             max_tool_calls=1,
             parallel_tool_calls=False,
             text_format=ExtractedMessage,
-            max_output_tokens=4_000,
-            reasoning={"effort": "none"},
+            max_output_tokens=MAX_AI_OUTPUT_TOKENS,
+            reasoning={"effort": EXTRACTION_REASONING_EFFORT},
             prompt_cache_key=f"meshi:{SOURCE_DISCOVERY_PROMPT_VERSION}:discover",
             store=False,
         ),
@@ -682,7 +700,7 @@ async def discover_restaurant_mentions(text: str) -> ExtractionCallResult:
             started,
             api_attempts=api_attempts,
             web_search_calls_per_attempt=1,
-            retry_cost_reserve_microusd=100_000,
+            retry_cost_reserve_microusd=500_000,
         ),
         source_urls,
     )
@@ -727,8 +745,8 @@ async def search_restaurant_candidates(
             max_tool_calls=1,
             parallel_tool_calls=False,
             text_format=SearchCandidateSet,
-            max_output_tokens=5_000,
-            reasoning={"effort": "low"},
+            max_output_tokens=MAX_AI_OUTPUT_TOKENS,
+            reasoning={"effort": RESOLUTION_REASONING_EFFORT},
             prompt_cache_key=f"meshi:{CANDIDATE_SEARCH_PROMPT_VERSION}:search",
             store=False,
         ),
@@ -747,7 +765,7 @@ async def search_restaurant_candidates(
             started,
             api_attempts=api_attempts,
             web_search_calls_per_attempt=1,
-            retry_cost_reserve_microusd=100_000,
+            retry_cost_reserve_microusd=500_000,
         ),
         source_urls,
     )
@@ -779,8 +797,8 @@ async def analyze_restaurant_images(
             instructions=_IMAGE_PROMPT,
             input=[{"role": "user", "content": content}],
             text_format=ImageClues,
-            max_output_tokens=2_000,
-            reasoning={"effort": "none"},
+            max_output_tokens=MAX_AI_OUTPUT_TOKENS,
+            reasoning={"effort": RESOLUTION_REASONING_EFFORT},
             store=False,
         ),
     )
@@ -796,7 +814,7 @@ async def analyze_restaurant_images(
             started,
             api_attempts=api_attempts,
             image_count=len(selected),
-            retry_cost_reserve_microusd=250_000,
+            retry_cost_reserve_microusd=500_000,
         ),
     )
 

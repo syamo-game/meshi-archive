@@ -32,8 +32,10 @@ from db.models import (
     Shop,
     ShopMention,
     ShopRedirect,
+    SourceAsset,
     prefer_reparsed_duplicate,
 )
+from services.import_service import collect_external_identities, extract_external_identity
 from web.auth import is_admin
 from web.area_groups import (
     area_display_label,
@@ -438,6 +440,50 @@ def _shop_image_url(public_mentions: Sequence[ShopMention]) -> Optional[str]:
     return None
 
 
+def _posted_tabelog_url(
+    shop: Shop,
+    public_mentions: Sequence[ShopMention],
+    canonical_url: str | None,
+) -> str | None:
+    identities: set[tuple[str, str]] = {
+        identity
+        for identity in collect_external_identities(
+            external_source=shop.external_source,
+            external_id=shop.external_id,
+            urls=(canonical_url,),
+        )
+        if identity[0] == "tabelog"
+    }
+    if len(identities) != 1:
+        if identities:
+            logger.error(
+                "Conflicting Tabelog identities omitted: shop_id=%s identities=%s",
+                shop.id, sorted(identities),
+            )
+        return None
+    expected_identity: tuple[str, str] = next(iter(identities))
+    for mention in public_mentions:
+        message: Message | None = mention.message
+        if message is None:
+            continue
+        assets: list[SourceAsset] = sorted(
+            message.assets, key=lambda asset: (asset.id is None, asset.id or 0),
+        )
+        for asset in assets:
+            if asset.kind not in {AssetKind.LINK.value, AssetKind.EMBED.value}:
+                continue
+            url: str | None = _safe_http_url(asset.url)
+            if url is None:
+                logger.error(
+                    "Unsafe posted source URL omitted: shop_id=%s mention_id=%s asset_id=%s",
+                    shop.id, mention.id, asset.id,
+                )
+                continue
+            if extract_external_identity(url) == expected_identity:
+                return url
+    return None
+
+
 def _shop_links(shop: Shop, discord_base_url: Optional[str]) -> ShopLinks:
     public_mentions = _public_mentions(shop)
     public_mention = public_mentions[0] if public_mentions else None
@@ -456,6 +502,10 @@ def _shop_links(shop: Shop, discord_base_url: Optional[str]) -> ShopLinks:
     canonical_url = _safe_http_url(shop.canonical_url)
     if shop.canonical_url and canonical_url is None:
         logger.error("Unsafe canonical URL omitted: shop_id=%s", shop.id)
+    if source_url is None:
+        source_url = _posted_tabelog_url(shop, public_mentions, canonical_url)
+        if source_url and extract_external_identity(source_url) == extract_external_identity(canonical_url):
+            canonical_url = None
     if (
         source_url is not None
         and canonical_url is not None

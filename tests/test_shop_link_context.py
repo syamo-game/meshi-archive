@@ -336,6 +336,174 @@ def test_google_maps_japan_urls_are_classified_as_maps(maps_url: str) -> None:
     assert home_router._is_google_maps_url(maps_url) is True
 
 
+@pytest.mark.parametrize("kind", ("link", "embed"))
+@pytest.mark.parametrize("fetch_status", ("available", "unavailable"))
+def test_posted_tabelog_url_is_shown_in_list_detail_and_incremental_cards(
+    db: Session,
+    kind: str,
+    fetch_status: str,
+) -> None:
+    canonical_url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    posted_url = "https://s.tabelog.com/tokyo/A1301/A130101/13000001/dtlmenu/"
+    shop = Shop(shop_name="食べログから保存した店", canonical_url=canonical_url)
+    mention = add_mention(db, shop, message_id="90000000000000071", source_url=None)
+    mention.message.assets.append(SourceAsset(kind=kind, url=posted_url, fetch_status=fetch_status))
+    db.commit()
+
+    links = home_router._shop_links(shop, None)
+
+    assert links["source_url"] == posted_url
+    assert links["source_label"] == "食べログ"
+    assert links["source_is_map"] is False
+    assert links["canonical_url"] is None
+    responses = (
+        home_router.home(request(), db=db),
+        home_router.shop_detail(shop.id, request(f"/shop/{shop.id}"), db=db),
+    )
+    for response in responses:
+        html = response.body.decode("utf-8")
+        assert f'href="{posted_url}"' in html
+        assert "</svg> 食べログ" in html
+        assert "保存元なし" not in html
+        assert "保存元へのリンクは登録されていません。" not in html
+        assert "関連ページを見る" not in html
+        assert links["maps_url"].replace("&", "&amp;") in html
+    card_html = home_router.templates.env.get_template("_shop_cards.html").render(
+        shops=[shop], shop_links={shop.id: links}, return_to="/",
+    )
+    assert f'href="{posted_url}"' in card_html
+    assert "</svg> 食べログ" in card_html
+    assert "保存元なし" not in card_html
+    assert mention.source_url is None
+    assert shop.canonical_url == canonical_url
+
+
+def test_posted_tabelog_urls_match_each_shop_in_a_shared_message(db: Session) -> None:
+    first_url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    second_url = "https://tabelog.com/tokyo/A1301/A130101/13000002/"
+    first_shop = Shop(shop_name="一軒目", canonical_url=first_url)
+    second_shop = Shop(shop_name="二軒目", canonical_url=second_url)
+    first = add_mention(db, first_shop, message_id="90000000000000072", source_url=None)
+    second = ShopMention(
+        message=first.message, shop=second_shop, occurrence_index=1,
+        extracted_name=second_shop.shop_name, resolution_status="resolved",
+        review_status="approved", metadata_review_status="approved", extraction_source="test",
+    )
+    first.message.assets.extend([
+        SourceAsset(kind="link", url=second_url),
+        SourceAsset(kind="link", url=first_url),
+    ])
+    db.add(second)
+    db.commit()
+
+    assert home_router._shop_links(first_shop, None)["source_url"] == first_url
+    assert home_router._shop_links(second_shop, None)["source_url"] == second_url
+
+
+def test_posted_tabelog_url_can_match_an_explicit_shop_identity(db: Session) -> None:
+    posted_url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    shop = Shop(shop_name="店舗IDで照合する店", external_source="食べログ", external_id="13000001")
+    mention = add_mention(db, shop, message_id="90000000000000073", source_url=None)
+    mention.message.assets.append(SourceAsset(kind="link", url=posted_url))
+    db.commit()
+
+    assert home_router._shop_links(shop, None)["source_url"] == posted_url
+
+
+@pytest.mark.parametrize(("review_status", "metadata_review_status"), (
+    ("pending", "approved"), ("approved", "pending"), ("rejected", "approved"),
+))
+def test_unapproved_posted_tabelog_url_is_not_used_as_a_source(
+    db: Session,
+    review_status: str,
+    metadata_review_status: str,
+) -> None:
+    url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    shop = Shop(shop_name="確認中の食べログ店", canonical_url=url)
+    add_mention(db, shop, message_id="90000000000000074", source_url=None)
+    unapproved = add_mention(
+        db, shop, message_id="90000000000000075", source_url=None,
+        review_status=review_status, metadata_review_status=metadata_review_status,
+    )
+    unapproved.message.assets.append(SourceAsset(kind="link", url=url))
+    db.commit()
+
+    links = home_router._shop_links(shop, None)
+
+    assert links["source_url"] is None
+    assert links["canonical_url"] == url
+
+
+@pytest.mark.parametrize(("posted_url", "kind"), (
+    (None, "link"),
+    ("https://tabelog.com/tokyo/A1301/A130101/13000002/", "link"),
+    ("https://not-tabelog.com/tokyo/A1301/A130101/13000001/", "link"),
+    ("https://tabelog.com/tokyo/A1301/A130101/13000001/", "image"),
+    ("https://tabelog.com/tokyo/A1301/A130101/13000001/", "attachment"),
+    ("javascript:https://tabelog.com/tokyo/A1301/A130101/13000001/", "link"),
+    ("https://user:secret@tabelog.com/tokyo/A1301/A130101/13000001/", "link"),
+))
+def test_unrelated_or_unsafe_tabelog_urls_are_not_used_as_sources(
+    db: Session,
+    posted_url: str | None,
+    kind: str,
+) -> None:
+    canonical_url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    shop = Shop(shop_name="食べログ出典を照合する店", canonical_url=canonical_url)
+    mention = add_mention(db, shop, message_id="90000000000000076", source_url=None)
+    if posted_url is not None:
+        mention.message.assets.append(SourceAsset(kind=kind, url=posted_url))
+    db.commit()
+
+    links = home_router._shop_links(shop, None)
+
+    assert links["source_url"] is None
+    assert links["canonical_url"] == canonical_url
+
+
+def test_conflicting_shop_tabelog_identities_do_not_choose_a_source(
+    db: Session,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    canonical_url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    shop = Shop(
+        shop_name="店舗IDが矛盾する店", canonical_url=canonical_url,
+        external_source="tabelog", external_id="13000002",
+    )
+    mention = add_mention(db, shop, message_id="90000000000000077", source_url=None)
+    mention.message.assets.append(SourceAsset(kind="link", url=canonical_url))
+    db.commit()
+
+    assert home_router._shop_links(shop, None)["source_url"] is None
+    assert f"Conflicting Tabelog identities omitted: shop_id={shop.id}" in caplog.text
+
+
+def test_existing_x_source_is_kept_when_the_post_also_has_a_tabelog_url(db: Session) -> None:
+    canonical_url = "https://tabelog.com/tokyo/A1301/A130101/13000001/"
+    x_url = "https://x.com/example/status/90000000000000078"
+    shop = Shop(shop_name="Xから保存した店", canonical_url=canonical_url)
+    mention = add_mention(db, shop, message_id="90000000000000078", source_url=x_url)
+    mention.message.assets.append(SourceAsset(kind="link", url=canonical_url))
+    db.commit()
+
+    links = home_router._shop_links(shop, None)
+
+    assert links["source_url"] == x_url
+    assert links["source_label"] == "X"
+    assert links["canonical_url"] == canonical_url
+
+
+def test_posted_tabelog_url_is_not_inferred_without_a_shop_identity(db: Session) -> None:
+    shop = Shop(shop_name="店舗IDがない店")
+    mention = add_mention(db, shop, message_id="90000000000000079", source_url=None)
+    mention.message.assets.append(SourceAsset(
+        kind="link", url="https://tabelog.com/tokyo/A1301/A130101/13000001/",
+    ))
+    db.commit()
+
+    assert home_router._shop_links(shop, None)["source_url"] is None
+
+
 def test_source_url_is_hidden_without_both_approvals(db: Session) -> None:
     shop = Shop(shop_name="審査中の店")
     add_mention(
