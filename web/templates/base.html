@@ -11,11 +11,12 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/vendor/bootstrap-5.3.8/bootstrap.min.css">
-  <link rel="stylesheet" href="/static/css/explorer.css?v=14">
+  <link rel="stylesheet" href="/static/css/explorer.css?v=16">
   {% if not public_ui %}
-  <link rel="stylesheet" href="/static/css/admin.css?v=13">
+  <link rel="stylesheet" href="/static/css/admin.css?v=14">
   {% endif %}
-  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg?v=2">
+  <link rel="icon" type="image/x-icon" sizes="32x32" href="/static/favicon.ico?v=1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-icon.png?v=1">
 </head>
 <body class="{% if admin_ui %}admin-layout {% endif %}{% block body_class %}{% endblock %}">
   <a href="#main-content" class="skip-link visually-hidden-focusable btn btn-primary position-absolute top-0 start-0 m-2">メインコンテンツへスキップ</a>

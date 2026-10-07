@@ -111,7 +111,7 @@ def test_edit_snapshot_returns_current_csv_values_without_writing_the_database(w
         assert response.json() == {
             "version": 2,
             "values": {
-                "shop_name": "Saved shop", "area": "銀座", "category": "カフェ",
+                "shop_name": "Saved shop", "branch_name": "", "area": "銀座", "category": "カフェ",
                 "url": "", "address": "", "phone": "", "memo": "CSV update 1", "rating": "4",
                 "is_visited": False, "visited_at": "",
             },
@@ -427,3 +427,47 @@ def test_home_write_failure_rolls_back_reserved_version_and_fields(
         assert (shop.version, shop.shop_name, shop.memo, shop.rating, shop.is_visited) == (
             1, "Saved shop", "Saved memo", 3, False,
         )
+
+
+@pytest.mark.parametrize("choice", ["input", "latest"])
+def test_branch_name_conflict_retains_input_and_requires_an_explicit_choice(
+    writer_engine: Engine, choice: str,
+) -> None:
+    with Session(writer_engine) as db:
+        shop = db.get(Shop, 1)
+        assert shop is not None
+        shop.branch_name = "元の支店"
+        db.commit()
+    with TestClient(writer_app(writer_engine)) as client:
+        opened = client.get("/shop/1?edit=true")
+        fields = FormValues()
+        fields.feed(opened.text)
+        assert fields.inputs["branch_name"] == "元の支店"
+        with Session(writer_engine) as other:
+            shop = other.get(Shop, 1)
+            assert shop is not None
+            shop.branch_name = "最新の支店"
+            shop.version += 1
+            other.commit()
+        payload: dict[str, str] = {
+            "shop_name": "Saved shop", "branch_name": "入力した支店", "area": "銀座", "category": "カフェ",
+            "memo": "Saved memo", "rating": "3", "csrf_token": "writer-token", "expected_version": "1",
+        }
+        stale = client.post("/shop/1/edit", data=payload, follow_redirects=False)
+        assert stale.status_code == 409
+        retained = FormValues()
+        retained.feed(stale.text)
+        assert retained.inputs["branch_name"] == "入力した支店"
+        assert "最新の支店" in stale.text
+        snapshot = client.get("/shop/1/edit-snapshot")
+        assert snapshot.json()["values"]["branch_name"] == "最新の支店"
+        payload.update({"confirmed_version": "2", "confirm_conflict": "on"})
+        missing_choice = client.post("/shop/1/edit", data=payload, follow_redirects=False)
+        assert missing_choice.status_code == 409
+        saved = client.post("/shop/1/edit", data={**payload, "conflict_choices": [f"branch_name:{choice}"]}, follow_redirects=False)
+        assert saved.status_code == 302
+    with Session(writer_engine) as verified:
+        shop = verified.get(Shop, 1)
+        assert shop is not None
+        assert shop.branch_name == ("入力した支店" if choice == "input" else "最新の支店")
+        assert shop.version == 3

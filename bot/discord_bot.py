@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import logging
 import os
+from datetime import datetime, timezone
 
 import discord
+from discord.ext import tasks
 from dotenv import load_dotenv
 
 from bot.restaurant_extractor import ExtractionError, preflight_models
 from bot.sync_logic import build_message_envelope, sync_history
+from bot.weekly_sync import JST, WEEKLY_SYNC_TIME, WeeklySyncSettings, next_weekly_run, run_configured_sync
 from db.database import SessionLocal, init_db
 from db.models import Message, ProcessingStatus
 from services.identification_pipeline import process_message
@@ -27,6 +30,18 @@ ADMIN_USER_ID = os.getenv("ADMIN_USER_ID")
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
+weekly_settings: WeeklySyncSettings = WeeklySyncSettings.from_env()
+
+
+@tasks.loop(time=WEEKLY_SYNC_TIME, reconnect=False)
+async def weekly_history_sync() -> None:
+    if datetime.now(JST).weekday() != 0:
+        return
+    try:
+        await run_configured_sync(client, weekly_settings)
+    except Exception:
+        logger.exception("Weekly channel sync failed: channel_id=%s", weekly_settings.channel_id)
+
 
 
 @client.event
@@ -40,6 +55,12 @@ async def on_ready() -> None:
         await client.close()
         return
     logger.info("Bot ready: user=%s", client.user)
+    if weekly_settings.enabled and not weekly_history_sync.is_running():
+        weekly_history_sync.start()
+        logger.info(
+            "Weekly sync scheduled: channel_id=%s next_run=%s",
+            weekly_settings.channel_id, next_weekly_run(datetime.now(timezone.utc)).isoformat(),
+        )
 
 
 @client.event

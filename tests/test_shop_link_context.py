@@ -298,6 +298,8 @@ def test_shop_links_classify_map_sources_and_deduplicate_equivalent_urls(
         ("https://dancyu.jp/read/example.html", "dancyu"),
         ("https://www.youtube.com/watch?v=example", "YouTube"),
         ("https://source.example/article", "source.example"),
+        ("https://www.matsuo-toyama.com/", "matsuo-toyama.com"),
+        ("https://www.instagram.com/p/example/", "instagram.com"),
         ("https://source.example/menu.PDF?download=1", "PDF"),
         ("https://not-tabelog.com/article", "not-tabelog.com"),
     ),
@@ -319,6 +321,7 @@ def test_shop_links_label_the_external_destination(
     links = home_router._shop_links(shop, None)
 
     assert links["source_label"] == expected_label
+    assert links["source_url"] == source_url
 
 
 @pytest.mark.parametrize(

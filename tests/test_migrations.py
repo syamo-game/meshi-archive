@@ -520,7 +520,7 @@ def test_discord_only_migration_backfills_old_grants_and_preserves_change_audit(
             "INSERT INTO discord_viewer_grant_events VALUES (1, '11111111111111111', 'password', NULL, :session_hash, '2026-01-02 03:04:05')"
         ), {"session_hash": "a" * 64})
     command.stamp(config, "20261005_02")
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261006_02")
     with engine.begin() as connection:
         rows = connection.execute(text("SELECT discord_user_id, generation, created_at FROM discord_viewers ORDER BY discord_user_id")).all()
         assert [row[0] for row in rows] == ["11111111111111111", "22222222222222222"]
@@ -546,7 +546,7 @@ def test_role_migration_preserves_old_viewers_and_refuses_to_drop_role_audit(tmp
         connection.execute(text("CREATE TABLE discord_viewer_grant_events (id INTEGER PRIMARY KEY, discord_user_id VARCHAR(20) NOT NULL, actor_method VARCHAR(16) NOT NULL, actor_discord_user_id VARCHAR(20), actor_session_hash VARCHAR(64) NOT NULL, action VARCHAR(16) NOT NULL, replacement_user_id VARCHAR(20), created_at DATETIME NOT NULL)"))
         connection.execute(text("INSERT INTO discord_viewers VALUES ('11111111111111111', :generation, '2026-01-02 03:04:05')"), {"generation": "a" * 32})
     command.stamp(config, "20261006_01")
-    command.upgrade(config, "head")
+    command.upgrade(config, "20261006_02")
     with engine.begin() as connection:
         assert tuple(connection.execute(text("SELECT discord_user_id, generation, is_admin, created_at FROM discord_viewers")).one()) == ("11111111111111111", "a" * 32, 0, "2026-01-02 03:04:05")
         connection.execute(text("UPDATE discord_viewers SET is_admin=1"))

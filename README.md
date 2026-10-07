@@ -42,6 +42,8 @@ Discord側ではBotの「Message Content Intent」を有効にし、使うチャ
 
 `@Bot 店舗のURLや説明`で登録し、`@Bot sync`で過去投稿を取り込みます。特定できなかった投稿は管理画面の「登録内容の確認」で修正します。AIによる再読み込みは空欄だけを補い、写真はチェックした1枚を登録します。
 
+週次取得を使う場合は、`DISCORD_CHANNEL_ID`に対象チャネルを設定し、`WEEKLY_SYNC_ENABLED=true`にします。毎週月曜4:00（日本時間）に保存済みの同期位置から取得します。1回の上限は`SYNC_BATCH_LIMIT`（既定500件）です。初回を手動で実行する場合は`python -m bot.weekly_sync`を使います。本文・添付画像・リンク情報をOpenAI APIへ送信し、結果をDBへ登録するため、対象チャネルと利用者の了承を確認してから有効にしてください。
+
 ## 詳しい説明
 
 [開発・テスト](docs/CONTRIBUTING.md) · [外部公開時の設定](docs/security.md) · [内部の仕組み](docs/architecture.md) · [画面の仕様](docs/ui-framework.md) · [利用ユーザーの管理](docs/discord-user-management.md)

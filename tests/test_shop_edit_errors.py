@@ -95,6 +95,7 @@ def editor(monkeypatch: pytest.MonkeyPatch) -> Generator[tuple[TestClient, sessi
 @pytest.mark.parametrize(("field", "value", "message"), [
     ("shop_name", "", "店名を入力してください。"),
     ("shop_name", "   ", "店名を入力してください。"),
+    ("branch_name", "支" * 256, "支店名は255文字以内で入力してください。"),
     ("area", "存在しない新エリア", "候補にある市区町村・エリアを選んでください。"),
     ("url", "ftp://example.com", "有効なURLを入力してください。"),
     ("url", "https://name:secret@example.com", "有効なURLを入力してください。"),
@@ -107,7 +108,7 @@ def test_invalid_edit_returns_html_with_all_input_and_field_error(
 ) -> None:
     client, sessions, shop_id = editor
     payload = {
-        "shop_name": "入力した店名 <保存前>", "area": "銀座", "category": "カフェ",
+        "shop_name": "入力した店名 <保存前>", "branch_name": "入力した支店 <保持>", "area": "銀座", "category": "カフェ",
         "url": "https://example.com/edited", "address": "入力した住所", "phone": "03-1234-5678",
         "memo": "メモの1行目\n2行目 <保持>", "rating": "4", "is_visited": "on",
         "visited_at": "2026-09-01", "csrf_token": "edit-token", "return_to": "/?q=cafe",
@@ -181,3 +182,43 @@ def test_corrected_edit_saves_the_retained_fields(
         assert shop.memo == "保持するメモ"
         assert shop.canonical_url == "https://example.com"
         assert shop.rating == 5
+
+
+@pytest.mark.parametrize(("entered", "stored"), [
+    ("  神田店  ", "神田店"),
+    ("", None),
+    ("   ", None),
+    ("支" * 255, "支" * 255),
+    ("銀座 <支店>", "銀座 <支店>"),
+])
+def test_branch_name_can_be_edited_and_cleared(
+    editor: tuple[TestClient, sessionmaker[Session], int], entered: str, stored: str | None,
+) -> None:
+    client, sessions, shop_id = editor
+    with sessions() as db:
+        shop = db.get(Shop, shop_id)
+        assert shop is not None
+        shop.branch_name = "元の支店"
+        db.commit()
+    opened = client.get(f"/shop/{shop_id}?edit=true")
+    fields = FormFields()
+    fields.feed(opened.text)
+    assert fields.fields["branch_name"] == "元の支店"
+    fields.fields["branch_name"] = entered
+    saved = client.post(f"/shop/{shop_id}/edit", data=fields.fields, follow_redirects=False)
+    assert saved.status_code == 302
+    with sessions() as db:
+        shop = db.get(Shop, shop_id)
+        assert shop is not None
+        assert shop.branch_name == stored
+        assert shop.version == 2
+    reopened = client.get(f"/shop/{shop_id}?edit=true")
+    retained = FormFields()
+    retained.feed(reopened.text)
+    assert retained.fields["branch_name"] == (stored or "")
+    assert "元の支店" not in reopened.text
+    if stored is None:
+        assert '<p class="text-body-secondary mb-0">' not in reopened.text
+    if stored == "銀座 <支店>":
+        assert "銀座 &lt;支店&gt;" in reopened.text
+        assert "銀座 <支店>" not in reopened.text

@@ -73,11 +73,11 @@ const conflictFields = add(new Element('shop-conflict-fields'));
 const conflictAccept = add(new Button('shop-conflict-accept')); conflictAccept.hidden = true;
 const controls = {};
 const values = {
-  csrf_token: 'test-csrf', expected_version: '1', return_to: '/?q=カフェ&area=銀座', shop_name: '入力した店名',
+  csrf_token: 'test-csrf', expected_version: '1', return_to: '/?q=カフェ&area=銀座', shop_name: '入力した店名', branch_name: '入力した支店',
   area: '銀座', category: 'カフェ', url: 'https://example.com/edited', rating: '4',
   visited_at: '2026-09-20', memo: 'メモ1行目\n2行目', address: '入力した住所', phone: '03-1234-5678',
 };
-const ids = { shop_name: 'shop-name', area: 'shop-area', url: 'shop-url', rating: 'shop-rating', visited_at: 'shop-visited-at', expected_version: 'shop-expected-version' };
+const ids = { shop_name: 'shop-name', branch_name: 'shop-branch-name', area: 'shop-area', url: 'shop-url', rating: 'shop-rating', visited_at: 'shop-visited-at', expected_version: 'shop-expected-version' };
 for (const [name, value] of Object.entries(values)) {
   const Constructor = ['area', 'category', 'rating'].includes(name) ? Select : name === 'memo' ? Textarea : Input;
   const control = add(new Constructor(ids[name] || 'shop-' + name));
@@ -130,7 +130,7 @@ let posts = 0;
 let gets = 0;
 let serverVersion = 2;
 const latestValues = {
-  shop_name: '最新の店名', area: '神田', category: '最新の分類', url: 'https://example.com/latest',
+  shop_name: '最新の店名', branch_name: '最新の支店', area: '神田', category: '最新の分類', url: 'https://example.com/latest',
   address: '最新の住所', phone: '03-9999-9999', memo: '最新のメモ', rating: '2',
   is_visited: false, visited_at: '',
 };
@@ -287,7 +287,7 @@ const chooseAll = value => {
       assert.equal(choices().length, 0);
       assert.equal(conflictAccept.disabled, false);
     } else {
-      assert.equal(choices().length, 11, 'Every differing text/visit field and the selected photo needs a choice');
+      assert.equal(choices().length, 12, 'Every differing text/visit field and the selected photo needs a choice');
       assert.equal(choices().every(choice => choice.value === ''), true);
       assert.equal(conflictAccept.disabled, true);
       conflictAccept.listeners.click();

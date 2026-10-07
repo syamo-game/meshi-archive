@@ -399,7 +399,7 @@ def _source_link_label(source_url: str, source_is_map: bool) -> str:
         return "YouTube"
     if hostname == "discord.com" or hostname.endswith(".discord.com"):
         return "Discord"
-    return hostname
+    return hostname.removeprefix("www.")
 
 
 def _shop_image_url(public_mentions: Sequence[ShopMention]) -> Optional[str]:
@@ -923,11 +923,12 @@ class ShopEditValues:
     rating: str
     is_visited: bool
     visited_at: str
+    branch_name: str = ""
     expected_version: str = ""
 
 
 _SHOP_EDIT_FIELDS: dict[str, str] = {
-    "shop_name": "店名", "area": "エリア", "category": "カテゴリ", "url": "店舗URL",
+    "shop_name": "店名", "branch_name": "支店名", "area": "エリア", "category": "カテゴリ", "url": "店舗URL",
     "address": "住所", "phone": "電話番号", "memo": "メモ", "rating": "評価",
     "is_visited": "訪問済み", "visited_at": "訪問日",
 }
@@ -935,7 +936,7 @@ _SHOP_EDIT_FIELDS: dict[str, str] = {
 
 def _shop_edit_values(shop: Shop) -> ShopEditValues:
     return ShopEditValues(
-        shop_name=shop.shop_name, area=shop.area or "", category=shop.category or "",
+        shop_name=shop.shop_name, branch_name=shop.branch_name or "", area=shop.area or "", category=shop.category or "",
         url=shop.canonical_url or "", address=shop.address or "", phone=shop.phone or "",
         memo=shop.memo or "", rating=str(shop.rating) if shop.rating is not None else "",
         is_visited=shop.is_visited,
@@ -953,6 +954,7 @@ def _parse_shop_version(value: str | None) -> int | None:
 
 class ShopEditErrors(TypedDict, total=False):
     shop_name: str
+    branch_name: str
     area: str
     url: str
     rating: str
@@ -1084,6 +1086,7 @@ def shop_edit(
     shop_id: int,
     request: Request,
     shop_name: str = Form(""),
+    branch_name: Annotated[str, Form()] = "",
     area: Optional[str] = Form(None),
     category: Optional[str] = Form(None),
     url: Optional[str] = Form(None),
@@ -1141,6 +1144,7 @@ def shop_edit(
 
     values = ShopEditValues(
         shop_name=shop_name,
+        branch_name=branch_name,
         area=area or "",
         category=category or "",
         url=url or "",
@@ -1180,6 +1184,9 @@ def shop_edit(
     cleaned_name = shop_name.strip()
     if not cleaned_name:
         errors["shop_name"] = "店名を入力してください。"
+    cleaned_branch_name: str | None = values.branch_name.strip() or None
+    if cleaned_branch_name is not None and len(cleaned_branch_name) > 255:
+        errors["branch_name"] = "支店名は255文字以内で入力してください。"
     cleaned_area = shop.area if area == shop.area else canonicalize_area(area)
     if area and area.strip() and cleaned_area is None:
         errors["area"] = "候補にある市区町村・エリアを選んでください。"
@@ -1238,6 +1245,7 @@ def shop_edit(
                 detail=_SHOP_WRITE_CONFLICT, status_code=409,
             )
         shop.shop_name = cleaned_name
+        shop.branch_name = cleaned_branch_name
         shop.area = cleaned_area
         if cleaned_area is None:
             for mention in shop.mentions:
