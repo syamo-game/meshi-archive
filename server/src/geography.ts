@@ -35,10 +35,40 @@ export function areaSort(value: string | null): readonly [number, number, string
   if (!value?.trim()) return [3, 0, ''];
   return areas.get(canonicalArea(value) ?? value)?.sort ?? [2, 0, value];
 }
-const categoryMaster = z.object({ values: z.array(z.string()), aliases: z.record(z.string(), z.string()) }).parse(JSON.parse(readFileSync(new URL('../data/categories.json', import.meta.url), 'utf8')));
-export const categories = new Set(categoryMaster.values);
-export function canonicalCategory(value: string | null): string | null {
-  if (value === null) return null;
-  const cleaned = value.trim();
-  return categories.has(cleaned) ? cleaned : categoryMaster.aliases[cleaned] ?? null;
+export { categories, canonicalCategory } from './categories.js';
+
+export interface AreaFilterOption { value: string; label: string; count: number; depth: number; }
+export function buildAreaFilterOptions(rows: readonly { area: string | null; count: number }[]): AreaFilterOption[] {
+  const counts = new Map<string, number>();
+  const leaves = new Map<string, Map<string, number>>();
+  const parents = new Map<string, string>();
+  const children = new Map<string, Set<string>>();
+  const groupOrder = new Map(master.entries.flatMap(entry => entry.group ? [[entry.group, entry.sort[1]] as const] : []));
+  const add = (value: string, count: number): void => { counts.set(value, (counts.get(value) ?? 0) + count); };
+  for (const { area, count } of rows) {
+    if (!area) continue;
+    const entry = areas.get(canonicalArea(area) ?? area);
+    const group = entry?.municipality ?? master.group_prefix + (entry?.group ?? 'その他');
+    add(group, count);
+    if (area !== group) {
+      const bucket = leaves.get(group) ?? new Map<string, number>();
+      bucket.set(area, (bucket.get(area) ?? 0) + count); leaves.set(group, bucket);
+    }
+    if (entry?.parent) {
+      parents.set(group, entry.parent);
+      const bucket = children.get(entry.parent) ?? new Set<string>();
+      bucket.add(group); children.set(entry.parent, bucket); add(entry.parent, count);
+    }
+  }
+  const label = (value: string): string => value.startsWith(master.group_prefix) ? value.slice(master.group_prefix.length) : areaLabel(value);
+  const textOrder = (a: string, b: string): number => a < b ? -1 : a > b ? 1 : 0;
+  const order = (a: string, b: string): number => (groupOrder.get(label(a)) ?? Number.MAX_SAFE_INTEGER) - (groupOrder.get(label(b)) ?? Number.MAX_SAFE_INTEGER) || textOrder(label(a), label(b));
+  const result: AreaFilterOption[] = [];
+  const append = (value: string, depth: number): void => {
+    result.push({ value, label: label(value), count: counts.get(value) ?? 0, depth });
+    for (const [area, count] of [...(leaves.get(value) ?? [])].sort((a, b) => b[1] - a[1] || textOrder(a[0], b[0]))) result.push({ value: area, label: areaLabel(area), count, depth: depth + 1 });
+    for (const child of [...(children.get(value) ?? [])].sort(order)) append(child, depth + 1);
+  };
+  for (const value of [...counts.keys()].filter(value => !parents.has(value)).sort(order)) append(value, 0);
+  return result;
 }

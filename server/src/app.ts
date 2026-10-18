@@ -15,6 +15,7 @@ import type { Config } from './config.js';
 import type { Database } from './db/database.js';
 import { AppError } from './errors.js';
 import { areaLabel, areas } from './geography.js';
+import { categories, categoryGroups } from './categories.js';
 import { listQuerySchema, Shops } from './shops.js';
 import { registerUserRoutes } from './users.js';
 import { registerEditorRoutes } from './shop-editor.js';
@@ -111,8 +112,7 @@ export function createApp(database: Database, config: Config): Hono<WebEnvironme
   });
   app.get('/api/ui/editor-options', async context => {
     requireAdmin(context.get('session'));
-    const categories = await database.query("SELECT DISTINCT s.category FROM shops s WHERE s.category IS NOT NULL AND s.category<>'' AND EXISTS(SELECT 1 FROM shop_mentions m WHERE m.shop_id=s.id AND m.review_status='approved' AND m.metadata_review_status='approved') ORDER BY s.category", z.object({ category: z.string() }));
-    return context.json({ areas: [...areas].map(([value]) => ({ value, label: areaLabel(value), count: 0 })), categories: categories.map(row => row.category) });
+    return context.json({ areas: [...areas].map(([value]) => ({ value, label: areaLabel(value), count: 0 })), categories: [...categories], category_groups: categoryGroups });
   });
   registerUserRoutes(app, database, config);
   registerEditorRoutes(app, database, config);

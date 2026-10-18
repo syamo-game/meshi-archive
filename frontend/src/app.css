@@ -51,7 +51,7 @@ button:disabled:active { scale: 1; }
 .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; flex-wrap: wrap; }
 .edit-form>fieldset, .review-edit-form>fieldset { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; border: 0; padding: 0; margin: 16px 0 0; }
 .edit-form label, .user-editor label, .admin-section>label, .review-edit-form label, .review-filter label, .conflict-panel>label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
-.edit-form input:not([type=radio]), .edit-form select, .edit-form textarea, .user-editor input, .user-editor select, .admin-section input, .admin-section textarea, .admin-section select, .review-edit-form input, .review-filter input, .review-filter select { width: 100%; min-width: 0; min-height: 44px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 12px; font: inherit; font-size: 16px; color: var(--ink); background: var(--white); }
+.edit-form input:not([type=radio]), .edit-form select, .edit-form textarea, .user-editor input, .user-editor select, .admin-section input, .admin-section textarea, .admin-section select, .review-edit-form input, .review-edit-form select, .review-filter input, .review-filter select { width: 100%; min-width: 0; min-height: 44px; padding: 9px 12px; border: 1px solid var(--edge); border-radius: 12px; font: inherit; font-size: 16px; color: var(--ink); background: var(--white); }
 textarea { resize: vertical; line-height: 1.7; }
 input[type=file] { padding: 8px; }
 .wide-field { grid-column: 1 / -1; }
@@ -88,3 +88,7 @@ th, td { padding: 12px; border-bottom: 1px solid var(--edge); vertical-align: to
   .brand { font-size: 20px; }
   .source-text { display: none; }
 }
+
+.form-actions > .text-button, .form-actions > .primary-button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+.edit-form .rating-editor { margin: 0; min-width: 0; }
+.edit-form .rating-choice { display: grid; place-items: center; gap: 0; font-size: 28px; }

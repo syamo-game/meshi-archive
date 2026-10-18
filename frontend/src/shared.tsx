@@ -47,8 +47,8 @@ export function Icon({ name }: { name: IconName }): ReactNode {
     search: <><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 4.5 4.5" /></>,
     filter: <><path d="M4 7h16M4 17h16" /><circle cx="9" cy="7" r="2" /><circle cx="15" cy="17" r="2" /></>,
     close: <path d="m6 6 12 12M18 6 6 18" />,
-    pin: <><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" /><circle cx="12" cy="10" r="2" /></>,
-    source: <><path d="m10 13 4-4M8 15l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0M16 9l1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0" /></>,
+    pin: <><path d="M12 21s7-5.3 7-12a7 7 0 1 0-14 0c0 6.7 7 12 7 12Z" /><circle cx="12" cy="9" r="2.5" /></>,
+    source: <><path d="m10 8 3-3a4.24 4.24 0 0 1 6 6l-3 3M14 16l-3 3a4.24 4.24 0 0 1-6-6l3-3m0 8 8-8" /></>,
     next: <path d="m9 5 7 7-7 7" />, previous: <path d="m15 5-7 7 7 7" />,
     menu: <path d="M4 6h16M4 12h16M4 18h16" />, edit: <><path d="m15 4 5 5-10 10H5v-5L15 4Z" /></>, plus: <path d="M12 5v14M5 12h14" />,
   };
@@ -74,4 +74,8 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
   static getDerivedStateFromError(error: Error): { error: Error } { return { error }; }
   componentDidCatch(error: Error, info: ErrorInfo): void { console.error('React screen failed', error, info.componentStack); }
   render(): ReactNode { return this.state.error ? <main className="main-shell"><ErrorBox error="画面を表示できませんでした。再読み込みしてください。" retry={() => window.location.reload()} /></main> : this.props.children; }
+}
+
+export function RatingInput({ rating, onChange, disabled = false, name = 'rating' }: { rating: number | null; onChange: (rating: number | null) => void; disabled?: boolean; name?: string }): ReactNode {
+  return <fieldset className="rating-editor" disabled={disabled}><legend>評価</legend><div className="rating-editor__row"><div className="rating-options">{Array.from({ length: 5 }, (_, index) => <label className={`rating-choice ${index < (rating ?? 0) ? 'is-selected' : ''}`} key={index}><input className="sr-only" type="radio" name={name} value={index + 1} checked={rating === index + 1} aria-label={`${index + 1}点`} onChange={() => onChange(index + 1)} /><span aria-hidden="true">★</span></label>)}</div><button className="text-button rating-reset" type="button" disabled={!rating} onClick={() => onChange(null)}>解除</button></div></fieldset>;
 }

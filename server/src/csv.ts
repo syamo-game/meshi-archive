@@ -12,11 +12,11 @@ import type { Config } from './config.js';
 import type { Database, Executor, SqlValue } from './db/database.js';
 import { booleanColumn, idRow, timestampColumn } from './db/database.js';
 import { canonicalArea } from './geography.js';
+import { canonicalCategory, categories } from './categories.js';
 import { safeHttpUrl, tabelogIdentity } from './links.js';
 import { normalizeExternalIdentity } from './resolution.js';
 import { listQuerySchema, Shops } from './shops.js';
 import { formValue } from './users.js';
-import categories from '../data/categories.json' with { type: 'json' };
 
 export const csvMaxBytes = 5 * 1024 * 1024;
 const columns = { 'shop.name': 'shop_name', 'shop.branch_name': 'branch_name', 'shop.area': 'area', 'shop.category': 'category', 'shop.address': 'address', 'shop.phone': 'phone', canonical_url: 'canonical_url', 'status.is_visited': 'is_visited', visited_at: 'visited_at', rating: 'rating', memo: 'memo' } as const;
@@ -123,6 +123,7 @@ function changedValues(shop: CsvShop, row: CsvRow): Changes {
     if (field === 'is_visited') continue;
     let value = row.values[field]; if (value === undefined) continue;
     if (field === 'area' && value !== shop.area && typeof value === 'string') value = canonicalArea(value) ?? value;
+    if (field === 'category' && typeof value === 'string') value = canonicalCategory(value) ?? (shop.category !== null && value.trim() === shop.category.trim() ? shop.category : value);
     if (field === 'visited_at' && typeof value === 'string' && shop.visited_at && preciseTimestamp(value) === preciseTimestamp(shop.visited_at)) continue;
     if (value !== shop[field]) changes[field] = value;
   }
@@ -154,7 +155,7 @@ export class CsvUpdates {
       if (row.values.is_visited !== undefined && row.values.is_visited !== (rating !== null)) errors.push(prefix + '訪問状況は評価から決まります。評価の有無に合わせてください。');
       const changed = changedValues(shop, row);
       if (changed.area !== undefined && (typeof changed.area !== 'string' || !canonicalArea(changed.area))) errors.push(prefix + 'エリアは登録済みの市区町村名・駅名を入力してください。');
-      if (changed.category !== undefined && (typeof changed.category !== 'string' || !categories.values.includes(changed.category))) errors.push(prefix + 'カテゴリは確認画面の既定分類を指定してください。');
+      if (changed.category !== undefined && changed.category !== null && (typeof changed.category !== 'string' || !categories.has(changed.category))) errors.push(prefix + 'カテゴリは登録済みの分類を指定してください。');
       if (row.values.canonical_url !== undefined) {
         const explicit = normalizeExternalIdentity(shop.external_source, shop.external_id);
         const proposedId = tabelogIdentity(typeof row.values.canonical_url === 'string' ? row.values.canonical_url : null);

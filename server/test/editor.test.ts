@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { test } from 'node:test';
 import sharp from 'sharp';
 import { z } from 'zod';
-import { detailSchema } from '@meshi/contracts';
+import { detailSchema, editorOptionsSchema } from '@meshi/contracts';
 import { createApp } from '../src/app.js';
 import { storeUploadedImage } from '../src/images.js';
 import { fixture, headers } from './helpers.js';
@@ -96,5 +96,49 @@ test('delete protects merged targets and preserves original mention records', as
     assert.equal((await app.request('/api/ui/shops/3', { headers: headers(admin) })).status, 404);
     const mention = await database.query('SELECT shop_id FROM shop_mentions WHERE message_id=$1', z.object({ shop_id: z.number().nullable() }), ['90000000000000003']);
     assert.deepEqual(mention, [{ shop_id: null }]);
+  } finally { await database.close(); }
+});
+
+
+test('category choices use the master and reject new arbitrary categories without blocking legacy edits', async () => {
+  const { app, database, admin } = await fixture();
+  try {
+    const options = await app.request('/api/ui/editor-options', { headers: headers(admin) });
+    const parsed = editorOptionsSchema.parse(await options.json());
+    assert.ok(parsed.categories.includes('寿司'));
+    assert.ok(parsed.categories.includes('回転寿司'));
+    assert.ok(!parsed.categories.includes('寿司・回転寿司'));
+    assert.deepEqual(parsed.category_groups.find(group => group.label === 'パスタ・ピザ')?.options.map(option => [option.value, option.depth]), [['パスタ', 0], ['ピザ', 0], ['ナポリピザ', 1], ['ローマピザ', 1], ['ニューヨークピザ', 1], ['シカゴピザ', 1], ['デトロイトピザ', 1]]);
+    assert.ok(!parsed.categories.includes('和食'));
+    const invalid = form(); invalid.set('category', '居酒屋、寿司、海鮮');
+    assert.equal((await app.request('/shop/2/edit', { method: 'POST', headers: headers(admin), body: invalid })).status, 422);
+    const legacy = form(); legacy.set('category', '和食');
+    assert.equal((await app.request('/shop/2/edit', { method: 'POST', headers: headers(admin), body: legacy })).status, 302);
+    const valid = form(); valid.set('expected_version', '2'); valid.set('category', '回転寿司'); valid.set('rating', '4');
+    assert.equal((await app.request('/shop/2/edit', { method: 'POST', headers: headers(admin), body: valid })).status, 302);
+    const saved = detailSchema.parse(await (await app.request('/api/ui/shops/2', { headers: headers(admin) })).json());
+    assert.equal(saved.category, '回転寿司'); assert.equal(saved.rating, 4);
+  } finally { await database.close(); }
+});
+
+test('category edits normalize aliases, preserve ambiguous legacy values, and allow clearing', async () => {
+  const { app, database, admin } = await fixture();
+  try {
+    await database.execute('UPDATE shops SET category=$1 WHERE id=$2', [' イタリアン・パスタ・ピザ ', 2]);
+    const save = (version: number, category: string): Promise<Response> => {
+      const data = form(); data.set('expected_version', String(version)); data.set('category', category);
+      return app.request('/shop/2/edit', { method: 'POST', headers: headers(admin), body: data });
+    };
+    assert.equal((await save(1, ' イタリアン・パスタ・ピザ ')).status, 302);
+    const preserved = detailSchema.parse(await (await app.request('/api/ui/shops/2', { headers: headers(admin) })).json());
+    assert.equal(preserved.category, ' イタリアン・パスタ・ピザ ');
+    assert.equal((await save(2, 'パスタ・ピザ')).status, 422);
+    assert.equal((await save(2, 'イタリア料理')).status, 302);
+    const canonical = await database.query('SELECT category FROM shops WHERE id=$1', z.object({ category: z.string() }), [2]);
+    assert.equal(canonical[0]?.category, 'イタリアン');
+    assert.equal((await save(3, 'ニューヨークピザ')).status, 302);
+    assert.equal((await save(4, '')).status, 302);
+    const cleared = detailSchema.parse(await (await app.request('/api/ui/shops/2', { headers: headers(admin) })).json());
+    assert.equal(cleared.category, null);
   } finally { await database.close(); }
 });

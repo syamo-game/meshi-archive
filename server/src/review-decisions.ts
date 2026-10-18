@@ -7,6 +7,7 @@ import type { Database, Executor } from './db/database.js';
 import { countRow } from './db/database.js';
 import { AppError } from './errors.js';
 import { canonicalArea } from './geography.js';
+import { canonicalCategory } from './categories.js';
 import { ImageCache } from './image-cache.js';
 import { storeUploadedImage, validateImageSourceUrl } from './images.js';
 import { safeHttpUrl } from './links.js';
@@ -65,8 +66,21 @@ function approve(mention: MentionRecord, shop: ShopRecord): void {
 function approveMetadata(mention: MentionRecord, shop: ShopRecord | null): void {
   if (!shop || !shop.area || !shop.category?.trim()) throw new AppError(400, 'エリアとカテゴリを入力してから承認してください。');
   const canonical = canonicalArea(shop.area); if (!canonical) throw new AppError(400, 'エリアは登録済みの市区町村名・駅名を選択してください。');
+  const category = canonicalCategory(shop.category); if (!category) throw new AppError(400, 'カテゴリは登録済みの分類を選択してください。');
   if (shop.area !== canonical) { shop.area = canonical; shop.version++; }
+  if (shop.category !== category) { shop.category = category; shop.version++; }
   mention.metadata_review_status = 'approved'; mention.metadata_difference_type = null; mention.metadata_reviewed_at = new Date().toISOString(); mention.version++;
+}
+function editedCategory(value: string, current: string | null): string {
+  const canonical = canonicalCategory(value);
+  if (canonical) return canonical;
+  if (current !== null && value === current.trim()) return current;
+  throw new AppError(422, 'カテゴリは登録済みの分類を選択してください。');
+}
+function evidenceCategory(value: string | null, mentionId: number): string | null {
+  const canonical = canonicalCategory(value);
+  if (value && !canonical) console.warn('Review evidence category requires classification', { mentionId, category: value });
+  return canonical;
 }
 function identityOf(shop: Pick<ShopRecord, 'shop_name' | 'branch_name' | 'area' | 'address' | 'phone' | 'canonical_url' | 'external_source' | 'external_id'>, evidence: string | null = null): NewShopIdentity { return { shop_name: shop.shop_name, branch_name: shop.branch_name, area: shop.area, address: shop.address, phone: shop.phone, canonical_url: shop.canonical_url, external_source: shop.external_source, external_id: shop.external_id, evidence_url: evidence }; }
 export class ReviewDecisions {
@@ -127,14 +141,14 @@ export class ReviewDecisions {
             const input = decision.shop;
             if (input.shop_name !== shop.shop_name || (input.branch_name !== undefined && input.branch_name !== shop.branch_name) || normalizeUrlIdentity(input.canonical_url) !== normalizeUrlIdentity(shop.canonical_url)) throw new AppError(400, '登録情報の確認では店名・支店名・店舗URLを変更できません。店舗の同定から操作してください。');
             await validateCreation(connection, { ...identityOf(shop), area: input.area, address: input.address, phone: input.phone, canonical_url: input.canonical_url }, shop);
-            Object.assign(shop, { area: input.area, category: input.category, address: input.address, phone: normalizePhone(input.phone), version: shop.version + 1 });
+            Object.assign(shop, { area: input.area, category: editedCategory(input.category, shop.category), address: input.address, phone: normalizePhone(input.phone), version: shop.version + 1 });
           }
           approveMetadata(mention, shop);
         }
       } else if (decision.action === 'approve_current') {
         if (!shop) {
           if (mention.difference_type === 'extraction_not_found' || mention.extracted_name === '（店舗名未特定）') throw new AppError(409, '店舗名が未特定です。店舗情報を入力してから登録してください。');
-          const values = { shop_name: mention.extracted_name, branch_name: mention.extracted_branch_name, area: canonicalArea(mention.extracted_area), category: mention.extracted_category, address: null, phone: null, canonical_url: null, evidence_url: null, external_source: null, external_id: null };
+          const values = { shop_name: mention.extracted_name, branch_name: mention.extracted_branch_name, area: canonicalArea(mention.extracted_area), category: evidenceCategory(mention.extracted_category, id), address: null, phone: null, canonical_url: null, evidence_url: null, external_source: null, external_id: null };
           await validateCreation(connection, values, null); shop = await create(values);
         }
         approve(mention, shop); Object.assign(mention, metadataAssessment(shop, mention));
@@ -144,13 +158,13 @@ export class ReviewDecisions {
         if (identitiesConflict(collectExternalIdentities(candidate.external_source, candidate.external_id, [candidate.canonical_url, candidate.evidence_url]))) throw new AppError(409, '候補の店舗識別子が矛盾しています。');
         const fromUrl = externalIdentity(candidate.canonical_url) ?? externalIdentity(candidate.evidence_url);
         const external = normalizeExternalIdentity(candidate.external_source, candidate.external_id) ?? (fromUrl ? normalizeExternalIdentity(...fromUrl) : null);
-        const values = { shop_name: candidate.name, branch_name: shop ? shop.branch_name : mention.extracted_branch_name, area: canonicalArea(shop ? shop.area : mention.extracted_area) ?? canonicalArea(candidate.area) ?? canonicalArea(mention.extracted_area), category: candidate.category ?? shop?.category ?? null, address: candidate.address ?? shop?.address ?? null, phone: candidate.phone !== null ? normalizePhone(candidate.phone) : shop?.phone ?? null, canonical_url: candidate.canonical_url ?? shop?.canonical_url ?? null, external_source: external?.[0] ?? shop?.external_source ?? null, external_id: external?.[1] ?? shop?.external_id ?? null, evidence_url: candidate.evidence_url };
+        const values = { shop_name: candidate.name, branch_name: shop ? shop.branch_name : mention.extracted_branch_name, area: canonicalArea(shop ? shop.area : mention.extracted_area) ?? canonicalArea(candidate.area) ?? canonicalArea(mention.extracted_area), category: candidate.category === null ? shop?.category ?? null : evidenceCategory(candidate.category, id), address: candidate.address ?? shop?.address ?? null, phone: candidate.phone !== null ? normalizePhone(candidate.phone) : shop?.phone ?? null, canonical_url: candidate.canonical_url ?? shop?.canonical_url ?? null, external_source: external?.[0] ?? shop?.external_source ?? null, external_id: external?.[1] ?? shop?.external_id ?? null, evidence_url: candidate.evidence_url };
         await validateCreation(connection, values, shop);
         if (!shop) shop = await create(values);
         Object.assign(shop, values, { version: shop.version + 1 }); approve(mention, shop); Object.assign(mention, metadataAssessment(shop, mention));
       } else if (decision.action === 'edit_and_approve') {
         const input = decision.shop; const external = externalIdentity(input.canonical_url);
-        const values = { shop_name: input.shop_name, branch_name: input.branch_name !== undefined ? input.branch_name : shop?.branch_name ?? null, area: input.area, category: input.category, address: input.address, phone: normalizePhone(input.phone), canonical_url: input.canonical_url, external_source: external?.[0] ?? null, external_id: external?.[1] ?? null, evidence_url: null };
+        const values = { shop_name: input.shop_name, branch_name: input.branch_name !== undefined ? input.branch_name : shop?.branch_name ?? null, area: input.area, category: editedCategory(input.category, shop?.category ?? null), address: input.address, phone: normalizePhone(input.phone), canonical_url: input.canonical_url, external_source: external?.[0] ?? null, external_id: external?.[1] ?? null, evidence_url: null };
         await validateCreation(connection, values, shop); if (!shop) shop = await create(values);
         Object.assign(shop, values, { version: shop.version + 1 }); approve(mention, shop); Object.assign(mention, metadataAssessment(shop, mention));
       } else if (decision.action === 'merge') {

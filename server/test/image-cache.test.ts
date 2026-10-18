@@ -60,7 +60,7 @@ test('cached review evidence and photo approval use real files and permission gu
     assert.equal((await app.request(`/api/admin/evidence/image/${asset.id}`, { headers: headers(viewer) })).status, 403);
     const original = await app.request(`/api/admin/evidence/image/${asset.id}`, { headers: headers(admin) }); assert.equal(original.status, 200); assert.deepEqual(Buffer.from(await original.arrayBuffer()), image);
     const preview = await app.request(`/api/admin/evidence/photo/${asset.id}`, { headers: headers(admin) }); assert.equal(preview.status, 200); assert.equal(preview.headers.get('content-type'), 'image/webp');
-    const approval = await app.request(`/api/admin/reviews/${source.id}/decision`, { method: 'POST', headers: { ...headers(admin), 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'edit_and_approve', expected_version: 1, shop_version: 1, confirm_metadata: true, photo_asset_id: asset.id, shop: { shop_name: '店舗31', area: '門前仲町', category: '丼・定食', branch_name: null, canonical_url: null } }) });
+    const approval = await app.request(`/api/admin/reviews/${source.id}/decision`, { method: 'POST', headers: { ...headers(admin), 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'edit_and_approve', expected_version: 1, shop_version: 1, confirm_metadata: true, photo_asset_id: asset.id, shop: { shop_name: '店舗31', area: '門前仲町', category: '定食', branch_name: null, canonical_url: null } }) });
     assert.equal(approval.status, 200);
     const shop = (await database.query('SELECT * FROM shops WHERE id=31', shopRecord))[0]; assert.ok(shop?.image_key);
     const stored = await readFile(join(temporary.path, 'uploads', shop.image_key + '.webp')); assert.equal((await sharp(stored).metadata()).width, 960);

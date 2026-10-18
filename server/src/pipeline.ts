@@ -166,12 +166,13 @@ export class RestaurantProcessor implements MessageProcessor {
         const before = candidate; const [created, collision, collisionReason] = await shops.guardCreation(extracted, candidate, blocked); candidate = created; if (collision) { chosen = collision; reason = collisionReason; selected = before; basis = 'verified_collision'; blocked = null; } else blocked = collisionReason;
       }
       if (!chosen && !candidate && !blocked && pageBlocked) blocked = pageBlocked;
+      const categoryEvidence = chosen ? chosen.category : candidate?.is_verified ? candidate.category || extracted.category : extracted.category;
       if (!chosen && candidate) { chosen = await createCandidateShop(connection, extracted, candidate); basis = candidate.provenance === 'image' ? 'image_evidence' : 'verified_candidate'; }
-      const [metadata, difference] = metadataReviewState(chosen ? chosen.area : extracted.area, chosen ? chosen.category : extracted.category); const reasons = [extracted.confidence_reason];
+      const [metadata, difference] = metadataReviewState(chosen ? chosen.area : extracted.area, chosen ? chosen.category : extracted.category, categoryEvidence); const reasons = [extracted.confidence_reason];
       if (ambiguousAssets) reasons.push('複数の店舗ID付きURLと投稿内店舗の対応を一意に確認できない'); reason = blocked || reason; if (reason) reasons.push(reason);
       if (candidate) { reasons.push(candidate.verification_reason || '検証済み候補で確定'); candidates = candidate.provenance === 'web_search' && candidate.is_verified ? replaceWebCandidate(candidates, candidate) : dedupeCandidates([candidate, ...candidates]); }
       if (searchReason) reasons.push('Web検索未解決: ' + searchReason); if (imageReason) reasons.push('画像補助: ' + imageReason);
-      if (difference === 'unknown_category') reasons.push('未知カテゴリ: ' + (chosen ? chosen.category : extracted.category)); if (difference === 'unknown_area') reasons.push('未知エリア: ' + (chosen ? chosen.area : extracted.area));
+      if (difference === 'unknown_category') reasons.push('未知カテゴリ: ' + categoryEvidence); if (difference === 'unknown_area') reasons.push('未知エリア: ' + (chosen ? chosen.area : extracted.area));
       const now = new Date().toISOString(); const row = await saveMention(connection, { ...newMention(id, occurrence, extracted, url, extractionSource), shop_id: chosen?.id ?? null, resolution_status: chosen ? 'resolved' : 'ambiguous', review_status: chosen ? 'approved' : 'pending', metadata_review_status: metadata, metadata_difference_type: difference, resolution_method: chosen ? 'automatic' : null, resolution_basis: basis, difference_type: imageAssessment.codes.length ? 'evidence_review' : chosen ? null : 'new_ambiguous', extraction_error: evidenceReviewError(imageAssessment), confidence_reason: reasons.join(' / '), reviewed_at: chosen ? now : null, metadata_reviewed_at: metadata === 'approved' ? now : null });
       await storeCandidates(connection, row, extracted, candidates, candidate || selected);
     }

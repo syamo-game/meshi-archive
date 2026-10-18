@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { z } from 'zod';
 import { readAISettings } from '../src/ai.js';
+import { extractedMentionSchema } from '../src/ai-models.js';
 import { envelopeSchema } from '../src/ingestion.js';
 import { RestaurantProcessor } from '../src/pipeline.js';
-import { replaceSourceAssets } from '../src/pipeline-storage.js';
-import { mentionRecord, messageRecord } from '../src/records.js';
+import { pipelineCandidateSchema } from '../src/pipeline-candidates.js';
+import { createCandidateShop, metadataReviewState, newMention, replaceSourceAssets, saveMention, storeCandidates } from '../src/pipeline-storage.js';
+import { candidateRecord, mentionRecord, messageRecord } from '../src/records.js';
 import { fixture } from './helpers.js';
 
 test('actual processor reuses one approved source without AI and keeps repeat processing idempotent', async () => {
@@ -36,5 +38,23 @@ test('actual processing failure retains message, source assets and stage records
     assert.equal((await database.query('SELECT * FROM shop_mentions WHERE message_id=$1', mentionRecord, [envelope.message_id])).length, 0);
     assert.equal((await database.query('SELECT url FROM source_assets WHERE message_id=$1', z.object({ url: z.string() }), [envelope.message_id]))[0]?.url, 'https://example.com/shop');
     const stages = await database.query('SELECT stage FROM processing_runs WHERE message_id=$1 ORDER BY id', z.object({ stage: z.string() }), [envelope.message_id]); assert.deepEqual(stages.map(row => row.stage), ['message_extraction', 'message_pipeline']);
+  } finally { await database.close(); }
+});
+
+test('candidate storage normalizes true aliases and retains unknown category evidence for review', async () => {
+  const { database } = await fixture();
+  try {
+    for (const [index, raw, expected, difference] of [[0, '鮨', '寿司', null], [1, '寿司・回転寿司', null, 'unknown_category'], [2, '架空分類', null, 'unknown_category'], [3, null, null, 'missing_category']] as const) {
+      const extracted = extractedMentionSchema.parse({ shop_name: `分類店舗${index}`, area: '木場', category: raw, needs_review: false, confidence_reason: 'Synthetic category evidence' });
+      const candidate = pipelineCandidateSchema.parse({ name: extracted.shop_name, area: '木場', category: raw, provenance: 'structured_data', is_verified: true });
+      const shop = await createCandidateShop(database, extracted, candidate);
+      assert.equal(shop.category, expected);
+      const [status, reason] = metadataReviewState(shop.area, shop.category, raw);
+      assert.equal(status, expected === null ? 'pending' : 'approved'); assert.equal(reason, difference);
+      const row = await saveMention(database, { ...newMention('90000000000000001', index + 1, extracted, null, 'synthetic-test'), shop_id: shop.id, metadata_review_status: status, metadata_difference_type: reason });
+      await storeCandidates(database, row, extracted, [candidate], candidate);
+      assert.equal((await database.query('SELECT * FROM shop_mentions WHERE id=$1', mentionRecord, [row.id]))[0]?.extracted_category, raw);
+      assert.equal((await database.query('SELECT * FROM resolution_candidates WHERE mention_id=$1', candidateRecord, [row.id]))[0]?.category, raw);
+    }
   } finally { await database.close(); }
 });

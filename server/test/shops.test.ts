@@ -100,3 +100,36 @@ test('keeps a posted Tabelog link and omits conflicting source identities', asyn
     assert.equal(conflict.source_url, null); assert.match(conflict.canonical_url ?? '', /654321/);
   } finally { await database.close(); }
 });
+
+test('category filters include descendants and aliases without guessing legacy compounds', async () => {
+  const { database, app, viewer } = await fixture();
+  try {
+    const values = ['ピザ', 'ナポリピザ', 'ニューヨークピザ', 'イタリア料理', 'イタリアン・パスタ・ピザ', 'ピッツァ', null, '', '寿司・回転寿司', '回転寿司', '鮨', 'ジェラート', 'アイスクリーム', '　', '\t'];
+    for (const [index, value] of values.entries()) await database.execute('UPDATE shops SET category=$1 WHERE id=$2', [value, index + 1]);
+    await database.execute('UPDATE shops SET category=$1 WHERE id=$2', ['デトロイトピザ', 31]);
+    const list = async (category: string): Promise<ReturnType<typeof shopsSchema.parse>> => shopsSchema.parse(await (await app.request('/api/ui/shops?' + new URLSearchParams({ category }), { headers: headers(viewer) })).json());
+    const ids = async (category: string): Promise<number[]> => (await list(category)).items.map(shop => shop.id).sort((a, b) => a - b);
+    assert.deepEqual(await ids('ピザ'), [1, 2, 3, 6]);
+    assert.deepEqual(await ids('ピッツァ'), [1, 2, 3, 6]);
+    assert.deepEqual(await ids('ニューヨークピザ'), [3]);
+    assert.deepEqual(await ids('イタリアン'), [4]);
+    assert.deepEqual(await ids('イタリアン・パスタ・ピザ'), [5]);
+    assert.deepEqual(await ids('寿司'), [10, 11]);
+    assert.deepEqual(await ids('回転寿司'), [10]);
+    assert.deepEqual(await ids('寿司・回転寿司'), [9]);
+    assert.deepEqual(await ids('__none__'), [7, 8, 14, 15]);
+    assert.deepEqual(await ids("' OR 1=1 --"), []);
+    assert.deepEqual(await ids('ジェラート'), [12]);
+    assert.deepEqual(await ids('アイスクリーム'), [13]);
+    const all = await list('');
+    const pizzaOptions = all.category_groups.find(group => group.label === 'パスタ・ピザ');
+    assert.deepEqual(pizzaOptions?.options.map(option => [option.value, option.depth]), [['ピザ', 0], ['ナポリピザ', 1], ['ニューヨークピザ', 1]]);
+    assert.ok(!all.categories.includes('デトロイトピザ'));
+    assert.ok(all.category_groups.find(group => group.label === '未整理')?.options.some(option => option.value === '寿司・回転寿司'));
+    const sushi = await list('寿司');
+    assert.equal(sushi.items.find(shop => shop.id === 11)?.category, '寿司');
+    assert.deepEqual(sushi.category_groups, all.category_groups);
+    const search = shopsSchema.parse(await (await app.request('/api/ui/shops?' + new URLSearchParams({ q: 'イタリアン' }), { headers: headers(viewer) })).json());
+    assert.deepEqual(search.items.map(shop => shop.id).sort((a, b) => a - b), [4, 5]);
+  } finally { await database.close(); }
+});

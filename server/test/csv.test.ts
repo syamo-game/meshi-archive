@@ -115,6 +115,25 @@ test('CSV metadata validates known values and existing external identity', async
   } finally { await database.close(); }
 });
 
+test('CSV preserves legacy category round trips and stores canonical aliases or unclassified values', async () => {
+  const { app, database, admin } = await fixture();
+  try {
+    await database.execute('UPDATE shops SET category=$1 WHERE id=1', ['  寿司・回転寿司  ']);
+    const csv = (version: number, category: string | null): string => csvDocument([['_id', 'shop.version', 'message_id', 'shop.category'], [1, version, idFor(1), category]]);
+    const updates = new CsvUpdates(database);
+    for (const value of ['  寿司・回転寿司  ', '寿司・回転寿司']) {
+      const unchanged = await updates.preview(parseCsvUpdate(bytes(csv(1, value)), 'a.csv'));
+      assert.equal(unchanged.preview?.updated, 0);
+    }
+    for (const [version, category, expected] of [[1, '鮨', '寿司'], [2, null, null]] as const) {
+      const content = csv(version, category);
+      for (const action of ['validate', 'apply']) assert.equal((await app.request('/api/ui/admin/import/' + action, { method: 'POST', headers: headers(admin), body: file(content) })).status, 200);
+      const stored = (await database.query('SELECT category,version FROM shops WHERE id=1', z.object({ category: z.string().nullable(), version: z.number() })))[0];
+      assert.equal(stored?.category, expected); assert.equal(stored?.version, version + 1);
+    }
+  } finally { await database.close(); }
+});
+
 test('CSV export includes all matching shops, exact memo, BOM and content checksum', async () => {
   const { app, database, admin, viewer } = await fixture();
   try {

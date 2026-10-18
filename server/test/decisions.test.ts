@@ -17,7 +17,7 @@ test('approval keeps identity and metadata separate and checks both versions', a
     assert.equal(item.review_status, 'approved'); assert.equal(item.metadata_review_status, 'pending'); assert.equal(item.metadata_difference_type, 'unknown_category');
     assert.equal((await app.request('/api/ui/shops/31', { headers: headers(viewer) })).status, 404);
     assert.equal((await post({ action: 'approve_current', expected_version: 1, shop_version: 1 })).status, 409);
-    const metadata = await post({ action: 'edit_and_approve', scope: 'metadata', expected_version: item.version, shop_version: 1, shop: { shop_name: '店舗31', branch_name: null, area: '門前仲町', category: '丼・定食', canonical_url: null } });
+    const metadata = await post({ action: 'edit_and_approve', scope: 'metadata', expected_version: item.version, shop_version: 1, shop: { shop_name: '店舗31', branch_name: null, area: '門前仲町', category: '定食', canonical_url: null } });
     assert.equal(metadata.status, 200);
     assert.equal((await app.request('/api/ui/shops/31', { headers: headers(viewer) })).status, 200);
     const audit = await database.query('SELECT scope,action FROM review_events WHERE mention_id=$1 ORDER BY id', z.object({ scope: z.string(), action: z.string() }), [mention.id]);
@@ -28,7 +28,7 @@ test('approval keeps identity and metadata separate and checks both versions', a
 test('approval automatically resolves only matching pending identities with an audit event', async () => {
   const { app, database, admin } = await fixture();
   try {
-    await database.execute("UPDATE shops SET category='丼・定食' WHERE id=31");
+    await database.execute("UPDATE shops SET category='定食' WHERE id=31");
     await database.execute("UPDATE shop_mentions SET review_status='pending',shop_id=NULL,extracted_name='店舗31',extracted_area='門前仲町' WHERE shop_id=30");
     await database.execute("UPDATE shop_mentions SET review_status='pending',shop_id=NULL,extracted_name='店舗31',extracted_area='門前仲町',extraction_error='evidence_review:synthetic' WHERE shop_id=29");
     const source = (await database.query('SELECT * FROM shop_mentions WHERE shop_id=31', mentionRecord))[0]; assert.ok(source);
@@ -47,13 +47,47 @@ test('review edits reject collisions and metadata identity changes without parti
   try {
     const source = (await database.query('SELECT * FROM shop_mentions WHERE shop_id=31', mentionRecord))[0]; assert.ok(source);
     const post = (body: object): Promise<Response> => app.request(`/api/admin/reviews/${source.id}/decision`, { method: 'POST', headers: { ...headers(admin), 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_version: 1, shop_version: 1, ...body }) });
-    assert.equal((await post({ action: 'edit_and_approve', shop: { shop_name: '店舗01', area: '木場', category: '丼・定食' } })).status, 409);
-    assert.equal((await post({ action: 'edit_and_approve', scope: 'metadata', shop: { shop_name: '別の店舗', area: '門前仲町', category: '丼・定食' } })).status, 400);
+    assert.equal((await post({ action: 'edit_and_approve', shop: { shop_name: '店舗01', area: '木場', category: '定食' } })).status, 409);
+    assert.equal((await post({ action: 'edit_and_approve', scope: 'metadata', shop: { shop_name: '別の店舗', area: '門前仲町', category: '定食' } })).status, 400);
     assert.equal((await database.query('SELECT * FROM shops WHERE id=31', shopRecord))[0]?.version, 1);
     assert.equal((await database.query('SELECT * FROM shop_mentions WHERE id=$1', mentionRecord, [source.id]))[0]?.version, 1);
     assert.deepEqual(await database.query('SELECT id FROM review_events', z.object({ id: z.number() })), []);
     assert.equal((await post({ action: 'defer', note: '  保留\n理由  ' })).status, 200);
     const audit = (await database.query('SELECT note FROM review_events WHERE mention_id=$1', z.object({ note: z.string().nullable() }), [source.id]))[0]; assert.equal(audit?.note, '  保留\n理由  ');
+  } finally { await database.close(); }
+});
+
+test('review edits preserve untouched legacy categories but require canonical metadata approval', async () => {
+  const { app, database, admin } = await fixture();
+  try {
+    await database.execute('UPDATE shops SET category=$1 WHERE id=31', ['  寿司・回転寿司  ']);
+    const source = (await database.query('SELECT * FROM shop_mentions WHERE shop_id=31', mentionRecord))[0]; assert.ok(source);
+    const post = (body: object): Promise<Response> => app.request(`/api/admin/reviews/${source.id}/decision`, { method: 'POST', headers: { ...headers(admin), 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const draft = { shop_name: '店舗31', area: '門前仲町', category: '架空分類', address: '東京都江東区門前仲町1丁目' };
+    assert.equal((await post({ action: 'edit_and_approve', expected_version: 1, shop_version: 1, shop: draft })).status, 422);
+    assert.equal((await post({ action: 'approve_current', scope: 'metadata', expected_version: 1, shop_version: 1 })).status, 400);
+    const edited = await post({ action: 'edit_and_approve', expected_version: 1, shop_version: 1, shop: { ...draft, category: '  寿司・回転寿司  ' } });
+    assert.equal(edited.status, 200);
+    const legacy = (await database.query('SELECT * FROM shops WHERE id=31', shopRecord))[0]; assert.ok(legacy);
+    const mention = (await database.query('SELECT * FROM shop_mentions WHERE id=$1', mentionRecord, [source.id]))[0]; assert.ok(mention);
+    assert.equal(legacy.category, '  寿司・回転寿司  '); assert.equal(mention.metadata_review_status, 'pending');
+    const classified = await post({ action: 'edit_and_approve', scope: 'metadata', expected_version: mention.version, shop_version: legacy.version, shop: { ...draft, category: '鮨' } });
+    assert.equal(classified.status, 200);
+    assert.equal((await database.query('SELECT * FROM shops WHERE id=31', shopRecord))[0]?.category, '寿司');
+    assert.equal((await database.query('SELECT * FROM shop_mentions WHERE id=$1', mentionRecord, [source.id]))[0]?.metadata_review_status, 'approved');
+  } finally { await database.close(); }
+});
+
+test('approving raw unknown category evidence creates an unclassified shop and keeps metadata pending', async () => {
+  const { app, database, admin } = await fixture();
+  try {
+    const source = (await database.query('SELECT * FROM shop_mentions WHERE shop_id=31', mentionRecord))[0]; assert.ok(source);
+    await database.execute('UPDATE shop_mentions SET shop_id=NULL,extracted_name=$2,extracted_area=$3,extracted_category=$4 WHERE id=$1', [source.id, '分類確認店舗', '門前仲町', '居酒屋、寿司、海鮮']);
+    const response = await app.request(`/api/admin/reviews/${source.id}/decision`, { method: 'POST', headers: { ...headers(admin), 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'approve_current', expected_version: 1 }) });
+    assert.equal(response.status, 200);
+    const mention = (await database.query('SELECT * FROM shop_mentions WHERE id=$1', mentionRecord, [source.id]))[0]; assert.ok(mention);
+    assert.equal(mention.extracted_category, '居酒屋、寿司、海鮮'); assert.equal(mention.metadata_review_status, 'pending');
+    assert.equal((await database.query('SELECT * FROM shops WHERE id=$1', shopRecord, [mention.shop_id]))[0]?.category, null);
   } finally { await database.close(); }
 });
 

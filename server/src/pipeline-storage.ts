@@ -1,7 +1,8 @@
 import type { ExtractedMention } from './ai-models.js';
 import { candidateMatchesArea, nameWithBranch } from './candidate-geography.js';
 import type { Executor } from './db/database.js';
-import { areas, canonicalArea, canonicalCategory, categories } from './geography.js';
+import { areas, canonicalArea } from './geography.js';
+import { canonicalCategory } from './categories.js';
 import type { MessageEnvelope } from './ingestion.js';
 import { candidateIdentities } from './pipeline-candidates.js';
 import type { PipelineCandidate } from './pipeline-candidates.js';
@@ -12,11 +13,11 @@ import { branchesConflict, nameSimilarity, normalizePhone } from './resolution.j
 import { identitiesConflict } from './shop-creation.js';
 import { sourceAssetFingerprint, sourceAssetIdentity } from './source-identity.js';
 
-export function metadataReviewState(area: string | null, category: string | null): readonly [MentionRecord['metadata_review_status'], string | null] {
+export function metadataReviewState(area: string | null, category: string | null, categoryEvidence: string | null = category): readonly [MentionRecord['metadata_review_status'], string | null] {
   if (!area) return ['pending', 'missing_area'];
   if (!canonicalArea(area)) return ['pending', 'unknown_area'];
-  if (!category) return ['pending', 'missing_category'];
-  if (!categories.has(canonicalCategory(category) ?? category)) return ['pending', 'unknown_category'];
+  if (!category) return ['pending', categoryEvidence && !canonicalCategory(categoryEvidence) ? 'unknown_category' : 'missing_category'];
+  if (!canonicalCategory(category)) return ['pending', 'unknown_category'];
   return ['approved', null];
 }
 export async function replaceSourceAssets(connection: Executor, envelope: MessageEnvelope): Promise<void> {
@@ -39,8 +40,10 @@ export async function createCandidateShop(connection: Executor, mention: Extract
   if (candidate.is_verified && mentionArea && candidate.area?.trim() && !candidateMatchesArea(mentionArea, candidate)) throw new Error(`Verified candidate area conflicts with the mention: mention_area=${mention.area}, candidate_area=${candidate.area}`);
   const area = mentionArea && areas.has(mentionArea) ? mentionArea : candidate.is_verified && candidateArea && areas.has(candidateArea) ? candidateArea : null;
   const rawCategory = candidate.is_verified ? candidate.category || mention.category : mention.category;
+  const category = canonicalCategory(rawCategory);
+  if (rawCategory && !category) console.warn('Candidate category requires review', { shopName: mention.shop_name, category: rawCategory, provenance: candidate.provenance });
   const [source, id] = candidate.is_verified ? preferredIdentity(candidate) : [null, null];
-  const shop = (await connection.query('INSERT INTO shops(shop_name,branch_name,area,category,address,phone,canonical_url,external_source,external_id,is_visited,created_at,updated_at,version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1) RETURNING *', shopRecord, [storageName(mention, candidate), mention.branch_name, area, canonicalCategory(rawCategory) || rawCategory, candidate.is_verified ? candidate.address : null, candidate.is_verified ? normalizePhone(candidate.phone) : null, candidate.is_verified ? candidate.canonical_url : null, source ?? null, id ?? null, false, now, now]))[0];
+  const shop = (await connection.query('INSERT INTO shops(shop_name,branch_name,area,category,address,phone,canonical_url,external_source,external_id,is_visited,created_at,updated_at,version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1) RETURNING *', shopRecord, [storageName(mention, candidate), mention.branch_name, area, category, candidate.is_verified ? candidate.address : null, candidate.is_verified ? normalizePhone(candidate.phone) : null, candidate.is_verified ? candidate.canonical_url : null, source ?? null, id ?? null, false, now, now]))[0];
   if (!shop) throw new Error('Shop insertion returned no row'); return shop;
 }
 export type NewMention = Omit<MentionRecord, 'id' | 'version' | 'created_at'>;

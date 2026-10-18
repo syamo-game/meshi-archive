@@ -7,6 +7,7 @@ import contract from '../data/ai-contract.json' with { type: 'json' };
 import { candidateSearchContextSchema, extractedMessageSchema, imageCluesSchema, requireExtractionEvidence, searchCandidateSetSchema } from './ai-models.js';
 import type { CandidateSearchContext, CandidateSearchResult, ExtractedMention, ExtractionCallResult, ImageAnalysisResult, ModelCallMetrics } from './ai-models.js';
 import { canonicalArea } from './geography.js';
+import { categoryInstructions } from './categories.js';
 import { ImageCache, publicAddress } from './image-cache.js';
 import { safeHttpUrl } from './links.js';
 
@@ -89,7 +90,8 @@ export class RestaurantAI {
     throw new ExtractionError(`OpenAI retry loop did not terminate: stage=${stage}`);
   }
   private parameters(model: string, reasoning: z.infer<typeof effort>, prompt: string, input: ResponseInput, schema: keyof typeof contract.schemas): ResponseCreateParamsNonStreaming {
-    return { model, instructions: prompt, input, text: { format: { type: 'json_schema', name: schema, strict: true, schema: contract.schemas[schema] } }, max_output_tokens: 25000, reasoning: { effort: reasoning }, store: false };
+    const instructions = schema === 'message' || schema === 'candidates' ? `${prompt}\n\n${categoryInstructions}` : prompt;
+    return { model, instructions, input, text: { format: { type: 'json_schema', name: schema, strict: true, schema: contract.schemas[schema] } }, max_output_tokens: 25000, reasoning: { effort: reasoning }, store: false };
   }
   private parse<Output>(response: Response, schema: z.ZodType<Output>, stage: string): Output {
     if (response.status !== 'completed' || !response.output_text) throw new ExtractionError(`OpenAI returned no complete structured output: stage=${stage} status=${response.status}`);

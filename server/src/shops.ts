@@ -5,7 +5,8 @@ import type { Config } from './config.js';
 import type { Database, Executor, SqlValue } from './db/database.js';
 import { countRow, timestampColumn } from './db/database.js';
 import { AppError } from './errors.js';
-import { areaLabel, areaMatches, areas, areaSort, canonicalArea } from './geography.js';
+import { areaLabel, areaMatches, areas, areaSort, buildAreaFilterOptions, canonicalArea } from './geography.js';
+import { buildCategoryFilterGroups, canonicalCategory, categoryMatches } from './categories.js';
 import { googleMapsUrl, safeHttpUrl, sourceLabel, tabelogIdentity, urlIdentity } from './links.js';
 import { normalizeExternalIdentity } from './resolution.js';
 
@@ -14,7 +15,7 @@ export type StoredShop = z.infer<typeof shopRow>;
 const mentionRow = z.object({ id: z.number(), shop_id: z.number(), message_id: z.string(), source_url: z.string().nullable(), extraction_source: z.string() });
 const assetRow = z.object({ shop_id: z.number(), url: z.string() });
 const areaRow = z.object({ area: z.string().nullable(), count: z.coerce.number() });
-const categoryRow = z.object({ category: z.string() });
+const categoryRow = z.object({ category: z.string().nullable() });
 const publicPredicate = "EXISTS(SELECT 1 FROM shop_mentions public_m WHERE public_m.shop_id=s.id AND public_m.review_status='approved' AND public_m.metadata_review_status='approved')";
 const orderMap = { created_at_desc: 's.created_at DESC,s.id DESC', name_asc: 's.shop_name ASC,s.id ASC', name_desc: 's.shop_name DESC,s.id DESC', area_asc: 's.area ASC,s.id ASC', area_desc: 's.area DESC,s.id DESC', rating_desc: 's.rating DESC NULLS LAST,s.id DESC', rating_asc: 's.rating ASC NULLS LAST,s.id ASC', area_order: '' } as const;
 export const listQuerySchema = z.object({ page: z.coerce.number().int().min(1).default(1), q: z.string().max(500).default(''), area: z.string().max(255).default(''), category: z.string().max(255).default(''), status: z.enum(['all', 'visited', 'unvisited']).default('all'), sort: z.enum(Object.keys(orderMap) as [keyof typeof orderMap, ...(keyof typeof orderMap)[]]).default('created_at_desc') });
@@ -66,7 +67,7 @@ export class Shops {
       }
       if (source && canonical && urlIdentity(source) === urlIdentity(canonical)) canonical = null;
       const query = [shop.shop_name, shop.branch_name, shop.address ?? shop.area].filter((part): part is string => Boolean(part?.trim())).map(part => part.trim()).join(' ');
-      return { id: shop.id, version: shop.version, name: shop.shop_name, branch: shop.branch_name, area: shop.area, area_label: areaLabel(shop.area, true), category: shop.category, rating: shop.rating, memo: shop.memo ?? '', image_url: shop.image_key ? `/media/shop-uploads/${shop.image_key}.webp` : null, maps_url: 'https://www.google.com/maps/search/?' + new URLSearchParams({ api: '1', query }).toString(), source_url: googleMapsUrl(source) ? null : source, source_label: source ? sourceLabel(source) : null, canonical_url: canonical, discord_url: this.config.guildId && this.config.channelId && matching[0] ? `https://discord.com/channels/${this.config.guildId}/${this.config.channelId}/${matching[0].message_id}` : null, address: shop.address, phone: shop.phone, visited_at: shop.visited_at };
+      return { id: shop.id, version: shop.version, name: shop.shop_name, branch: shop.branch_name, area: shop.area, area_label: areaLabel(shop.area, true), category: canonicalCategory(shop.category) ?? shop.category, rating: shop.rating, memo: shop.memo ?? '', image_url: shop.image_key ? `/media/shop-uploads/${shop.image_key}.webp` : null, maps_url: 'https://www.google.com/maps/search/?' + new URLSearchParams({ api: '1', query }).toString(), source_url: googleMapsUrl(source) ? null : source, source_label: source ? sourceLabel(source) : null, canonical_url: canonical, discord_url: this.config.guildId && this.config.channelId && matching[0] ? `https://discord.com/channels/${this.config.guildId}/${this.config.channelId}/${matching[0].message_id}` : null, address: shop.address, phone: shop.phone, visited_at: shop.visited_at };
     });
   }
   async detail(id: number, admin: boolean, connection: Executor = this.database): Promise<ShopDetail> {
@@ -76,6 +77,7 @@ export class Shops {
   }
   async selection(query: ListQuery, publicOnly: boolean): Promise<{ predicate: string; order: string; values: SqlValue[] }> {
     const areaValues = (await this.database.query('SELECT DISTINCT area,0 AS count FROM shops WHERE area IS NOT NULL', areaRow)).flatMap(row => row.area ? [row.area] : []);
+    const categoryValues = query.category || query.q.trim() ? (await this.database.query('SELECT DISTINCT category FROM shops', categoryRow)).map(row => row.category) : [];
     const values: SqlValue[] = [];
     const bind = (value: SqlValue): string => { values.push(value); return '$' + values.length; };
     const where = [publicOnly ? publicPredicate : '1=1'];
@@ -85,6 +87,9 @@ export class Shops {
       const matches = areaValues.filter(value => [value, areaLabel(value), areas.get(canonicalArea(value) ?? value)?.group ?? ''].some(label => label.toLowerCase().includes(term.toLowerCase())));
       const parts = ['shop_name', 'branch_name', 'area', 'category', 'address', 'memo'].map(field => `lower(COALESCE(s.${field},'')) LIKE ${placeholder} ESCAPE '\\'`);
       if (matches.length) parts.push('s.area IN (' + matches.map(bind).join(',') + ')');
+      const categoryTerm = (canonicalCategory(term) ?? term.normalize('NFKC')).toLowerCase();
+      const matchingCategories = categoryValues.filter((value): value is string => value !== null && (canonicalCategory(value) ?? value).toLowerCase().includes(categoryTerm));
+      if (matchingCategories.length) parts.push('s.category IN (' + matchingCategories.map(bind).join(',') + ')');
       where.push('(' + parts.join(' OR ') + ')');
     }
     if (query.area === '__none__') where.push('s.area IS NULL');
@@ -92,7 +97,13 @@ export class Shops {
       const selected = areaValues.filter(value => areaMatches(value, query.area));
       where.push(selected.length ? 's.area IN (' + selected.map(bind).join(',') + ')' : '1=0');
     }
-    if (query.category) where.push('s.category=' + bind(query.category));
+    if (query.category) {
+      const selected = categoryValues.filter(value => categoryMatches(value, query.category));
+      const strings = selected.filter((value): value is string => value !== null);
+      const parts: string[] = selected.includes(null) ? ['s.category IS NULL'] : [];
+      if (strings.length) parts.push('s.category IN (' + strings.map(bind).join(',') + ')');
+      where.push(parts.length ? '(' + parts.join(' OR ') + ')' : '1=0');
+    }
     if (query.status === 'visited') where.push('s.rating>0');
     if (query.status === 'unvisited') where.push('(s.rating IS NULL OR s.rating=0)');
     const predicate = where.join(' AND ');
@@ -112,11 +123,12 @@ export class Shops {
     const pages = Math.max(1, Math.ceil(total / 24)); const page = Math.min(query.page, pages);
     const limit = '$' + (values.length + 1); const offset = '$' + (values.length + 2);
     const rows = await this.database.query(`SELECT s.* FROM shops s WHERE ${predicate} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`, shopRow, [...values, 24, (page - 1) * 24]);
-    const categories = await this.database.query(`SELECT DISTINCT s.category FROM shops s WHERE s.category IS NOT NULL AND s.category<>'' AND ${publicPredicate} ORDER BY s.category`, categoryRow);
+    const storedCategories = await this.database.query(`SELECT DISTINCT s.category FROM shops s WHERE ${publicPredicate} ORDER BY s.category`, categoryRow);
+    const categoryGroups = buildCategoryFilterGroups(storedCategories.map(row => row.category));
     const options = globalAreas.flatMap(row => row.area ? [{ value: row.area, label: areaLabel(row.area), count: row.count }] : []).sort((a, b) => b.count - a.count || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
     const details = await this.decorate(rows, this.database);
     const items: Shop[] = details.map(({ id, version, name, branch, area, area_label, category, rating, memo, image_url, maps_url, source_url, source_label }) => ({ id, version, name, branch, area, area_label, category, rating, memo, image_url, maps_url, source_url, source_label }));
-    return { items, total, page, pages, per_page: 24, areas: options, categories: categories.map(row => row.category) };
+    return { items, total, page, pages, per_page: 24, areas: options, filter_areas: buildAreaFilterOptions(globalAreas), categories: categoryGroups.flatMap(group => group.options.map(option => option.value)), category_groups: categoryGroups };
   }
   async annotate(id: number, input: z.infer<typeof annotationUpdateSchema>, admin: boolean): Promise<ShopDetail> {
     const body = annotationUpdateSchema.parse(input);

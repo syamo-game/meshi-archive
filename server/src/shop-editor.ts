@@ -7,6 +7,7 @@ import type { Database, SqlValue } from './db/database.js';
 import { idRow } from './db/database.js';
 import { AppError } from './errors.js';
 import { canonicalArea } from './geography.js';
+import { canonicalCategory } from './categories.js';
 import { maxImageBytes, storeUploadedImage } from './images.js';
 import { safeHttpUrl } from './links.js';
 import { normalizePhone } from './resolution.js';
@@ -20,7 +21,7 @@ type Draft = Record<Field, string>;
 const versionSchema = z.string().regex(/^[1-9]\d*$/).transform(Number).pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
 const deleteSchema = z.strictObject({ version: z.number().int().positive() });
 function values(shop: StoredShop): Draft {
-  return { shop_name: shop.shop_name, branch_name: shop.branch_name ?? '', area: shop.area ?? '', category: shop.category ?? '', url: shop.canonical_url ?? '', address: shop.address ?? '', phone: shop.phone ?? '', memo: shop.memo ?? '', rating: shop.rating ? String(shop.rating) : '', visited_at: shop.visited_at?.slice(0, 10) ?? '' };
+  return { shop_name: shop.shop_name, branch_name: shop.branch_name ?? '', area: shop.area ?? '', category: canonicalCategory(shop.category) ?? shop.category ?? '', url: shop.canonical_url ?? '', address: shop.address ?? '', phone: shop.phone ?? '', memo: shop.memo ?? '', rating: shop.rating ? String(shop.rating) : '', visited_at: shop.visited_at?.slice(0, 10) ?? '' };
 }
 function returnTo(value: string): string {
   const target = value || '/';
@@ -71,7 +72,11 @@ export class ShopEditor {
       const branch = z.string().trim().max(255).parse(draft.branch_name) || null;
       const area = draft.area === current.area ? shop.area : canonicalArea(draft.area);
       if (draft.area.trim() && !area) throw new AppError(422, '候補にある市区町村・エリアを選択してください。');
-      const category = z.string().trim().max(255).parse(draft.category) || null;
+      const rawCategory = z.string().trim().max(255).parse(draft.category) || null;
+      const normalizedCategory = canonicalCategory(rawCategory);
+      const unchangedCategory = rawCategory === shop.category?.trim();
+      const category = normalizedCategory ?? (rawCategory && unchangedCategory ? shop.category : rawCategory);
+      if (rawCategory && !unchangedCategory && !normalizedCategory) throw new AppError(422, 'カテゴリは候補から選択してください。');
       const url = draft.url.trim() ? safeHttpUrl(draft.url) : null;
       if (draft.url.trim() && !url) throw new AppError(422, 'http:// または https:// で始まる有効なURLを指定してください。');
       const address = z.string().trim().max(2000).parse(draft.address) || null;

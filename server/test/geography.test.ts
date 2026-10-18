@@ -27,3 +27,18 @@ test('area and address safeguards match 208 Python checks and 1918 municipality 
     assert.deepEqual(municipalitiesInText(item.address).map(row => row.code), item.codes, item.address);
   }
 });
+
+
+test('filter areas restore municipality hierarchy while keeping counted leaves', async () => {
+  const { buildAreaFilterOptions, areaMatches } = await import('../src/geography.js');
+  const rows = [{ area: '清澄白河', count: 20 }, { area: '門前仲町', count: 12 }, { area: '北海道札幌市中央区', count: 1 }, { area: '札幌', count: 2 }, { area: '神田', count: 3 }];
+  const result = buildAreaFilterOptions(rows);
+  assert.deepEqual(result.map(row => [row.value, row.count, row.depth]), [
+    ['北海道札幌市', 3, 0], ['札幌', 2, 1], ['北海道札幌市中央区', 1, 1],
+    ['東京都千代田区', 3, 0], ['神田', 3, 1], ['東京都江東区', 32, 0], ['清澄白河', 20, 1], ['門前仲町', 12, 1],
+  ]);
+  assert.deepEqual(buildAreaFilterOptions([...rows].reverse()), result);
+  assert.equal(areaMatches('清澄白河', '東京都江東区'), true);
+  assert.equal(areaMatches('北海道札幌市中央区', '北海道札幌市'), true);
+  assert.equal(areaMatches('神田', '東京都江東区'), false);
+});
