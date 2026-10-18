@@ -1,0 +1,304 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: Apply this main revision to production after successful checks
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE_NAME: meshi-archive
+  COMPOSE_FILE: docker-compose.prod.yml
+  REMOTE_APP_DIR: /opt/meshi-archive
+  SERVICES: migrate web bot
+  HEALTH_CHECK: for i in $(seq 1 30); do docker compose -f docker-compose.prod.yml exec -T web node -e 'fetch("http://localhost:8000/healthz", {signal:AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))' && exit 0; sleep 2; done; exit 1
+
+jobs:
+  lint-build:
+    name: Test & build (Docker)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: meshi_archive_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d meshi_archive_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Scan Git history for secrets
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo:ro" \
+            zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git /repo --redact=100 --no-banner \
+            --config /repo/.gitleaks.toml
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb
+
+      - name: Build image (no push)
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0
+        with:
+          context: .
+          target: test
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:ci
+
+      - name: Run tests
+        run: |
+          docker run --rm --network host \
+            -e TEST_POSTGRES_URL="postgresql://postgres:postgres@127.0.0.1:5432/meshi_archive_test" \
+            "$IMAGE_NAME:ci" npm test
+
+      - name: Audit installed runtime dependencies
+        run: |
+          docker run --rm "$IMAGE_NAME:ci" npm audit --omit=dev
+
+  push:
+    name: Push image to GHCR
+    needs: lint-build
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image-tag: ${{ steps.meta.outputs.image-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+
+      - name: Log in to GHCR
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          owner=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "image-tag=ghcr.io/${owner}/${IMAGE_NAME}:sha-${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          echo "image-latest=ghcr.io/${owner}/${IMAGE_NAME}:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb
+
+      - name: Build & push
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image-tag }}
+            ${{ steps.meta.outputs.image-latest }}
+
+  deploy:
+    name: Deploy to VPS
+    needs: push
+    if: github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch' && inputs.deploy
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      packages: read
+    concurrency:
+      group: production-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          echo "${{ secrets.VPS_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Pull and restart services on VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IMAGE_TAG: ${{ needs.push.outputs.image-tag }}
+        run: |
+          set -euo pipefail
+
+          ssh_env=$(printf 'GHCR_USER=%q GHCR_TOKEN=%q IMAGE_TAG=%q REMOTE_APP_DIR=%q COMPOSE_FILE=%q SERVICES=%q HEALTH_CHECK=%q' \
+            "$GHCR_USER" \
+            "$GHCR_TOKEN" \
+            "$IMAGE_TAG" \
+            "$REMOTE_APP_DIR" \
+            "$COMPOSE_FILE" \
+            "$SERVICES" \
+            "$HEALTH_CHECK")
+
+          ssh -i ~/.ssh/id_deploy "$VPS_USER@$VPS_HOST" "$ssh_env bash -s" <<'EOF'
+          set -euo pipefail
+          cd "$REMOTE_APP_DIR"
+
+          exec 9>"/home/ubuntu/.meshi-production.lock"
+          if ! flock -w 60 9; then
+            echo "Another production operation holds the deployment lock" >&2
+            exit 1
+          fi
+
+          mutation_failure_marker="/home/ubuntu/.meshi-production-mutation-failed"
+          recovery_guard="/home/ubuntu/.meshi-production-recovery-active"
+          if [ -e "$mutation_failure_marker" ] || [ -L "$mutation_failure_marker" ] \
+            || [ -e "$recovery_guard" ] || [ -L "$recovery_guard" ]; then
+            echo "Production remains stopped after a failed data mutation" >&2
+            exit 1
+          fi
+
+          if [ -z "${IMAGE_TAG:-}" ]; then
+            echo "IMAGE_TAG is required for production deployment" >&2
+            exit 1
+          fi
+
+          release_id="${IMAGE_TAG##*:sha-}"
+          case "$release_id" in
+            ""|*[!A-Fa-f0-9]*)
+              echo "IMAGE_TAG does not contain a valid commit SHA" >&2
+              exit 1
+              ;;
+          esac
+          docker_config="$(mktemp -d)"
+          next_compose="$(mktemp)"
+          cleanup() {
+            rm -rf "$docker_config"
+            rm -f "$next_compose"
+          }
+          trap cleanup EXIT
+          printf '%s' "$GHCR_TOKEN" | docker --config "$docker_config" login ghcr.io -u "$GHCR_USER" --password-stdin
+          docker --config "$docker_config" pull "$IMAGE_TAG"
+          docker run --rm --network none --entrypoint cat "$IMAGE_TAG" /app/docker-compose.prod.yml > "$next_compose"
+          backup_root="/home/ubuntu/meshi-backups"
+          install -d -m 700 "$backup_root"
+          web_container="$(docker compose -f "$COMPOSE_FILE" ps -q web)"
+          if [ -z "$web_container" ]; then
+            echo "The active web container is required to verify the image volume" >&2
+            exit 1
+          fi
+          image_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/app-data/shop-images"}}{{if eq .Type "volume"}}{{.Name}}{{end}}{{end}}{{end}}' "$web_container")"
+          active_image_cache="$(docker exec "$web_container" printenv SHOP_IMAGE_CACHE_DIR)"
+          if [ -z "$image_volume" ] || [ "$active_image_cache" != "/app-data/shop-images" ]; then
+            echo "Migrate existing shop images to the named volume before deployment; see docs/operations.md" >&2
+            exit 1
+          fi
+          current_web_image="$(docker inspect --format '{{.Image}}' "$web_container")"
+          configured_image_volume="$(docker compose --project-directory "$REMOTE_APP_DIR" --env-file .env -f "$next_compose" config --format json | docker run --rm -i --network none "$IMAGE_TAG" node server/dist/operations/deploy-check.js volume)"
+          if [ "$configured_image_volume" != "$image_volume" ]; then
+            echo "The next web configuration points to a different image volume" >&2
+            exit 1
+          fi
+          image_bytes="$(docker run --rm --network none --mount "type=volume,source=$image_volume,target=/shop-images,readonly" "$IMAGE_TAG" node server/dist/operations/deploy-check.js image-bytes /shop-images)"
+          app_identity="$(APP_IMAGE="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" run --rm --no-deps web node server/dist/operations/deploy-check.js database-identity < /dev/null)"
+          IFS='|' read -r app_database app_database_host resolved_database_host connected_database_host <<< "$app_identity"
+          if [ "$app_database_host" != "db" ] || [ -z "$connected_database_host" ] || [ "$resolved_database_host" != "$connected_database_host" ]; then
+            echo "Application database is not the verified Compose database service" >&2
+            exit 1
+          fi
+          case "$app_database" in
+            ""|*[!A-Za-z0-9_-]*)
+              echo "Application database name is invalid" >&2
+              exit 1
+              ;;
+          esac
+
+          database_bytes="$(docker compose -f "$COMPOSE_FILE" exec -T -e APP_DATABASE_NAME="$app_database" db sh -c 'psql -U "$POSTGRES_USER" -d "$APP_DATABASE_NAME" -Atqc "SELECT pg_database_size(current_database())"' < /dev/null)"
+          free_bytes="$(df -PB1 "$backup_root" | awk 'NR == 2 {print $4}')"
+          case "$database_bytes:$image_bytes:$free_bytes" in
+            *[!0-9:]*|:*|*::*|*:)
+              echo "Database size, image size or backup filesystem capacity is invalid" >&2
+              exit 1
+              ;;
+          esac
+          required_free_bytes=$((database_bytes * 2 + image_bytes * 2 + 1073741824))
+          if [ "$free_bytes" -lt "$required_free_bytes" ]; then
+            echo "Insufficient backup space while preserving the database safety reserve" >&2
+            exit 1
+          fi
+
+          backup_dir="/home/ubuntu/meshi-backups/$(date -u +%Y%m%d_%H%M%S)_deploy_${release_id}"
+          install -d -m 700 "$backup_dir"
+          cp .env "$backup_dir/production.env"
+          cp "$COMPOSE_FILE" "$backup_dir/docker-compose.prod.yml"
+          chmod 600 "$backup_dir/production.env" "$backup_dir/docker-compose.prod.yml"
+
+          db_identity="$(docker compose -f "$COMPOSE_FILE" exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT current_database(), system_identifier::text FROM pg_control_system()"' < /dev/null)"
+          IFS='|' read -r _bootstrap_database db_cluster_id <<< "$db_identity"
+          if [ -z "$db_cluster_id" ]; then
+            echo "Database cluster identity is unavailable" >&2
+            exit 1
+          fi
+
+          docker compose -f "$COMPOSE_FILE" stop web bot
+          docker compose -f "$COMPOSE_FILE" exec -T -e APP_DATABASE_NAME="$app_database" db \
+            sh -c 'pg_dump -U "$POSTGRES_USER" -d "$APP_DATABASE_NAME" -Fc' < /dev/null \
+            > "$backup_dir/meshi.dump"
+          docker compose -f "$COMPOSE_FILE" exec -T db pg_restore -l \
+            < "$backup_dir/meshi.dump" \
+            > "$backup_dir/meshi.dump.list"
+          docker run --rm --network none \
+            --mount "type=volume,source=$image_volume,target=/shop-images,readonly" \
+            --entrypoint tar "$current_web_image" -C /shop-images -czf - . \
+            > "$backup_dir/shop-images.tar.gz"
+          tar -tzf "$backup_dir/shop-images.tar.gz" > "$backup_dir/shop-images.list"
+          printf '%s\n' "$image_volume" > "$backup_dir/shop-images-volume.txt"
+          APP_IMAGE="$IMAGE_TAG" docker compose -f "$COMPOSE_FILE" run --rm --no-deps web node server/dist/operations/deploy-check.js database-counts < /dev/null \
+            > "$backup_dir/predeploy_counts.json"
+          docker compose -f "$COMPOSE_FILE" images \
+            > "$backup_dir/container-images.txt"
+          chmod 600 "$backup_dir/meshi.dump" "$backup_dir/meshi.dump.list" \
+            "$backup_dir/shop-images.tar.gz" "$backup_dir/shop-images.list" \
+            "$backup_dir/shop-images-volume.txt" \
+            "$backup_dir/predeploy_counts.json" "$backup_dir/container-images.txt"
+          (
+            cd "$backup_dir"
+            sha256sum production.env docker-compose.prod.yml meshi.dump \
+              meshi.dump.list shop-images.tar.gz shop-images.list shop-images-volume.txt \
+              predeploy_counts.json container-images.txt \
+              > SHA256SUMS
+            chmod 600 SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          echo "Production backup created: $backup_dir"
+          cp "$next_compose" "$COMPOSE_FILE"
+          export APP_IMAGE="$IMAGE_TAG"
+          docker --config "$docker_config" compose -f "$COMPOSE_FILE" pull $SERVICES
+          docker --config "$docker_config" compose -f "$COMPOSE_FILE" up -d $SERVICES
+          for service in web bot; do
+            active_container="$(docker compose -f "$COMPOSE_FILE" ps -q "$service")"
+            test -n "$active_container"
+            test "$(docker inspect --format '{{.Config.Image}}' "$active_container")" = "$IMAGE_TAG"
+          done
+          if [ -n "$HEALTH_CHECK" ]; then
+            sh -c "$HEALTH_CHECK" < /dev/null
+          fi
+          echo "Deployment complete: image=$IMAGE_TAG"
+          docker image prune -f
+          EOF

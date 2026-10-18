@@ -1,0 +1,1070 @@
+[
+  {
+    "name": "admin_sessions",
+    "primary": [
+      "token_hash"
+    ],
+    "columns": [
+      {
+        "name": "token_hash",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "auth_method",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "actor_discord_user_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "credential_binding",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "discord_viewer_grant_events",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "discord_user_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "actor_method",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "actor_discord_user_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "actor_session_hash",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "action",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "replacement_user_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "previous_role",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "new_role",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "discord_viewers",
+    "primary": [
+      "discord_user_id"
+    ],
+    "columns": [
+      {
+        "name": "discord_user_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "is_admin",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "generation",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "import_batches",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "filename",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "sha256",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "row_count",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "message_count",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "review_count",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      },
+      {
+        "name": "applied_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "error",
+        "kind": "text",
+        "nullable": true
+      }
+    ]
+  },
+  {
+    "name": "login_attempts",
+    "primary": [
+      "key"
+    ],
+    "columns": [
+      {
+        "name": "key",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "failures",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "window_started",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "blocked_until",
+        "kind": "integer",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "lookup_cache",
+    "primary": [
+      "cache_key"
+    ],
+    "columns": [
+      {
+        "name": "cache_key",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "kind",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "payload",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "expires_at",
+        "kind": "timestamp",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "messages",
+    "primary": [
+      "message_id"
+    ],
+    "columns": [
+      {
+        "name": "message_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "channel_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "content",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "source_created_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "is_target",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "processing_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "fetch_error",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "processed_at",
+        "kind": "timestamp",
+        "nullable": true
+      }
+    ]
+  },
+  {
+    "name": "shops",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "shop_name",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "branch_name",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "area",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "category",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "address",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "phone",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "canonical_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "image_key",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "external_source",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "external_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "is_visited",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "visited_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "rating",
+        "kind": "integer",
+        "nullable": true
+      },
+      {
+        "name": "memo",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      },
+      {
+        "name": "updated_at",
+        "kind": "timestamp",
+        "nullable": false
+      },
+      {
+        "name": "version",
+        "kind": "integer",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "sync_states",
+    "primary": [
+      "channel_id"
+    ],
+    "columns": [
+      {
+        "name": "channel_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "last_contiguous_message_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "last_weekly_sync_started_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "last_weekly_sync_completed_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "updated_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "import_rows",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "batch_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "row_number",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "shop_id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "message_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      },
+      {
+        "name": "shop_name",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "branch_name",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "area",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "category",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "address",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "phone",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "external_source",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "external_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "is_visited",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "visited_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "rating",
+        "kind": "integer",
+        "nullable": true
+      },
+      {
+        "name": "memo",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "source_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "canonical_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "image_key",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "needs_review",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "resolution_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "review_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "metadata_review_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "resolution_method",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "difference_type",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "metadata_difference_type",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "reviewed_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "metadata_reviewed_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "extraction_source",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "extraction_error",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "confidence_reason",
+        "kind": "text",
+        "nullable": true
+      }
+    ]
+  },
+  {
+    "name": "processing_runs",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "message_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "stage",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "model",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "prompt_version",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "input_tokens",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "output_tokens",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "web_search_calls",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "image_count",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "latency_ms",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "estimated_cost_microusd",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "error",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "shop_mentions",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "message_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "shop_id",
+        "kind": "integer",
+        "nullable": true
+      },
+      {
+        "name": "occurrence_index",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "extracted_name",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "extracted_branch_name",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "extracted_area",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "extracted_category",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "source_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "resolution_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "review_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "metadata_review_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "metadata_difference_type",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "resolution_method",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "difference_type",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "extraction_source",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "extraction_error",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "confidence_reason",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "reviewed_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "metadata_reviewed_at",
+        "kind": "timestamp",
+        "nullable": true
+      },
+      {
+        "name": "reused_from_mention_id",
+        "kind": "integer",
+        "nullable": true
+      },
+      {
+        "name": "resolution_basis",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "version",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "shop_redirects",
+    "primary": [
+      "source_shop_id"
+    ],
+    "columns": [
+      {
+        "name": "source_shop_id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "target_shop_id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "source_assets",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "message_id",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "kind",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "url",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "title",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "description",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "mime_type",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "extracted_text",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "source_service",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "source_item_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "normalized_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "content_fingerprint",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "fetch_status",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "fetch_error",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "resolution_candidates",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "mention_id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "rank",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "area",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "category",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "address",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "phone",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "canonical_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "external_source",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "external_id",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "evidence_url",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "provenance",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "is_verified",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "verification_reason",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "matched_fields",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "conflicting_fields",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "name_similarity_milli",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "is_strong_match",
+        "kind": "boolean",
+        "nullable": false
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "name": "review_events",
+    "primary": [
+      "id"
+    ],
+    "columns": [
+      {
+        "name": "id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "mention_id",
+        "kind": "integer",
+        "nullable": false
+      },
+      {
+        "name": "scope",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "action",
+        "kind": "text",
+        "nullable": false
+      },
+      {
+        "name": "previous_shop_id",
+        "kind": "integer",
+        "nullable": true
+      },
+      {
+        "name": "selected_shop_id",
+        "kind": "integer",
+        "nullable": true
+      },
+      {
+        "name": "note",
+        "kind": "text",
+        "nullable": true
+      },
+      {
+        "name": "created_at",
+        "kind": "timestamp",
+        "nullable": false
+      }
+    ]
+  }
+]

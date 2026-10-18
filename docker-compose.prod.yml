@@ -1,0 +1,106 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: Asia/Tokyo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal
+
+  migrate:
+    image: ${APP_IMAGE:-ghcr.io/syamo-game/meshi-archive:latest}
+    restart: "no"
+    command: ["node", "server/dist/db/migrate.js"]
+    environment:
+      DATABASE_URL: ${APP_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+
+  web:
+    image: ${APP_IMAGE:-ghcr.io/syamo-game/meshi-archive:latest}
+    restart: unless-stopped
+    command: ["node", "server/dist/index.js"]
+    environment:
+      DATABASE_URL: ${APP_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}}
+      SECRET_KEY: ${SECRET_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gpt-6.1-sol}
+      RESOLUTION_MODEL: ${RESOLUTION_MODEL:-gpt-6.1-sol}
+      EXTRACTION_REASONING_EFFORT: ${EXTRACTION_REASONING_EFFORT:-high}
+      RESOLUTION_REASONING_EFFORT: ${RESOLUTION_REASONING_EFFORT:-high}
+      AI_MAX_CONCURRENCY: ${AI_MAX_CONCURRENCY:-2}
+      APP_ENV: production
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:?Set the trusted reverse proxy IP}
+      HTTPS_ONLY: "true"
+      HOST: 0.0.0.0
+      PORT: "8000"
+      APP_READ_ONLY: ${APP_READ_ONLY:-false}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      DISCORD_CHANNEL_ID: ${DISCORD_CHANNEL_ID:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_CLIENT_SECRET: ${DISCORD_CLIENT_SECRET:-}
+      DISCORD_REDIRECT_URI: ${DISCORD_REDIRECT_URI:-}
+      DISCORD_ALLOWED_USER_IDS: ${DISCORD_ALLOWED_USER_IDS:-}
+      ADMIN_USER_ID: ${ADMIN_USER_ID:-}
+      WEB_ADMIN_USER_IDS: ${WEB_ADMIN_USER_IDS:-}
+      SHOP_IMAGE_CACHE_DIR: /app-data/shop-images
+    volumes:
+      - shopimages:/app-data/shop-images
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      internal:
+      proxy:
+        aliases:
+          - meshi-web
+
+  bot:
+    image: ${APP_IMAGE:-ghcr.io/syamo-game/meshi-archive:latest}
+    restart: unless-stopped
+    command: ["node", "server/dist/bot-entry.js"]
+    environment:
+      DATABASE_URL: ${APP_DATABASE_URL:-postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}}
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      DISCORD_CHANNEL_ID: ${DISCORD_CHANNEL_ID:-}
+      WEEKLY_SYNC_ENABLED: ${WEEKLY_SYNC_ENABLED:-false}
+      SYNC_BATCH_LIMIT: ${SYNC_BATCH_LIMIT:-500}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ADMIN_USER_ID: ${ADMIN_USER_ID}
+      APP_ENV: production
+      EXTRACTION_MODEL: ${EXTRACTION_MODEL:-gpt-6.1-sol}
+      RESOLUTION_MODEL: ${RESOLUTION_MODEL:-gpt-6.1-sol}
+      EXTRACTION_REASONING_EFFORT: ${EXTRACTION_REASONING_EFFORT:-high}
+      RESOLUTION_REASONING_EFFORT: ${RESOLUTION_REASONING_EFFORT:-high}
+      AI_MAX_CONCURRENCY: ${AI_MAX_CONCURRENCY:-2}
+      APP_READ_ONLY: ${APP_READ_ONLY:-false}
+      SHOP_IMAGE_CACHE_DIR: /app-data/shop-images
+    volumes:
+      - shopimages:/app-data/shop-images
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - internal
+
+networks:
+  internal:
+  proxy:
+    external: true
+
+volumes:
+  pgdata:
+  shopimages:

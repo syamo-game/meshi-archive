@@ -1,0 +1,5813 @@
+{
+  "reference": "c790aa246f6ff9ce2aec7fc6a2d9e8fe16c4184d",
+  "synthetic": true,
+  "groups": [
+    {
+      "name": "exact",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "external",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "食べログ",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "食べログ",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "食べログ",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "url",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": "https://example.com/shop/?utm_source=a",
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": "https://example.com/shop/?utm_source=a",
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": "https://example.com/shop/?utm_source=a",
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "canonical_url:e136da14299b6174f466e582",
+              "候補の店舗URLが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "canonical_url:e136da14299b6174f466e582",
+              "候補の店舗URLが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "canonical_url:e136da14299b6174f466e582",
+              "候補の店舗URLが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "canonical_url:e136da14299b6174f466e582",
+          "reason": "候補の店舗URLが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "canonical_url:e136da14299b6174f466e582",
+          "reason": "候補の店舗URLが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "canonical_url:e136da14299b6174f466e582",
+          "reason": "候補の店舗URLが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "phone",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-1234-5678",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-1234-5678",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-1234-5678",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "phone_name:d6a26b3b147d32237a048f7d",
+              "候補の電話番号と店名が一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "phone_name:d6a26b3b147d32237a048f7d",
+              "候補の電話番号と店名が一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "phone_name:d6a26b3b147d32237a048f7d",
+              "候補の電話番号と店名が一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "phone_name:d6a26b3b147d32237a048f7d",
+          "reason": "候補の電話番号と店名が一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "phone_name:d6a26b3b147d32237a048f7d",
+          "reason": "候補の電話番号と店名が一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "phone_name:d6a26b3b147d32237a048f7d",
+          "reason": "候補の電話番号と店名が一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "address",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": "東京都江東区木場1丁目2番3号",
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": "東京都江東区木場1丁目2番3号",
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": "東京都江東区木場1丁目2番3号",
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "address_name:bec8bc9d9387d5728968a1d8",
+              "候補の住所と店名が一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "address_name:bec8bc9d9387d5728968a1d8",
+              "候補の住所と店名が一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "address_name:bec8bc9d9387d5728968a1d8",
+              "候補の住所と店名が一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "address_name:bec8bc9d9387d5728968a1d8",
+          "reason": "候補の住所と店名が一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "address_name:bec8bc9d9387d5728968a1d8",
+          "reason": "候補の住所と店名が一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "address_name:bec8bc9d9387d5728968a1d8",
+          "reason": "候補の住所と店名が一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "conflicting_external",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 1,
+          "rank": 2,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "87654321",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 4,
+          "mention_id": 2,
+          "rank": 2,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "87654321",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 5,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 6,
+          "mention_id": 3,
+          "rank": 2,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "87654321",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "conflicting_phone",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": null,
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": null,
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": null,
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-1234-5678",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 1,
+          "rank": 2,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-9999-0000",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-1234-5678",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 4,
+          "mention_id": 2,
+          "rank": 2,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-9999-0000",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 5,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-1234-5678",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 6,
+          "mention_id": 3,
+          "rank": 2,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": "03-9999-0000",
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": []
+        },
+        {
+          "id": 2,
+          "values": []
+        },
+        {
+          "id": 3,
+          "values": []
+        }
+      ],
+      "index": []
+    },
+    {
+      "name": "image",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "image",
+          "is_verified": true,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "image",
+          "is_verified": true,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "image",
+          "is_verified": true,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "verified",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "structured_data",
+          "is_verified": true,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "structured_data",
+          "is_verified": true,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "structured_data",
+          "is_verified": true,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "branch",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂 門前仲町店",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂 門前仲町店",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂 門前仲町店",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "municipality",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "東京都江東区",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "東京都江東区",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "東京都江東区",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [],
+      "keys": [
+        {
+          "id": 1,
+          "values": []
+        },
+        {
+          "id": 2,
+          "values": []
+        },
+        {
+          "id": 3,
+          "values": []
+        }
+      ],
+      "index": []
+    },
+    {
+      "name": "unknown_area",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "架空の街",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "架空の街",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "架空の街",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [],
+      "keys": [
+        {
+          "id": 1,
+          "values": []
+        },
+        {
+          "id": 2,
+          "values": []
+        },
+        {
+          "id": 3,
+          "values": []
+        }
+      ],
+      "index": []
+    },
+    {
+      "name": "priorities",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "external_id:a2970a57060c39a89b94737b",
+              "候補の外部IDが一致"
+            ],
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": 2,
+          "key": "external_id:a2970a57060c39a89b94737b",
+          "reason": "候補の外部IDが一致",
+          "mention_ids": [
+            1,
+            2
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "unverified_posted",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": "木場",
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "posted_url",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "posted_url",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": "tabelog",
+          "external_id": "12345678",
+          "evidence_url": null,
+          "provenance": "posted_url",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "candidate_area",
+      "mentions": [
+        {
+          "id": 1,
+          "message_id": "90000000000000001",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": null,
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "message_id": "90000000000000002",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": null,
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "message_id": "90000000000000003",
+          "shop_id": null,
+          "occurrence_index": 0,
+          "extracted_name": "テスト食堂",
+          "extracted_branch_name": null,
+          "extracted_area": null,
+          "extracted_category": "和食",
+          "source_url": null,
+          "resolution_status": "not_found",
+          "review_status": "pending",
+          "metadata_review_status": "pending",
+          "metadata_difference_type": null,
+          "resolution_method": null,
+          "difference_type": null,
+          "extraction_source": "synthetic-reference",
+          "extraction_error": null,
+          "confidence_reason": null,
+          "reviewed_at": null,
+          "metadata_reviewed_at": null,
+          "reused_from_mention_id": null,
+          "resolution_basis": null,
+          "version": 1,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "candidates": [
+        {
+          "id": 1,
+          "mention_id": 1,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 2,
+          "mention_id": 2,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        },
+        {
+          "id": 3,
+          "mention_id": 3,
+          "rank": 1,
+          "name": "テスト食堂",
+          "area": "木場",
+          "category": null,
+          "address": null,
+          "phone": null,
+          "canonical_url": null,
+          "external_source": null,
+          "external_id": null,
+          "evidence_url": null,
+          "provenance": "web_search",
+          "is_verified": false,
+          "verification_reason": null,
+          "matched_fields": null,
+          "conflicting_fields": null,
+          "name_similarity_milli": 1000,
+          "is_strong_match": false,
+          "created_at": "2026-10-18T00:00:00+00:00"
+        }
+      ],
+      "keys": [
+        {
+          "id": 1,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 2,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        },
+        {
+          "id": 3,
+          "values": [
+            [
+              "mention_identity:de39ecf230feb93e7d54edb9",
+              "抽出した店名・支店名・エリアが一致"
+            ]
+          ]
+        }
+      ],
+      "index": [
+        {
+          "id": 1,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 2,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        },
+        {
+          "id": 3,
+          "key": "mention_identity:de39ecf230feb93e7d54edb9",
+          "reason": "抽出した店名・支店名・エリアが一致",
+          "mention_ids": [
+            1,
+            2,
+            3
+          ]
+        }
+      ]
+    }
+  ],
+  "statuses": [
+    {
+      "mention": {
+        "id": 1,
+        "message_id": "90000000000000001",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 2,
+        "message_id": "90000000000000002",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 3,
+        "message_id": "90000000000000003",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 4,
+        "message_id": "90000000000000004",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 5,
+        "message_id": "90000000000000005",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 6,
+        "message_id": "90000000000000006",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 7,
+        "message_id": "90000000000000007",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 8,
+        "message_id": "90000000000000008",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 9,
+        "message_id": "90000000000000009",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 10,
+        "message_id": "90000000000000010",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 11,
+        "message_id": "90000000000000011",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 12,
+        "message_id": "90000000000000012",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 13,
+        "message_id": "90000000000000013",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 14,
+        "message_id": "90000000000000014",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 15,
+        "message_id": "90000000000000015",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 16,
+        "message_id": "90000000000000016",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 17,
+        "message_id": "90000000000000017",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 18,
+        "message_id": "90000000000000018",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "pending",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "pending"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 19,
+        "message_id": "90000000000000019",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 20,
+        "message_id": "90000000000000020",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 21,
+        "message_id": "90000000000000021",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 22,
+        "message_id": "90000000000000022",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 23,
+        "message_id": "90000000000000023",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 24,
+        "message_id": "90000000000000024",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "pending"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 25,
+        "message_id": "90000000000000025",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "approved"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 26,
+        "message_id": "90000000000000026",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "approved"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 27,
+        "message_id": "90000000000000027",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "approved"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 28,
+        "message_id": "90000000000000028",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "approved"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 29,
+        "message_id": "90000000000000029",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "approved"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 30,
+        "message_id": "90000000000000030",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "approved"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 31,
+        "message_id": "90000000000000031",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 32,
+        "message_id": "90000000000000032",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 33,
+        "message_id": "90000000000000033",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 34,
+        "message_id": "90000000000000034",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 35,
+        "message_id": "90000000000000035",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 36,
+        "message_id": "90000000000000036",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "approved",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "approved"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 37,
+        "message_id": "90000000000000037",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 38,
+        "message_id": "90000000000000038",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 39,
+        "message_id": "90000000000000039",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 40,
+        "message_id": "90000000000000040",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 41,
+        "message_id": "90000000000000041",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 42,
+        "message_id": "90000000000000042",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 43,
+        "message_id": "90000000000000043",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 44,
+        "message_id": "90000000000000044",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 45,
+        "message_id": "90000000000000045",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 46,
+        "message_id": "90000000000000046",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 47,
+        "message_id": "90000000000000047",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 48,
+        "message_id": "90000000000000048",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 49,
+        "message_id": "90000000000000049",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 50,
+        "message_id": "90000000000000050",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 51,
+        "message_id": "90000000000000051",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 52,
+        "message_id": "90000000000000052",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 53,
+        "message_id": "90000000000000053",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 54,
+        "message_id": "90000000000000054",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "deferred",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "deferred"
+        ],
+        "identity": [
+          "deferred"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 55,
+        "message_id": "90000000000000055",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 56,
+        "message_id": "90000000000000056",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 57,
+        "message_id": "90000000000000057",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 58,
+        "message_id": "90000000000000058",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "pending"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 59,
+        "message_id": "90000000000000059",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 60,
+        "message_id": "90000000000000060",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "pending",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 61,
+        "message_id": "90000000000000061",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 62,
+        "message_id": "90000000000000062",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 63,
+        "message_id": "90000000000000063",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 64,
+        "message_id": "90000000000000064",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "approved"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 65,
+        "message_id": "90000000000000065",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 66,
+        "message_id": "90000000000000066",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "approved",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 67,
+        "message_id": "90000000000000067",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 68,
+        "message_id": "90000000000000068",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": null,
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 69,
+        "message_id": "90000000000000069",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 70,
+        "message_id": "90000000000000070",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "event_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": [
+          "deferred"
+        ]
+      }
+    },
+    {
+      "mention": {
+        "id": 71,
+        "message_id": "90000000000000071",
+        "shop_id": null,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    },
+    {
+      "mention": {
+        "id": 72,
+        "message_id": "90000000000000072",
+        "shop_id": 1,
+        "occurrence_index": 0,
+        "extracted_name": "テスト食堂",
+        "extracted_branch_name": null,
+        "extracted_area": "木場",
+        "extracted_category": "和食",
+        "source_url": null,
+        "resolution_status": "not_found",
+        "review_status": "rejected",
+        "metadata_review_status": "deferred",
+        "metadata_difference_type": null,
+        "resolution_method": null,
+        "difference_type": "manual_excluded",
+        "extraction_source": "synthetic-reference",
+        "extraction_error": null,
+        "confidence_reason": null,
+        "reviewed_at": null,
+        "metadata_reviewed_at": null,
+        "reused_from_mention_id": null,
+        "resolution_basis": null,
+        "version": 1,
+        "created_at": "2026-10-18T00:00:00+00:00"
+      },
+      "expected": {
+        "all": [
+          "rejected"
+        ],
+        "identity": [
+          "rejected"
+        ],
+        "metadata": []
+      }
+    }
+  ]
+}

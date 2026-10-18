@@ -1,0 +1,27 @@
+{
+  "name": "meshi-archive",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "frontend",
+    "server",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": ">=24.11.1"
+  },
+  "scripts": {
+    "build:contracts": "npm run build --workspace @meshi/contracts",
+    "typecheck": "npm run build:contracts && npm run typecheck --workspaces --if-present",
+    "build": "npm run build:contracts && npm run build --workspace @meshi/server && npm run build --workspace meshi-archive-web",
+    "test": "npm run build:contracts && npm run test --workspace @meshi/server",
+    "dev:api": "npm run build:contracts && tsx watch server/src/index.ts",
+    "dev:web": "npm run dev --workspace meshi-archive-web",
+    "start": "node server/dist/index.js",
+    "bot": "node server/dist/bot-entry.js",
+    "sync": "node server/dist/bot-entry.js --sync",
+    "migrate": "node server/dist/db/migrate.js",
+    "ops": "node server/dist/operations/cli.js",
+    "build:regions": "node server/dist/operations/region-builder.js"
+  }
+}
