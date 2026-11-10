@@ -1,5 +1,12 @@
-import { Component, useEffect, useRef, useState } from 'react';
-import type { ErrorInfo, ReactNode } from 'react';
+import { Dialog } from '@astryxdesign/core/Dialog';
+import { DialogHeader } from '@astryxdesign/core/Dialog';
+import { Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
+import { Button } from '@astryxdesign/core/Button';
+import { Skeleton as AstryxSkeleton } from '@astryxdesign/core/Skeleton';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Link as AstryxLink } from '@astryxdesign/core/Link';
+import { Component, useEffect, useState } from 'react';
+import type { ComponentProps, ErrorInfo, ReactNode } from 'react';
 import { z } from 'zod';
 import { ApiError, api } from './api';
 
@@ -17,18 +24,29 @@ export function closeDialog(fallback: string): void {
   if (state.success && state.data.dialogReturn === fallback) window.history.back();
   else navigate(fallback, true);
 }
+// Swap the open dialog for another one without adding a history entry.
+export function replaceDialog(url: string): void {
+  window.history.replaceState(window.history.state, '', url);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 export function useLocation(): string {
   const [location, setLocation] = useState(window.location.pathname + window.location.search);
   useEffect(() => { const change = (): void => setLocation(window.location.pathname + window.location.search); window.addEventListener('popstate', change); return () => window.removeEventListener('popstate', change); }, []);
   return location;
 }
-export function Link({ href, children, className, label }: { href: string; children: ReactNode; className?: string; label?: string }): ReactNode {
-  return <a href={href} className={className} aria-label={label} onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigate(href); } }}>{children}</a>;
+export function Link({ href, children, className, label, current, color }: { href: string; children: ReactNode; className?: string; label?: string; current?: 'page'; color?: ComponentProps<typeof AstryxLink>['color'] }): ReactNode {
+  return <AstryxLink href={href} className={className} label={label} aria-current={current} color={color} onClick={event => { if (event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey) { event.preventDefault(); navigate(href); } }}>{children}</AstryxLink>;
 }
 export function ExternalLink({ href, children, className, label }: { href: string | null; children: ReactNode; className?: string; label?: string }): ReactNode {
   if (!href) return null;
   const valid = /^https?:\/\//i.test(href) || (href.startsWith('/') && !href.startsWith('//'));
-  return valid ? <a href={href} target="_blank" rel="noopener noreferrer" className={className} aria-label={label}>{children}</a> : <span className="field-error">リンクの形式を確認してください。</span>;
+  return valid ? <AstryxLink href={href} target="_blank" rel="noopener noreferrer" className={className} label={label}>{children}</AstryxLink> : <span className="field-error">リンクの形式を確認してください。</span>;
+}
+// Button-styled external link; keeps the same URL safety check as ExternalLink.
+export function ExternalButton({ href, children, className, label, icon, variant = 'secondary', size = 'sm', width }: { href: string | null; children?: ReactNode; className?: string; label: string; icon?: ReactNode; variant?: 'primary' | 'secondary' | 'ghost'; size?: 'sm' | 'md' | 'lg'; width?: string }): ReactNode {
+  if (!href) return null;
+  const valid = /^https?:\/\//i.test(href) || (href.startsWith('/') && !href.startsWith('//'));
+  return valid ? <Button href={href} target="_blank" rel="noopener noreferrer" className={className} label={label} icon={icon} variant={variant} size={size} width={width}>{children}</Button> : <span className="field-error">リンクの形式を確認してください。</span>;
 }
 export function useResource<T>(url: string, schema: z.ZodType<T>): { data: T | null; error: Error | null; loading: boolean; reload: () => void } {
   const [result, setResult] = useState<{ data: T | null; error: Error | null; loading: boolean }>({ data: null, error: null, loading: true });
@@ -52,19 +70,19 @@ export function Icon({ name }: { name: IconName }): ReactNode {
     next: <path d="m9 5 7 7-7 7" />, previous: <path d="m15 5-7 7 7 7" />,
     menu: <path d="M4 6h16M4 12h16M4 18h16" />, edit: <><path d="m15 4 5 5-10 10H5v-5L15 4Z" /></>, plus: <path d="M12 5v14M5 12h14" />,
   };
-  return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
+  return <svg className="meshi-icon" viewBox="0 0 24 24" aria-hidden="true">{paths[name]}</svg>;
 }
 export function ErrorBox({ error, retry }: { error: Error | string | null; retry?: () => void }): ReactNode {
   if (!error) return null;
-  return <div className="error-box" role="alert"><p>{typeof error === 'string' ? error : error.message}</p>{error instanceof ApiError && error.status === 401 ? <a href="/login">ログイン</a> : retry && <button className="text-button" onClick={retry}>再試行</button>}</div>;
+  return <Banner className="error-box" status="error" title={<span className="preserve-lines">{typeof error === 'string' ? error : error.message}</span>} endContent={error instanceof ApiError && error.status === 401 ? <AstryxLink href="/login">ログイン</AstryxLink> : retry && <Button variant="ghost" size="sm" label="再試行" onClick={retry} />} />;
 }
 export function Skeleton({ full = true }: { full?: boolean }): ReactNode {
-  return <div className={full ? 'react-skeleton fullscreen' : 'react-skeleton'} role="status" aria-label="読み込み中"><div className="skeleton-inner"><div className="skeleton-header"><div className="sk" style={{ width: 160, height: 28 }} /></div><div className="sk sk-search" /><div className="skeleton-heading"><div className="sk" /></div><div className="skeleton-cards">{Array.from({ length: 6 }, (_, i) => <div className="skeleton-card" key={i}><div className="sk sk-photo" /><div className="sk-copy"><div className="sk" /><div className="sk" /><div className="sk" /></div></div>)}</div></div></div>;
+  return <div className={full ? 'react-skeleton fullscreen' : 'react-skeleton'} role="status" aria-label="読み込み中"><div className="skeleton-inner"><div className="skeleton-header"><AstryxSkeleton className="sk" style={{ width: 160, height: 28 }} /></div><AstryxSkeleton className="sk sk-search" /><div className="skeleton-heading"><AstryxSkeleton className="sk" /></div><div className="skeleton-cards">{Array.from({ length: 6 }, (_, i) => <div className="skeleton-card" key={i}><AstryxSkeleton className="sk sk-photo" /><div className="sk-copy"><AstryxSkeleton className="sk" /><AstryxSkeleton className="sk" /><AstryxSkeleton className="sk" /></div></div>)}</div></div></div>;
 }
-export function Modal({ children, title, close, detail = false }: { children: ReactNode; title: string; close: () => void; detail?: boolean }): ReactNode {
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const dialog = ref.current; if (!dialog) return; dialog.showModal(); return () => { if (dialog.open) dialog.close(); }; }, []);
-  return <dialog ref={ref} className={`sheet ${detail ? 'detail-sheet' : 'filter-sheet'}`} aria-label={title} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) { const r = event.currentTarget.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) close(); } }}><div className="sheet-layout">{children}</div></dialog>;
+// titleHidden: no title bar; the title still names the dialog and a close button floats over the content.
+export function Modal({ children, title, close, detail = false, titleHidden = false, footer }: { children: ReactNode; title: string; close: () => void; detail?: boolean; titleHidden?: boolean; footer?: ReactNode }): ReactNode {
+  const onOpenChange = (open: boolean): void => { if (!open) close(); };
+  return <Dialog isOpen onOpenChange={onOpenChange} padding={0} maxHeight="var(--sheet-max-height)" className={`sheet ${detail ? 'detail-sheet' : 'filter-sheet'}${titleHidden ? ' sheet-untitled' : ''}`} aria-label={title}>{titleHidden && <Button className="sheet-close" variant="secondary" label="閉じる" icon={<Icon name="close" />} isIconOnly onClick={close} />}<Layout className="sheet-layout" padding={4} header={titleHidden ? undefined : <DialogHeader title={title} onOpenChange={onOpenChange} />} content={<LayoutContent className="sheet-body" isScrollable padding={0}>{children}</LayoutContent>} footer={footer && <LayoutFooter>{footer}</LayoutFooter>} /></Dialog>;
 }
 export function Stars({ rating }: { rating: number | null }): ReactNode {
   return <span className="rating" aria-label={rating ? `評価 ${rating}点（5点満点）` : '未評価'}>{rating ? <span className="stars" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <span key={index} className={index < rating ? 'is-selected' : ''}>★</span>)}</span> : '未評価'}</span>;
@@ -77,5 +95,5 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
 }
 
 export function RatingInput({ rating, onChange, disabled = false, name = 'rating' }: { rating: number | null; onChange: (rating: number | null) => void; disabled?: boolean; name?: string }): ReactNode {
-  return <fieldset className="rating-editor" disabled={disabled}><legend>評価</legend><div className="rating-editor__row"><div className="rating-options">{Array.from({ length: 5 }, (_, index) => <label className={`rating-choice ${index < (rating ?? 0) ? 'is-selected' : ''}`} key={index}><input className="sr-only" type="radio" name={name} value={index + 1} checked={rating === index + 1} aria-label={`${index + 1}点`} onChange={() => onChange(index + 1)} /><span aria-hidden="true">★</span></label>)}</div><button className="text-button rating-reset" type="button" disabled={!rating} onClick={() => onChange(null)}>解除</button></div></fieldset>;
+  return <fieldset className="rating-editor" disabled={disabled}><legend>評価</legend><div className="rating-editor__row"><div className="rating-options">{Array.from({ length: 5 }, (_, index) => <label className={`rating-choice ${index < (rating ?? 0) ? 'is-selected' : ''}`} key={index}><input className="sr-only" type="radio" name={name} value={index + 1} checked={rating === index + 1} aria-label={`${index + 1}点`} onChange={() => onChange(index + 1)} /><span aria-hidden="true">★</span></label>)}</div><Button className="rating-reset" type="button" variant="ghost" size="sm" label="解除" isDisabled={!rating} onClick={() => onChange(null)} /></div></fieldset>;
 }

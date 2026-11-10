@@ -68,8 +68,15 @@ test('real image uploads produce a reusable WebP and protected media response', 
     assert.equal(response.status, 200);
     const shop = detailSchema.parse(await (await app.request('/api/ui/shops/2', { headers: headers(admin) })).json());
     assert.equal(shop.image_url, '/media/shop-uploads/' + first.key + '.webp');
-    assert.equal((await app.request(shop.image_url ?? '', { headers: headers(viewer) })).headers.get('content-type'), 'image/webp');
-    assert.equal((await app.request(shop.image_url ?? '')).status, 401);
+    const photo = await app.request(shop.image_url ?? '', { headers: headers(viewer) });
+    assert.equal(photo.headers.get('content-type'), 'image/webp');
+    assert.equal(photo.headers.get('cache-control'), 'private, max-age=31536000, immutable');
+    const anonymous = await app.request(shop.image_url ?? '');
+    assert.equal(anonymous.status, 401); assert.equal(anonymous.headers.get('cache-control'), 'private, no-store');
+    assert.equal((await app.request('/static/favicon.ico')).headers.get('cache-control'), 'public, max-age=86400');
+    assert.equal((await app.request('/static/fonts/OFL-NotoSansJP.txt')).headers.get('cache-control'), 'public, max-age=2592000');
+    const missing = await app.request('/static/missing.png');
+    assert.equal(missing.status, 404); assert.equal(missing.headers.get('cache-control'), null);
   } finally { await database.close(); await directory.clean(); }
 });
 

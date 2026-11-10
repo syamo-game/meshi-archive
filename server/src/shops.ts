@@ -125,7 +125,10 @@ export class Shops {
     const rows = await this.database.query(`SELECT s.* FROM shops s WHERE ${predicate} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`, shopRow, [...values, 24, (page - 1) * 24]);
     const storedCategories = await this.database.query(`SELECT DISTINCT s.category FROM shops s WHERE ${publicPredicate} ORDER BY s.category`, categoryRow);
     const categoryGroups = buildCategoryFilterGroups(storedCategories.map(row => row.category));
-    const options = globalAreas.flatMap(row => row.area ? [{ value: row.area, label: areaLabel(row.area), count: row.count }] : []).sort((a, b) => b.count - a.count || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+    // Slider areas follow every filter except area itself, so the order matches the current results.
+    const scoped = await this.selection({ ...query, area: '', sort: 'name_asc' }, true);
+    const scopedAreas = await this.database.query(`SELECT s.area,COUNT(s.id) AS count FROM shops s WHERE ${scoped.predicate} GROUP BY s.area`, areaRow, scoped.values);
+    const options = scopedAreas.flatMap(row => row.area ? [{ value: row.area, label: areaLabel(row.area), count: row.count }] : []).sort((a, b) => b.count - a.count || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
     const details = await this.decorate(rows, this.database);
     const items: Shop[] = details.map(({ id, version, name, branch, area, area_label, category, rating, memo, image_url, maps_url, source_url, source_label }) => ({ id, version, name, branch, area, area_label, category, rating, memo, image_url, maps_url, source_url, source_label }));
     return { items, total, page, pages, per_page: 24, areas: options, filter_areas: buildAreaFilterOptions(globalAreas), categories: categoryGroups.flatMap(group => group.options.map(option => option.value)), category_groups: categoryGroups };

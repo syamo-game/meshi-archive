@@ -83,7 +83,7 @@ export function createApp(database: Database, config: Config): Hono<WebEnvironme
       if (!user.success) { console.error('Discord user response did not match its schema'); return context.redirect('/login?error=discord_user_failed', 302); }
       const issued = await auth.issue(user.data.id, user.data.username, session);
       setCookie(context, sessionCookie, issued.token, cookieOptions);
-      return context.redirect(issued.session.access?.admin ? '/admin/' : '/', 302);
+      return context.redirect('/', 302);
     } catch (error) {
       if (error instanceof AppError && error.status === 403) return context.redirect('/login?error=discord_forbidden', 302);
       console.error('Discord OAuth callback failed', { error });
@@ -127,9 +127,15 @@ export function createApp(database: Database, config: Config): Hono<WebEnvironme
     if (!/^[a-f0-9]{64}\.webp$/.test(filename)) throw new AppError(404, '画像が見つかりません。');
     const rows = await database.query(`SELECT s.id FROM shops s WHERE s.image_key=$1${session.access?.admin ? '' : " AND EXISTS(SELECT 1 FROM shop_mentions m WHERE m.shop_id=s.id AND m.review_status='approved' AND m.metadata_review_status='approved')"} LIMIT 1`, z.object({ id: z.number() }), [filename.slice(0, -5)]);
     if (!rows.length) throw new AppError(404, '画像が見つかりません。');
-    try { return context.body(await readFile(join(config.imageDirectory, 'uploads', filename)), 200, { 'Content-Type': 'image/webp' }); }
+    // The file name is the hash of the image, so one URL always means the same bytes. Keep it in the viewer's own browser only.
+    try { return context.body(await readFile(join(config.imageDirectory, 'uploads', filename)), 200, { 'Content-Type': 'image/webp', 'Cache-Control': 'private, max-age=31536000, immutable' }); }
     catch (error) { if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new AppError(404, '画像が見つかりません。'); throw error; }
   });
+  // Build files carry a content hash in their name, so they can be kept for good. The server sends no 304,
+  // so the large font gets a long lifetime too; rename the font file when it changes.
+  const staticLifetime = (path: string): string => path.startsWith('/static/app/assets/') ? 'public, max-age=31536000, immutable' : path.startsWith('/static/fonts/') ? 'public, max-age=2592000' : 'public, max-age=86400';
+  // Set it on the finished response: serveStatic builds its response before any hook could add a header.
+  app.use('/static/*', async (context, next) => { await next(); if (context.res.ok) context.res.headers.set('Cache-Control', staticLifetime(context.req.path)); });
   app.use('/static/*', serveStatic({ root: fileURLToPath(new URL('../../web', import.meta.url)) }));
   const documentPaths = ['/', '/login', '/logout', '/admin/login', '/admin', '/admin/', '/admin/review', '/admin/users', '/admin/exports', '/admin/shops/bulk', '/shop/:id'];
   for (const path of documentPaths) app.get(path, async context => {

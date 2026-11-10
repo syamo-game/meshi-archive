@@ -1,0 +1,33 @@
+.admin-workspace { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 20px; max-width: 1120px; margin: auto; padding: 24px; }
+.admin-sidebar { align-self: start; height: auto; min-width: 0; padding: 12px; border: 1px solid var(--edge); border-radius: 16px; background: var(--white); }
+.admin-sidebar h2 { margin: 4px 10px 8px; font-size: 14px; }
+.admin-body { min-width: 0; }
+.admin-screen { min-width: 0; display: grid; align-content: start; gap: 14px; }
+.admin-screen h1 { margin: 0 0 4px; font-size: 24px; }
+.admin-screen h2 { margin: 0 0 10px; font-size: 17px; }
+.admin-screen .admin-summary { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: var(--panel-inset); }
+.admin-summary h2 { margin: 0 0 4px; }
+.admin-summary strong { display: block; font-size: 28px; line-height: 1.15; }
+@media (max-width: 700px) {
+  .admin-workspace { grid-template-columns: minmax(0, 1fr); padding: 12px; gap: 14px; }
+  .admin-sidebar h2 { margin: 0 4px 4px; }
+}
+@media (max-width: 575px) {
+  .admin-screen .review-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.admin-bulk-upload { display: grid; min-width: 0; gap: 12px; }
+
+.admin-summary-count { display: flex; align-items: baseline; gap: 10px; }
+.admin-screen .admin-summary-count h2 { margin: 0; }
+.admin-summary > a { min-height: 44px; }
+.admin-screen .admin-exports, .admin-screen .admin-user-list { padding-block: 4px; }
+.admin-user-id { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.admin-user-list th:first-child { width: 53%; }
+.admin-user-list th:nth-child(2) { width: 22%; }
+.admin-screen .review-filter { grid-template-columns: minmax(0, 150px) minmax(0, 1fr) auto; align-items: end; margin-bottom: 0; }
+.review-extra { grid-column: 1 / -1; }
+.review-extra-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 575px) {
+  .admin-screen .review-filter, .review-extra-fields { grid-template-columns: minmax(0, 1fr); }
+  .review-filter > button { justify-self: end; }
+}

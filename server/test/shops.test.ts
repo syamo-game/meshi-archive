@@ -23,6 +23,11 @@ test('serves the same public 24-item pages and stable area counts', async () => 
     assert.equal(filtered.total, 10); assert.equal(filtered.page, 1); assert.deepEqual(filtered.areas, first.areas);
     const visited = shopsSchema.parse(await (await app.request('/api/ui/shops?status=visited', { headers: headers(viewer) })).json());
     assert.equal(visited.total, 1); assert.equal(visited.items[0]?.id, 1);
+    assert.deepEqual(visited.areas, [{ value: '木場', label: '木場', count: 1 }]);
+    await database.execute("UPDATE shops SET category='寿司' WHERE id IN (1,21,22,23)");
+    const sushi = shopsSchema.parse(await (await app.request('/api/ui/shops?category=' + encodeURIComponent('寿司'), { headers: headers(viewer) })).json());
+    assert.equal(sushi.total, 4);
+    assert.deepEqual(sushi.areas, [{ value: '門前仲町', label: '門前仲町', count: 3 }, { value: '木場', label: '木場', count: 1 }]);
   } finally { await database.close(); }
 });
 
