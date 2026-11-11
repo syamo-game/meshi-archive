@@ -7,7 +7,7 @@ import contract from '../data/ai-contract.json' with { type: 'json' };
 import { candidateSearchContextSchema, extractedMessageSchema, imageCluesSchema, requireExtractionEvidence, searchCandidateSetSchema } from './ai-models.js';
 import type { CandidateSearchContext, CandidateSearchResult, ExtractedMention, ExtractionCallResult, ImageAnalysisResult, ModelCallMetrics } from './ai-models.js';
 import { canonicalArea } from './geography.js';
-import { categoryInstructions } from './categories.js';
+import { categories, categoryInstructions } from './categories.js';
 import { ImageCache, publicAddress } from './image-cache.js';
 import { safeHttpUrl } from './links.js';
 
@@ -68,6 +68,15 @@ type ResponseInput = NonNullable<ResponseCreateParamsNonStreaming['input']>;
 type SearchParameters = ResponseCreateParamsNonStreaming & { max_tool_calls: 1 };
 function responseInput(text: string, images: readonly string[]): ResponseInput { return images.length ? [{ role: 'user', content: [{ type: 'input_text', text }, ...images.map(image => ({ type: 'input_image' as const, image_url: image, detail: 'auto' as const }))] }] : text; }
 function withSearch(params: ResponseCreateParamsNonStreaming, cacheKey: string): SearchParameters { return { ...params, tools: [{ type: 'web_search' }], include: ['web_search_call.action.sources'], tool_choice: 'required', max_tool_calls: 1, parallel_tool_calls: false, prompt_cache_key: cacheKey }; }
+// The model may only answer a category with a master value or null.
+const categoryChoice = { anyOf: [{ type: 'string', enum: [...categories] }, { type: 'null' }], title: 'Category' };
+const messageMention = contract.schemas.message.$defs.ExtractedMention;
+const searchCandidate = contract.schemas.candidates.$defs.SearchCandidate;
+export const outputSchemas = {
+  ...contract.schemas,
+  message: { ...contract.schemas.message, $defs: { ...contract.schemas.message.$defs, ExtractedMention: { ...messageMention, properties: { ...messageMention.properties, category: categoryChoice } } } },
+  candidates: { ...contract.schemas.candidates, $defs: { SearchCandidate: { ...searchCandidate, properties: { ...searchCandidate.properties, category: categoryChoice } } } },
+};
 export class RestaurantAI {
   private client: OpenAI | null = null;
   private readonly semaphore: AICallLimiter;
@@ -91,12 +100,16 @@ export class RestaurantAI {
   }
   private parameters(model: string, reasoning: z.infer<typeof effort>, prompt: string, input: ResponseInput, schema: keyof typeof contract.schemas): ResponseCreateParamsNonStreaming {
     const instructions = schema === 'message' || schema === 'candidates' ? `${prompt}\n\n${categoryInstructions}` : prompt;
-    return { model, instructions, input, text: { format: { type: 'json_schema', name: schema, strict: true, schema: contract.schemas[schema] } }, max_output_tokens: 25000, reasoning: { effort: reasoning }, store: false };
+    return { model, instructions, input, text: { format: { type: 'json_schema', name: schema, strict: true, schema: outputSchemas[schema] } }, max_output_tokens: 25000, reasoning: { effort: reasoning }, store: false };
   }
   private parse<Output>(response: Response, schema: z.ZodType<Output>, stage: string): Output {
     if (response.status !== 'completed' || !response.output_text) throw new ExtractionError(`OpenAI returned no complete structured output: stage=${stage} status=${response.status}`);
     try { return schema.parse(JSON.parse(response.output_text)); }
-    catch (error) { throw new ExtractionError(`OpenAI output did not match its contract: stage=${stage} response_id=${response.id}`, { cause: error }); }
+    catch (error) {
+      // Keep which field failed. The stored message is the only record after logs rotate.
+      const issues = error instanceof z.ZodError ? error.issues.map(issue => `${issue.path.join('.') || '(root)'}: ${issue.message}`).join('; ') : error instanceof Error ? error.message : String(error);
+      throw new ExtractionError(`OpenAI output did not match its contract: stage=${stage} response_id=${response.id} issues=${[...issues].slice(0, 1000).join('')}`, { cause: error });
+    }
   }
   async preflightModels(signal?: AbortSignal): Promise<void> {
     const seen = new Set<string>();

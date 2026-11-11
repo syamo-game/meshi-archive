@@ -2,7 +2,7 @@ import type { ExtractedMention } from './ai-models.js';
 import { candidateMatchesArea, nameWithBranch } from './candidate-geography.js';
 import type { Executor } from './db/database.js';
 import { areas, canonicalArea } from './geography.js';
-import { canonicalCategory } from './categories.js';
+import { canonicalCategory, categoryFromEvidence } from './categories.js';
 import type { MessageEnvelope } from './ingestion.js';
 import { candidateIdentities } from './pipeline-candidates.js';
 import type { PipelineCandidate } from './pipeline-candidates.js';
@@ -40,7 +40,8 @@ export async function createCandidateShop(connection: Executor, mention: Extract
   if (candidate.is_verified && mentionArea && candidate.area?.trim() && !candidateMatchesArea(mentionArea, candidate)) throw new Error(`Verified candidate area conflicts with the mention: mention_area=${mention.area}, candidate_area=${candidate.area}`);
   const area = mentionArea && areas.has(mentionArea) ? mentionArea : candidate.is_verified && candidateArea && areas.has(candidateArea) ? candidateArea : null;
   const rawCategory = candidate.is_verified ? candidate.category || mention.category : mention.category;
-  const category = canonicalCategory(rawCategory);
+  // A verified candidate wins only when it gives a master value. Otherwise keep the extracted one.
+  const category = (candidate.is_verified ? categoryFromEvidence(candidate.category) : null) ?? canonicalCategory(mention.category);
   if (rawCategory && !category) console.warn('Candidate category requires review', { shopName: mention.shop_name, category: rawCategory, provenance: candidate.provenance });
   const [source, id] = candidate.is_verified ? preferredIdentity(candidate) : [null, null];
   const shop = (await connection.query('INSERT INTO shops(shop_name,branch_name,area,category,address,phone,canonical_url,external_source,external_id,is_visited,created_at,updated_at,version) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,1) RETURNING *', shopRecord, [storageName(mention, candidate), mention.branch_name, area, category, candidate.is_verified ? candidate.address : null, candidate.is_verified ? normalizePhone(candidate.phone) : null, candidate.is_verified ? candidate.canonical_url : null, source ?? null, id ?? null, false, now, now]))[0];

@@ -58,3 +58,14 @@ test('candidate storage normalizes true aliases and retains unknown category evi
     }
   } finally { await database.close(); }
 });
+
+test('verified candidate category wins only as a master value and never erases the extracted one', async () => {
+  const { database } = await fixture();
+  try {
+    for (const [index, fromCandidate, fromMention, verified, expected] of [[0, '居酒屋、寿司、海鮮', '寿司', true, '居酒屋'], [1, '架空分類', '寿司', true, '寿司'], [2, null, '鮨', true, '寿司'], [3, 'ラーメン', '寿司', false, '寿司'], [4, '架空分類', '別の架空分類', true, null]] as const) {
+      const extracted = extractedMentionSchema.parse({ shop_name: `決定順序店舗${index}`, area: '木場', category: fromMention, needs_review: false, confidence_reason: 'Synthetic category order' });
+      const candidate = pipelineCandidateSchema.parse({ name: extracted.shop_name, area: '木場', category: fromCandidate, provenance: verified ? 'structured_data' : 'web_search', is_verified: verified });
+      assert.equal((await createCandidateShop(database, extracted, candidate)).category, expected, `case ${index}`);
+    }
+  } finally { await database.close(); }
+});

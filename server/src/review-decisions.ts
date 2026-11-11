@@ -7,7 +7,7 @@ import type { Database, Executor } from './db/database.js';
 import { countRow } from './db/database.js';
 import { AppError } from './errors.js';
 import { canonicalArea } from './geography.js';
-import { canonicalCategory } from './categories.js';
+import { canonicalCategory, categoryFromEvidence } from './categories.js';
 import { ImageCache } from './image-cache.js';
 import { storeUploadedImage, validateImageSourceUrl } from './images.js';
 import { safeHttpUrl } from './links.js';
@@ -77,8 +77,8 @@ function editedCategory(value: string, current: string | null): string {
   if (current !== null && value === current.trim()) return current;
   throw new AppError(422, 'カテゴリは登録済みの分類を選択してください。');
 }
-function evidenceCategory(value: string | null, mentionId: number): string | null {
-  const canonical = canonicalCategory(value);
+function evidenceCategory(value: string | null, mentionId: number, fromPage = false): string | null {
+  const canonical = fromPage ? categoryFromEvidence(value) : canonicalCategory(value);
   if (value && !canonical) console.warn('Review evidence category requires classification', { mentionId, category: value });
   return canonical;
 }
@@ -158,7 +158,7 @@ export class ReviewDecisions {
         if (identitiesConflict(collectExternalIdentities(candidate.external_source, candidate.external_id, [candidate.canonical_url, candidate.evidence_url]))) throw new AppError(409, '候補の店舗識別子が矛盾しています。');
         const fromUrl = externalIdentity(candidate.canonical_url) ?? externalIdentity(candidate.evidence_url);
         const external = normalizeExternalIdentity(candidate.external_source, candidate.external_id) ?? (fromUrl ? normalizeExternalIdentity(...fromUrl) : null);
-        const values = { shop_name: candidate.name, branch_name: shop ? shop.branch_name : mention.extracted_branch_name, area: canonicalArea(shop ? shop.area : mention.extracted_area) ?? canonicalArea(candidate.area) ?? canonicalArea(mention.extracted_area), category: candidate.category === null ? shop?.category ?? null : evidenceCategory(candidate.category, id), address: candidate.address ?? shop?.address ?? null, phone: candidate.phone !== null ? normalizePhone(candidate.phone) : shop?.phone ?? null, canonical_url: candidate.canonical_url ?? shop?.canonical_url ?? null, external_source: external?.[0] ?? shop?.external_source ?? null, external_id: external?.[1] ?? shop?.external_id ?? null, evidence_url: candidate.evidence_url };
+        const values = { shop_name: candidate.name, branch_name: shop ? shop.branch_name : mention.extracted_branch_name, area: canonicalArea(shop ? shop.area : mention.extracted_area) ?? canonicalArea(candidate.area) ?? canonicalArea(mention.extracted_area), category: evidenceCategory(candidate.category, id, true) ?? shop?.category ?? evidenceCategory(mention.extracted_category, id), address: candidate.address ?? shop?.address ?? null, phone: candidate.phone !== null ? normalizePhone(candidate.phone) : shop?.phone ?? null, canonical_url: candidate.canonical_url ?? shop?.canonical_url ?? null, external_source: external?.[0] ?? shop?.external_source ?? null, external_id: external?.[1] ?? shop?.external_id ?? null, evidence_url: candidate.evidence_url };
         await validateCreation(connection, values, shop);
         if (!shop) shop = await create(values);
         Object.assign(shop, values, { version: shop.version + 1 }); approve(mention, shop); Object.assign(mention, metadataAssessment(shop, mention));

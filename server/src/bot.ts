@@ -5,7 +5,8 @@ import { discordId } from './config.js';
 import type { Database } from './db/database.js';
 import { acquireMessageEnvelope, discordInput } from './ingestion.js';
 import type { MessageProcessor } from './ingestion.js';
-import { HistorySyncError, nextWeeklyRun, SyncAlreadyRunning, syncChannelHistory, weeklySlot } from './sync.js';
+import { discordHistory, HistorySyncError, nextWeeklyRun, SyncAlreadyRunning, syncChannelHistory, syncReport, weeklySlot } from './sync.js';
+import type { SyncSummary } from './sync.js';
 
 export interface BotSettings { token: string; adminId: string; channelId: string | null; weekly: boolean; batchLimit: number; readOnly: boolean; }
 export function readBotSettings(environment: NodeJS.ProcessEnv = process.env): BotSettings {
@@ -56,29 +57,37 @@ export class DiscordBot {
     console.info('Weekly sync scheduled', { channelId: this.settings.channelId, nextRun: next.toISOString() });
     this.weeklyTimer = setTimeout(() => {
       this.weeklyTimer = null;
-      this.track(this.runWeekly().catch(error => { console.error('Weekly channel sync failed', { channelId: this.settings.channelId, error }); }).finally(() => { this.schedule(); }));
+      this.track(this.runWeekly().then(result => result ? this.notifyAdmin(syncReport('週次同期', result)) : undefined, async error => {
+        console.error('Weekly channel sync failed', { channelId: this.settings.channelId, error });
+        await this.notifyAdmin(error instanceof HistorySyncError ? `週次同期を停止しました。${error.failed.length}件が続けて失敗しました。失敗した投稿は次回の同期で再試行します。message_id=${error.failed.join(', ')}` : `週次同期に失敗しました。channel_id=${this.settings.channelId}。Botのログを確認してください。`);
+      }).finally(() => { this.schedule(); }));
     }, Math.max(1, next.getTime() - Date.now()));
     this.weeklyTimer.unref();
   }
-  async runWeekly(force = false): Promise<void> {
-    if (!force && !this.settings.weekly) return;
+  // Weekly sync has no channel to reply in, so the result goes to the admin by direct message.
+  private async notifyAdmin(text: string): Promise<void> {
+    try { await (await this.client.users.fetch(this.settings.adminId)).send(text); }
+    catch (error) { console.error('Failed to notify the admin', { adminId: this.settings.adminId, text, error }); }
+  }
+  async runWeekly(force = false): Promise<SyncSummary | null> {
+    if (!force && !this.settings.weekly) return null;
     if (!this.settings.channelId || !this.client.user) throw new Error('Weekly sync requires a configured channel and connected Discord client');
     const channel = await this.client.channels.fetch(this.settings.channelId);
     if (!channel || !channel.isSendable() || !(channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement || channel.isThread())) throw new Error(`Weekly sync requires a guild text channel or thread: channel_id=${this.settings.channelId}`);
     const now = new Date();
-    await syncChannelHistory(this.database, this.processor, channel, this.client.user.id, this.settings.batchLimit, this.settings.readOnly, { slot: weeklySlot(now), startedAt: now, force });
+    return syncChannelHistory(this.database, this.processor, discordHistory(channel), this.client.user.id, this.settings.batchLimit, this.settings.readOnly, { slot: weeklySlot(now), startedAt: now, force });
   }
   private async manualSync(channel: SendableChannels): Promise<void> {
     if (!this.client.user) throw new Error('Discord client is not connected');
     await channel.send('過去メッセージの同期を開始します。');
     try {
-      const result = await syncChannelHistory(this.database, this.processor, channel, this.client.user.id, this.settings.batchLimit, this.settings.readOnly);
+      const result = await syncChannelHistory(this.database, this.processor, discordHistory(channel), this.client.user.id, this.settings.batchLimit, this.settings.readOnly);
       if (!result) throw new Error('Manual channel sync returned no result');
-      await channel.send(`同期が完了しました。処理=${result.processed}件、店舗候補=${result.registered}件、データ確認=${result.pending}件。`);
+      await channel.send(syncReport('同期', result));
     } catch (error) {
       console.error('Manual history sync failed', { channelId: channel.id, error });
       if (error instanceof SyncAlreadyRunning) await channel.send('このチャンネルは同期中です。完了後に再実行してください。');
-      else if (error instanceof HistorySyncError) await channel.send(`同期を停止しました。message_id=${error.messageId} の処理に失敗しました。再実行すると同じ投稿から再開します。`);
+      else if (error instanceof HistorySyncError) await channel.send(`同期を停止しました。${error.failed.length}件が続けて失敗しました。失敗した投稿は次回の同期で再試行します。message_id=${error.failed.join(', ')}`);
       else await channel.send(`同期処理に失敗しました。channel_id=${channel.id}`);
     }
   }
