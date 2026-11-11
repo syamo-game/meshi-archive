@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildCategoryFilterGroups, canonicalCategory, categories, categoryGroups, categoryInstructions, categoryMasterSchema, categoryMatches } from '../src/categories.js';
+import { buildCategoryFilterGroups, canonicalCategory, categories, categoryFromEvidence, categoryGroups, categoryInstructions, categoryMasterSchema, categoryMatches } from '../src/categories.js';
 
 test('category master separates headings, genres and verified styles', () => {
   assert.equal(categoryGroups.length, 15);
@@ -21,6 +21,14 @@ test('only same-meaning aliases normalize while ambiguous legacy values remain u
   const equivalents: readonly [string, string][] = [[' 鮨 ', '寿司'], ['イタリア料理', 'イタリアン'], ['ピッツァ', 'ピザ'], [' ＮＹピザ　', 'ニューヨークピザ'], ['ジェラート専門店', 'ジェラート'], ['タコス専門店', 'タコス']];
   for (const [value, expected] of equivalents) assert.equal(canonicalCategory(value), expected);
   for (const value of [null, '', '　', 'イタリアン・パスタ・ピザ', '寿司・回転寿司', '居酒屋、寿司、海鮮', 'カフェ・喫茶店', 'ジェラート・アイスクリーム', 'その他', '__proto__', 'constructor']) assert.equal(canonicalCategory(value), null);
+});
+
+test('other-country cuisines have a master value and joined page cuisines use the first master value', () => {
+  for (const value of ['アメリカ料理', 'その他各国料理']) assert.equal(canonicalCategory(value), value);
+  assert.deepEqual(categoryGroups.find(group => group.label === '各国料理')?.options.slice(-2).map(option => option.value), ['アメリカ料理', 'その他各国料理']);
+  assert.ok(categoryInstructions.includes('一覧に国・地域名がない外国料理は「その他各国料理」'));
+  const cases: readonly [string | null, string | null][] = [['居酒屋、寿司、海鮮', '居酒屋'], ['海鮮料理, 鮨', '海鮮'], ['架空分類／ 寿司', '寿司'], [' 鮨 ', '寿司'], ['寿司・回転寿司', null], ['架空分類、別の架空分類', null], ['', null], [null, null]];
+  for (const [value, expected] of cases) assert.equal(categoryFromEvidence(value), expected, String(value));
 });
 
 test('category filters include children without inferring styles or reclassifying legacy values', () => {

@@ -42,6 +42,15 @@ export function canonicalCategory(value: string | null): string | null {
   return categories.has(normalized) ? normalized : aliases.get(normalized) ?? null;
 }
 
+// Page cuisine text can join several genres, such as "居酒屋、寿司、海鮮". Use the first master value.
+export function categoryFromEvidence(value: string | null): string | null {
+  if (value === null) return null;
+  const whole = canonicalCategory(value);
+  if (whole) return whole;
+  for (const part of value.split(/[、,，/／]/)) { const canonical = canonicalCategory(part); if (canonical) return canonical; }
+  return null;
+}
+
 export function categoryMatches(stored: string | null, selected: string): boolean {
   if (selected === '__none__') return stored === null || !stored.normalize('NFKC').trim();
   const canonicalSelected = canonicalCategory(selected);
@@ -79,5 +88,6 @@ export const categoryInstructions: string = [
   '店舗そのものの主な業態・専門性を根拠に分類し、メニューにある料理だけで専門店と判断しないでください。',
   '根拠で確認できる場合だけ細分類を選び、スタイルが不明な場合はジャンル名を使ってください。分類できない場合はnullにしてください。',
   '複数の分類を結合した名前は使わないでください。ピザをイタリアンへ、ジェラートを洋菓子へ置き換えないでください。',
+  '一覧に国・地域名がない外国料理は「その他各国料理」を選んでください。',
   ...master.groups.map(group => `${group.label}: ${group.genres.map(genre => genre.children.length ? `${genre.value}（細分類: ${genre.children.join('、')}）` : genre.value).join('、')}`),
 ].join('\n');

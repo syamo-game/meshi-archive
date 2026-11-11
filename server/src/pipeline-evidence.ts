@@ -6,8 +6,8 @@ import type { ExtractedMention, SearchCandidateSet } from './ai-models.js';
 import { effectiveCandidateArea, matchesMentionNameAndArea, nameWithBranch } from './candidate-geography.js';
 import type { Executor } from './db/database.js';
 import { fetchHtmlDocument, HtmlFetchError } from './html-fetch.js';
-import { extractJsonLdCandidates, extractRestaurantPageEvidence, provePageCandidate } from './page-evidence.js';
-import { dedupeCandidates, pageCandidateCacheValue, pageVerifiedCandidateValid, pipelineCandidateSchema, topWebPolicy, unresolvedRedirect, verifyFromStructuredPage } from './pipeline-candidates.js';
+import { extractJsonLdCandidates, extractRestaurantPageEvidence, provePageCandidate, provePageCandidateByStreet } from './page-evidence.js';
+import { containedNamePolicy, dedupeCandidates, pageCandidateCacheValue, pageVerifiedCandidateValid, pipelineCandidateSchema, relaxedVerifiedCandidateValid, topWebPolicy, unresolvedRedirect, verifyFromStructuredPage } from './pipeline-candidates.js';
 import type { PipelineCandidate } from './pipeline-candidates.js';
 import { PipelineJournal } from './pipeline-journal.js';
 import { identitySchema, nameSimilarity, normalizeArea, normalizeName } from './resolution.js';
@@ -15,7 +15,9 @@ import type { CandidateIdentity } from './resolution.js';
 import { citationUrlIdentity, sanitizeCitedCandidate, sourceEvidenceUrlIdentity } from './source-evidence.js';
 
 export interface CandidateBatch { candidates: readonly PipelineCandidate[]; unresolved_reason: string | null; }
-const cachedPageProof = z.strictObject({ final_url: z.string().min(1).max(2048), method: z.enum(['structured_data', 'visible_page']), page_sha256: z.string().regex(/^[0-9a-f]{64}$/), candidate: pipelineCandidateSchema });
+const cachedPageProof = z.strictObject({ final_url: z.string().min(1).max(2048), method: z.enum(['structured_data', 'visible_page', 'structured_data_street', 'visible_page_street']), page_sha256: z.string().regex(/^[0-9a-f]{64}$/), candidate: pipelineCandidateSchema });
+// strict: original rules. relaxed: also the street-address proof and the ward-level area check. contained_name: relaxed, for a candidate picked by containedNameCandidates.
+export type PageVerification = 'strict' | 'relaxed' | 'contained_name';
 export class PipelineEvidence {
   constructor(private readonly connection: Executor, private readonly ai: RestaurantAI, private readonly journal: PipelineJournal, private readonly messageId: string) {}
   private invalidCache(stage: string, kind: string, key: string, error: Error): void { this.journal.failure(this.messageId, stage, new ExtractionError(`key=${key}; invalid cached payload: ${error.message}`)); this.journal.invalidate(kind, key); }
@@ -59,18 +61,19 @@ export class PipelineEvidence {
     }
     return { candidates: candidateSet.candidates.map(({ confidence_reason: _reason, ...candidate }) => ({ ...candidate, provenance: 'web_search', is_verified: false, verification_reason: '候補URLは検索元と一致、店舗情報はサーバー検証前' })), unresolved_reason: candidateSet.unresolved_reason };
   }
-  async verifyPage(mention: ExtractedMention, candidate: PipelineCandidate, candidates: readonly PipelineCandidate[], excludedUrls: readonly string[] = []): Promise<readonly [PipelineCandidate | null, string | null]> {
+  async verifyPage(mention: ExtractedMention, candidate: PipelineCandidate, candidates: readonly PipelineCandidate[], excludedUrls: readonly string[] = [], mode: PageVerification = 'strict'): Promise<readonly [PipelineCandidate | null, string | null]> {
+    const valid = (item: PipelineCandidate): boolean => pageVerifiedCandidateValid(mention, item) || (mode !== 'strict' && relaxedVerifiedCandidateValid(mention, item));
     const structured = verifyFromStructuredPage(mention, candidate, candidates); if (structured) return [structured, null];
     const url = candidate.canonical_url || candidate.evidence_url;
     if (!url) return [null, 'Web候補に引用済み店舗URLがない'];
     if (unresolvedRedirect([url])) return [null, '短縮URLの転送先を店舗根拠として確認できない'];
-    const kind = 'page_evidence_v2'; const key = pageCandidateCacheValue(mention, candidate, url);
+    const kind = 'page_evidence_v2'; const key = pageCandidateCacheValue(mention, candidate, url) + (mode === 'strict' ? '' : '|' + mode);
     const excluded = new Set(excludedUrls.map(sourceEvidenceUrlIdentity));
     const cached = await this.journal.get(this.connection, kind, key);
     if (cached !== null) {
       try {
         const proof = cachedPageProof.parse(JSON.parse(cached));
-        if (citationUrlIdentity(proof.final_url) === citationUrlIdentity(url) && !excluded.has(sourceEvidenceUrlIdentity(proof.final_url)) && pageVerifiedCandidateValid(mention, proof.candidate)) return [proof.candidate, null];
+        if (citationUrlIdentity(proof.final_url) === citationUrlIdentity(url) && !excluded.has(sourceEvidenceUrlIdentity(proof.final_url)) && valid(proof.candidate)) return [proof.candidate, null];
         this.journal.invalidate(kind, key);
       } catch (error) { if (!(error instanceof SyntaxError || error instanceof z.ZodError)) throw error; this.invalidCache('page_evidence_cache', kind, key, error); }
     }
@@ -81,12 +84,13 @@ export class PipelineEvidence {
     if (!document) return [null, '候補ページをサーバーから取得できない'];
     if (citationUrlIdentity(document.final_url) !== citationUrlIdentity(url)) return [null, '候補ページの転送先が検索で引用された店舗URLと一致しない'];
     if (excluded.has(sourceEvidenceUrlIdentity(document.final_url))) return [null, '候補ページが元投稿の出典へ戻るため独立根拠にならない'];
-    const proof = provePageCandidate(candidate, extractRestaurantPageEvidence(document.html, document.final_url));
+    const page = extractRestaurantPageEvidence(document.html, document.final_url);
+    const proof = provePageCandidate(candidate, page) ?? (mode === 'strict' ? null : provePageCandidateByStreet(candidate, page));
     if (!proof) return [null, '同一ページ上で店舗名と完全な住所を確認できない'];
     const area = effectiveCandidateArea(mention, proof.candidate);
     if (!area) return [null, '候補ページの住所から管理可能な地域を一意に特定できない'];
-    const verified: PipelineCandidate = { ...proof.candidate, area, evidence_url: document.final_url, provenance: 'web_search', is_verified: true, verification_reason: `policy=${topWebPolicy}; source_verified=true; matching_score=${nameSimilarity(nameWithBranch(mention.shop_name, mention.branch_name), candidate.name).toFixed(3)}; proof=${proof.method}; page_sha256=${proof.page_sha256}` };
-    if (!pageVerifiedCandidateValid(mention, verified)) return [null, '候補ページの住所または支店が投稿の地域情報と一致しない'];
+    const verified: PipelineCandidate = { ...proof.candidate, area, evidence_url: document.final_url, provenance: 'web_search', is_verified: true, verification_reason: `policy=${mode === 'contained_name' ? containedNamePolicy : topWebPolicy}; source_verified=true; matching_score=${nameSimilarity(nameWithBranch(mention.shop_name, mention.branch_name), candidate.name).toFixed(3)}; proof=${proof.method}; page_sha256=${proof.page_sha256}` };
+    if (!valid(verified)) return [null, '候補ページの住所または支店が投稿の地域情報と一致しない'];
     this.journal.put(kind, key, JSON.stringify({ final_url: document.final_url, method: proof.method, page_sha256: proof.page_sha256, candidate: verified }));
     return [verified, null];
   }

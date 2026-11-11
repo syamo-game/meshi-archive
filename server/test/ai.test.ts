@@ -4,7 +4,9 @@ import { setImmediate } from 'node:timers/promises';
 import { test } from 'node:test';
 import type { Response, ResponseFunctionWebSearch } from 'openai/resources/responses/responses';
 import { z } from 'zod';
-import { AICallLimiter, callMetrics, completedSearchSources, estimateCost, readAISettings, RestaurantAI } from '../src/ai.js';
+import contract from '../data/ai-contract.json' with { type: 'json' };
+import { AICallLimiter, callMetrics, completedSearchSources, estimateCost, outputSchemas, readAISettings, RestaurantAI } from '../src/ai.js';
+import { categories } from '../src/categories.js';
 import { extractedMentionSchema, extractedMessageSchema, requireExtractionEvidence } from '../src/ai-models.js';
 import { assessMentionEvidence, containsEvidenceName, eventOriginQuotesMatch, imageEvidenceAssessment, inputEvidenceAssessment } from '../src/extraction-safety.js';
 
@@ -56,6 +58,17 @@ test('AI settings keep existing models and fail without a configured key before 
   const client = new RestaurantAI(settings, '.local/no-ai-fixture');
   await assert.rejects(client.extract(''), /empty message/);
   await assert.rejects(client.extract('テスト食堂'), error => error instanceof Error && error.message === 'OPENAI_API_KEY is not configured');
+});
+
+test('model output schemas limit category to master values or null and keep other fields', () => {
+  const choice = z.object({ anyOf: z.tuple([z.object({ type: z.literal('string'), enum: z.array(z.string()) }), z.object({ type: z.literal('null') })]) });
+  for (const properties of [outputSchemas.message.$defs.ExtractedMention.properties, outputSchemas.candidates.$defs.SearchCandidate.properties]) {
+    assert.deepEqual(choice.parse(properties.category).anyOf[0].enum, [...categories]);
+    assert.deepEqual(properties.area, contract.schemas.message.$defs.ExtractedMention.properties.area);
+  }
+  assert.deepEqual(Object.keys(outputSchemas.message.$defs.ExtractedMention.properties), Object.keys(contract.schemas.message.$defs.ExtractedMention.properties));
+  assert.deepEqual(outputSchemas.images, contract.schemas.images);
+  for (const prompt of [contract.prompts.extraction, contract.prompts.image_extraction, contract.prompts.search, contract.prompts.image_search, contract.prompts.source_discovery]) { assert.ok(prompt.includes('末尾のカテゴリー一覧から1つ選びます')); assert.ok(!prompt.includes('簡潔な料理ジャンル')); }
 });
 
 test('model accounting preserves estimates and retries without claiming current API prices', () => {

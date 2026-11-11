@@ -2,8 +2,9 @@ import { z } from 'zod';
 import type { ExtractedMention } from './ai-models.js';
 import { candidateAddressMatchesGroup, candidateAddressPreciselyMatchesArea, candidateMatchesArea, effectiveCandidateArea, matchesMentionNameAndArea, nameWithBranch } from './candidate-geography.js';
 import { canonicalArea } from './geography.js';
-import { pageAddressesMatch } from './page-evidence.js';
-import { evaluateIdentity, extractBranchToken, identitySchema, nameSimilarity, normalizeAddress, normalizeArea, normalizeExternalSource, normalizeName, normalizePhone } from './resolution.js';
+import { pageAddressesMatch, streetAddress } from './page-evidence.js';
+import { areaIsMunicipality } from './region-master.js';
+import { branchesConflict, evaluateIdentity, extractBranchToken, identitySchema, nameSimilarity, normalizeAddress, normalizeArea, normalizeExternalSource, normalizeName, normalizePhone } from './resolution.js';
 import type { CandidateIdentity } from './resolution.js';
 import { collectExternalIdentities, identitiesConflict } from './shop-creation.js';
 import { citationUrlIdentity, sourceEvidenceUrlIdentity } from './source-evidence.js';
@@ -112,4 +113,40 @@ export function verifyFromStructuredPage(mention: ExtractedMention, candidate: P
   const area = effectiveCandidateArea(mention, selected); if (!area) return null;
   const verified: PipelineCandidate = { ...selected, area, provenance: 'web_search', is_verified: true, verification_reason: `policy=${topWebPolicy}; source_verified=true; matching_score=${nameSimilarity(nameWithBranch(mention.shop_name, mention.branch_name), candidate.name).toFixed(3)}; proof=structured_data_cache` };
   return pageVerifiedCandidateValid(mention, verified) ? verified : null;
+}
+export const containedNamePolicy = 'unique_place_contained_name';
+export interface ContainedNameCandidates { candidates: readonly PipelineCandidate[]; reason: string | null; }
+function samePlace(left: PipelineCandidate, right: PipelineCandidate): boolean {
+  const a = streetAddress(left.address); const b = streetAddress(right.address);
+  return a && b ? a === b : normalizeName(left.name) === normalizeName(right.name);
+}
+// Fallback after topWebCandidate: the posted name may be part of the candidate name ("さんぷる" in "居酒屋 さんぷる"),
+// but only when the post has a master area and all matching candidates point to one place.
+export function containedNameCandidates(mention: ExtractedMention, candidates: readonly PipelineCandidate[]): ContainedNameCandidates {
+  const web = candidates.filter(candidate => candidate.provenance === 'web_search'); if (!web.length) return { candidates: [], reason: null };
+  const area = canonicalArea(mention.area); const name = normalizeName(nameWithBranch(mention.shop_name, mention.branch_name));
+  if (!area || areaIsMunicipality(area)) return { candidates: [], reason: '投稿のエリアが駅・地区単位でないため、店名が完全一致しないWeb候補を自動確定しない' };
+  if ([...name].length < 2) return { candidates: [], reason: '店名が短すぎるため、Web候補との部分一致では自動確定しない' };
+  const places: PipelineCandidate[][] = [];
+  for (const candidate of web) { const place = places.find(list => list.some(other => samePlace(other, candidate))); if (place) place.push(candidate); else places.push([candidate]); }
+  const matches = places.filter(place => place.some(candidate => normalizeName(candidate.name).includes(name)));
+  const place = matches[0];
+  if (!place) return { candidates: [], reason: 'Web候補に投稿の店名を含む店舗がない' };
+  if (matches.length !== 1) return { candidates: [], reason: '投稿の店名を含むWeb候補が複数の場所にある' };
+  if (place.some(candidate => branchesConflict(nameWithBranch(mention.shop_name, mention.branch_name), candidate.name))) return { candidates: [], reason: 'Web候補の支店名が投稿と一致しない' };
+  if (place.some(candidate => identitiesConflict(candidateIdentities(candidate)))) return { candidates: [], reason: 'Web候補の外部IDが同一サービス内で矛盾' };
+  const keys = new Set(place.flatMap(candidate => [...candidateSourceKeys(candidate)]));
+  const sameSource = candidates.filter(other => !place.includes(other) && (other.provenance === 'web_search' || (other.provenance === 'structured_data' && other.is_verified)) && intersects(keys, candidateSourceKeys(other)));
+  if (sameSource.length) return { candidates: [], reason: '同じ出典のWeb候補または構造化データが別の場所を示している' };
+  const usable = place.filter(candidate => { const urls = [candidate.canonical_url, candidate.evidence_url].filter((url): url is string => Boolean(url)); return urls.length > 0 && !unresolvedRedirect(urls) && streetAddress(candidate.address) !== null; });
+  if (!usable.length) return { candidates: [], reason: '店名が一致するWeb候補に、確認できる店舗URLまたは番地までの住所がない' };
+  return { candidates: usable.map(candidate => ({ ...candidate, area, verification_reason: `policy=${containedNamePolicy}; canonical_area=${area}; source_verified=false` })), reason: null };
+}
+// Area check for a page-proved candidate when the address does not spell the station-style area name ("清澄白河" and "江東区高橋9-3").
+// The post must name the area itself, the address must be in the same ward or city, and it must not name another master area.
+export function relaxedVerifiedCandidateValid(mention: ExtractedMention, candidate: PipelineCandidate): boolean {
+  const area = canonicalArea(mention.area); if (!area || areaIsMunicipality(area) || canonicalArea(candidate.area) !== area) return false;
+  if (candidate.provenance !== 'web_search' || !candidate.is_verified || !candidate.address || !candidateAddressMatchesGroup(area, candidate.address)) return false;
+  const posted = nameWithBranch(mention.shop_name, mention.branch_name); const a = normalizeName(posted); const b = normalizeName(candidate.name);
+  return [...a].length >= 2 && [...b].length >= 2 && (a.includes(b) || b.includes(a)) && !branchesConflict(posted, candidate.name);
 }

@@ -4,9 +4,12 @@ import { test } from 'node:test';
 import { z } from 'zod';
 import { readBotSettings } from '../src/bot.js';
 import { openDatabase } from '../src/db/database.js';
+import type { Database } from '../src/db/database.js';
 import { buildMessageEnvelope } from '../src/ingestion.js';
-import type { DiscordInput } from '../src/ingestion.js';
-import { lockChannelSync, nextWeeklyRun, syncLockKey, weeklySlot } from '../src/sync.js';
+import type { DiscordInput, MessageEnvelope, MessageProcessor, ProcessResult } from '../src/ingestion.js';
+import { HistorySyncError, lockChannelSync, nextWeeklyRun, syncChannelHistory, syncLockKey, syncReport, weeklySlot } from '../src/sync.js';
+import type { HistorySource, SyncMessage } from '../src/sync.js';
+import { fixture } from './helpers.js';
 
 function message(): DiscordInput { return { id: '123456789012345678', channelId: '223456789012345678', content: '店舗の投稿 https://x.com/example/status/123456789012345678', createdAt: new Date('2026-10-18T00:00:00Z'), embeds: [], attachments: [] }; }
 const baseline = z.object({ sync_keys: z.array(z.object({ channel_id: z.string(), expected: z.string() })), weekly: z.array(z.object({ input: z.string(), slot: z.string(), next: z.string() })) }).parse(JSON.parse(readFileSync(new URL('./parity.json', import.meta.url), 'utf8')));
@@ -48,6 +51,64 @@ test('weekly schedule and advisory lock keys match the Python production baselin
     assert.equal(weeklySlot(new Date(vector.input)).getTime(), Date.parse(vector.slot));
     assert.equal(nextWeeklyRun(new Date(vector.input)).getTime(), Date.parse(vector.next));
   }
+});
+
+const syncChannel = '423456789012345678';
+function syncMessages(count: number): SyncMessage[] {
+  return Array.from({ length: count }, (_, index) => { const id = '8000000000000000' + (index + 1); return { id, authorId: '323456789012345678', empty: false, input: { id, channelId: syncChannel, content: '投稿 ' + id, createdAt: new Date('2026-10-18T00:00:00Z'), embeds: [], attachments: [] } }; });
+}
+function historySource(messages: readonly SyncMessage[], deleted: ReadonlySet<string> = new Set()): HistorySource {
+  return { id: syncChannel, after: async (cursor, limit) => messages.filter(item => BigInt(item.id) > BigInt(cursor)).slice(0, limit), one: async id => deleted.has(id) ? null : messages.find(item => item.id === id) ?? null };
+}
+// Stands in for the AI pipeline: chosen messages fail, the others are stored as succeeded.
+class SyncProcessor implements MessageProcessor {
+  readonly failing = new Set<string>();
+  constructor(private readonly database: Database) {}
+  async processMessage(envelope: MessageEnvelope): Promise<ProcessResult> {
+    if (this.failing.has(envelope.message_id)) throw new Error('Synthetic pipeline failure: message_id=' + envelope.message_id);
+    await this.database.execute("INSERT INTO messages(message_id,channel_id,is_target,processing_status) VALUES($1,$2,$3,'succeeded') ON CONFLICT(message_id) DO UPDATE SET processing_status='succeeded'", [envelope.message_id, envelope.channel_id, true]);
+    return { message_id: envelope.message_id, shop_ids: [], pending_mention_ids: [], ignored: false };
+  }
+  async cacheImage(): Promise<void> { throw new Error('Sync fixtures have no images'); }
+  async preflightModels(): Promise<void> { throw new Error('Sync fixtures do not call models'); }
+}
+const syncRow = z.object({ processing_status: z.string(), channel_id: z.string().nullable(), fetch_error: z.string().nullable() });
+const cursorRow = z.object({ last_contiguous_message_id: z.string().nullable() });
+
+test('history sync passes a failed message, keeps it failed and retries it on the next sync', async () => {
+  const { database } = await fixture();
+  try {
+    const messages = syncMessages(5); const processor = new SyncProcessor(database); const failed = messages[1]?.id ?? ''; processor.failing.add(failed);
+    const first = await syncChannelHistory(database, processor, historySource(messages), '523456789012345678', 500, false);
+    assert.deepEqual(first, { fetched: 5, processed: 4, registered: 0, pending: 0, skipped: 0, retried: 0, failed: [failed], limit_reached: false });
+    assert.equal((await database.query('SELECT last_contiguous_message_id FROM sync_states WHERE channel_id=$1', cursorRow, [syncChannel]))[0]?.last_contiguous_message_id, messages[4]?.id);
+    const stored = (await database.query('SELECT processing_status,channel_id,fetch_error FROM messages WHERE message_id=$1', syncRow, [failed]))[0];
+    assert.equal(stored?.processing_status, 'failed'); assert.equal(stored?.channel_id, syncChannel); assert.match(stored?.fetch_error ?? '', /Synthetic pipeline failure/);
+    assert.equal(syncReport('同期', first), `同期が完了しました。処理=4件、店舗候補=0件、データ確認=0件、失敗=1件。\n失敗した投稿は次回の同期で再試行します。message_id=${failed}`);
+    const again = await syncChannelHistory(database, processor, historySource(messages), '523456789012345678', 500, false);
+    assert.deepEqual(again?.failed, [failed]); assert.equal(again?.retried, 1); assert.equal(again?.fetched, 0);
+    processor.failing.clear();
+    const recovered = await syncChannelHistory(database, processor, historySource(messages), '523456789012345678', 500, false);
+    assert.deepEqual(recovered, { fetched: 0, processed: 1, registered: 0, pending: 0, skipped: 0, retried: 1, failed: [], limit_reached: false });
+    assert.equal((await database.query('SELECT processing_status,channel_id,fetch_error FROM messages WHERE message_id=$1', syncRow, [failed]))[0]?.processing_status, 'succeeded');
+    assert.equal((await syncChannelHistory(database, processor, historySource(messages), '523456789012345678', 500, false))?.retried, 0);
+  } finally { await database.close(); }
+});
+
+test('history sync stops after three failures in a row and closes a deleted failed message', async () => {
+  const { database } = await fixture();
+  try {
+    const messages = syncMessages(6); const processor = new SyncProcessor(database); const ids = messages.map(item => item.id);
+    for (const id of ids.slice(1, 4)) processor.failing.add(id);
+    await assert.rejects(syncChannelHistory(database, processor, historySource(messages), '523456789012345678', 500, false), error => error instanceof HistorySyncError && error.failed.join() === ids.slice(1, 4).join() && error.messageId === ids[3]);
+    assert.equal((await database.query('SELECT last_contiguous_message_id FROM sync_states WHERE channel_id=$1', cursorRow, [syncChannel]))[0]?.last_contiguous_message_id, ids[3]);
+    assert.equal((await database.query('SELECT processing_status,channel_id,fetch_error FROM messages WHERE message_id=$1', syncRow, [ids[4]])).length, 0);
+    processor.failing.clear();
+    const resumed = await syncChannelHistory(database, processor, historySource(messages, new Set([ids[2] ?? ''])), '523456789012345678', 500, false);
+    assert.deepEqual(resumed, { fetched: 2, processed: 4, registered: 0, pending: 0, skipped: 1, retried: 2, failed: [], limit_reached: false });
+    const deleted = (await database.query('SELECT processing_status,channel_id,fetch_error FROM messages WHERE message_id=$1', syncRow, [ids[2]]))[0];
+    assert.equal(deleted?.processing_status, 'ignored'); assert.match(deleted?.fetch_error ?? '', /deleted/);
+  } finally { await database.close(); }
 });
 
 test('channel lock rejects concurrent sync and releases after failures', async () => {

@@ -275,6 +275,14 @@
         {
           "value": "メキシコ料理",
           "children": []
+        },
+        {
+          "value": "アメリカ料理",
+          "children": []
+        },
+        {
+          "value": "その他各国料理",
+          "children": []
         }
       ]
     },
