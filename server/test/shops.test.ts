@@ -106,6 +106,29 @@ test('keeps a posted Tabelog link and omits conflicting source identities', asyn
   } finally { await database.close(); }
 });
 
+test('category options follow the other filters and leave out empty categories', async () => {
+  const { database, app, viewer } = await fixture();
+  try {
+    // Shops 1-20 are in 木場 and 21-30 in 門前仲町; only shop 1 is visited.
+    await database.execute("UPDATE shops SET category='寿司' WHERE id IN (21,22)");
+    await database.execute('UPDATE shops SET category=NULL WHERE id=1');
+    const list = async (params: Record<string, string>): Promise<ReturnType<typeof shopsSchema.parse>> => shopsSchema.parse(await (await app.request('/api/ui/shops?' + new URLSearchParams(params), { headers: headers(viewer) })).json());
+    const all = await list({});
+    assert.deepEqual([...all.categories].sort(), ['和食', '寿司'].sort()); assert.equal(all.has_unclassified, true);
+    const kiba = await list({ area: '木場' });
+    assert.deepEqual(kiba.categories, ['和食']); assert.equal(kiba.has_unclassified, true);
+    const monnaka = await list({ area: '門前仲町' });
+    assert.deepEqual([...monnaka.categories].sort(), ['和食', '寿司'].sort()); assert.equal(monnaka.has_unclassified, false);
+    const visited = await list({ status: 'visited' });
+    assert.deepEqual(visited.categories, []); assert.deepEqual(visited.category_groups, []); assert.equal(visited.has_unclassified, true);
+    const unvisited = await list({ status: 'unvisited', area: '木場' });
+    assert.deepEqual(unvisited.categories, ['和食']); assert.equal(unvisited.has_unclassified, false);
+    // The picked category does not narrow its own options.
+    const picked = await list({ area: '木場', category: '寿司' });
+    assert.equal(picked.total, 0); assert.deepEqual(picked.category_groups, kiba.category_groups); assert.equal(picked.has_unclassified, true);
+  } finally { await database.close(); }
+});
+
 test('category filters include descendants and aliases without guessing legacy compounds', async () => {
   const { database, app, viewer } = await fixture();
   try {

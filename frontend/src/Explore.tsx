@@ -13,7 +13,7 @@ import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { HStack } from '@astryxdesign/core/HStack';
 import { useEffect, useId, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { shopsSchema } from './api';
+import { api, shopsSchema } from './api';
 import type { Session, Shop, ShopPage } from './api';
 import { ErrorBox, ExternalButton, Icon, Modal, Skeleton, Stars, closeDialog, navigate, openDialog, useResource } from './shared';
 import { ShopDialog } from './Shop';
@@ -34,8 +34,26 @@ function Filter({ page, params, close, apply }: { page: ShopPage; params: URLSea
   const [area, setArea] = useState(params.get('area') ?? '');
   const [status, setStatus] = useState(params.get('status') ?? 'all');
   const statusId = useId();
+  // Category options follow the area and status picked here, so no listed category is empty.
+  const q = params.get('q') ?? '';
+  const scopeKey = (pickedArea: string, pickedStatus: string): string => { const scope = new URLSearchParams(); if (q) scope.set('q', q); if (pickedArea) scope.set('area', pickedArea); if (pickedStatus !== 'all') scope.set('status', pickedStatus); return scope.toString(); };
+  const appliedKey = scopeKey(params.get('area') ?? '', params.get('status') ?? 'all');
+  const key = scopeKey(area, status);
+  const [fetched, setFetched] = useState<{ key: string; page: ShopPage } | null>(null);
+  const [failure, setFailure] = useState<Error | null>(null);
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    setFailure(null);
+    if (key === appliedKey) return;
+    const controller = new AbortController();
+    api('/api/ui/shops?' + key, shopsSchema, { signal: controller.signal }).then(data => setFetched({ key, page: data }), (error: Error) => { if (error.name !== 'AbortError') setFailure(error); });
+    return () => controller.abort();
+  }, [key, appliedKey, attempt]);
+  // The list page already holds the options for the applied filters.
+  const scoped = key === appliedKey ? page : fetched?.key === key ? fetched.page : null;
+  const shown = scoped ?? fetched?.page ?? page;
   const areaOptions = [{ value: '', label: 'すべて' }, ...page.filter_areas.map(entry => ({ value: entry.value, label: `${'　'.repeat(entry.depth)}${entry.label} (${entry.count})` })), { value: '__none__', label: 'エリア未設定' }];
-  return <Modal title="絞り込み" close={close} footer={<HStack justify="between" width="100%"><Button type="button" variant="ghost" label="リセット" onClick={() => { const data = new FormData(); data.set('area', ''); data.set('category', ''); data.set('status', 'all'); apply(data); }} /><Button type="submit" form="explore-filter" variant="primary" label="適用" /></HStack>}><form id="explore-filter" className="filter-body" onKeyDown={blockComboboxSubmit} onSubmit={event => { event.preventDefault(); apply(new FormData(event.currentTarget)); }}><Selector label="エリア" htmlName="area" options={areaOptions} value={area} onChange={setArea} hasSearch searchPlaceholder="エリアを検索" width="100%" /><CategorySelect label="カテゴリ" name="category" value={category} onChange={setCategory} groups={page.category_groups} emptyLabel="すべて" includeUnclassified /><Field label="訪問状況" inputID={statusId} isGroupLabel width="100%"><SegmentedControl id={statusId} label="訪問状況" layout="fill" value={status} onChange={setStatus}><SegmentedControlItem value="all" label="すべて" /><SegmentedControlItem value="unvisited" label="未訪問" /><SegmentedControlItem value="visited" label="訪問済み" /></SegmentedControl></Field><input type="hidden" name="status" value={status} /></form></Modal>;
+  return <Modal title="絞り込み" close={close} footer={<HStack justify="between" width="100%"><Button type="button" variant="ghost" label="リセット" onClick={() => { const data = new FormData(); data.set('area', ''); data.set('category', ''); data.set('status', 'all'); apply(data); }} /><Button type="submit" form="explore-filter" variant="primary" label="適用" /></HStack>}><form id="explore-filter" className="filter-body" onKeyDown={blockComboboxSubmit} onSubmit={event => { event.preventDefault(); apply(new FormData(event.currentTarget)); }}><Selector label="エリア" htmlName="area" options={areaOptions} value={area} onChange={setArea} hasSearch searchPlaceholder="エリアを検索" width="100%" /><CategorySelect label="カテゴリ" value={category} onChange={setCategory} groups={shown.category_groups} emptyLabel="すべて" includeUnclassified={shown.has_unclassified || category === '__none__'} disabled={!scoped} /><input type="hidden" name="category" value={category} /><ErrorBox error={failure} retry={() => setAttempt(value => value + 1)} /><Field label="訪問状況" inputID={statusId} isGroupLabel width="100%"><SegmentedControl id={statusId} label="訪問状況" layout="fill" value={status} onChange={setStatus}><SegmentedControlItem value="all" label="すべて" /><SegmentedControlItem value="unvisited" label="未訪問" /><SegmentedControlItem value="visited" label="訪問済み" /></SegmentedControl></Field><input type="hidden" name="status" value={status} /></form></Modal>;
 }
 export function Explore({ location, session }: { location: string; session: Session }): ReactNode {
   const params = new URL(location, window.location.origin).searchParams;

@@ -123,15 +123,18 @@ export class Shops {
     const pages = Math.max(1, Math.ceil(total / 24)); const page = Math.min(query.page, pages);
     const limit = '$' + (values.length + 1); const offset = '$' + (values.length + 2);
     const rows = await this.database.query(`SELECT s.* FROM shops s WHERE ${predicate} ORDER BY ${order} LIMIT ${limit} OFFSET ${offset}`, shopRow, [...values, 24, (page - 1) * 24]);
-    const storedCategories = await this.database.query(`SELECT DISTINCT s.category FROM shops s WHERE ${publicPredicate} ORDER BY s.category`, categoryRow);
+    // Category options follow every filter except category itself, so no listed category is empty.
+    const categoryScope = await this.selection({ ...query, category: '', sort: 'name_asc' }, true);
+    const storedCategories = await this.database.query(`SELECT DISTINCT s.category FROM shops s WHERE ${categoryScope.predicate} ORDER BY s.category`, categoryRow, categoryScope.values);
     const categoryGroups = buildCategoryFilterGroups(storedCategories.map(row => row.category));
+    const hasUnclassified = storedCategories.some(row => categoryMatches(row.category, '__none__'));
     // Slider areas follow every filter except area itself, so the order matches the current results.
     const scoped = await this.selection({ ...query, area: '', sort: 'name_asc' }, true);
     const scopedAreas = await this.database.query(`SELECT s.area,COUNT(s.id) AS count FROM shops s WHERE ${scoped.predicate} GROUP BY s.area`, areaRow, scoped.values);
     const options = scopedAreas.flatMap(row => row.area ? [{ value: row.area, label: areaLabel(row.area), count: row.count }] : []).sort((a, b) => b.count - a.count || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
     const details = await this.decorate(rows, this.database);
     const items: Shop[] = details.map(({ id, version, name, branch, area, area_label, category, rating, memo, image_url, maps_url, source_url, source_label }) => ({ id, version, name, branch, area, area_label, category, rating, memo, image_url, maps_url, source_url, source_label }));
-    return { items, total, page, pages, per_page: 24, areas: options, filter_areas: buildAreaFilterOptions(globalAreas), categories: categoryGroups.flatMap(group => group.options.map(option => option.value)), category_groups: categoryGroups };
+    return { items, total, page, pages, per_page: 24, areas: options, filter_areas: buildAreaFilterOptions(globalAreas), categories: categoryGroups.flatMap(group => group.options.map(option => option.value)), category_groups: categoryGroups, has_unclassified: hasUnclassified };
   }
   async annotate(id: number, input: z.infer<typeof annotationUpdateSchema>, admin: boolean): Promise<ShopDetail> {
     const body = annotationUpdateSchema.parse(input);
