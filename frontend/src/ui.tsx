@@ -32,7 +32,8 @@ export function AreaInput({ label, value, onChange, areas, required = false, dis
     if (event.currentTarget.contains(event.relatedTarget)) return;
     const typed = query.current;
     query.current = null;
-    if (typed !== null && typed.trim() !== value) onChange(typed.trim());
+    // The typeahead resets its query to '' after a pick; an empty query is not a typed value and must not clear the area.
+    if (typed !== null && typed.trim() && typed.trim() !== value) onChange(typed.trim());
   }}><Typeahead<AreaItem> label={label} searchSource={source} value={selected} isRequired={required} isDisabled={disabled} status={status} hasClear hasEntriesOnFocus width="100%"
     renderItem={item => <span className="area-option">{item.label}{item.hint && <small>{item.hint}</small>}</span>}
     onChangeQuery={text => { query.current = text; }}
