@@ -8,7 +8,7 @@ import { externalIdentity } from './shop-creation.js';
 import { casefold, escapeRegex } from './text.js';
 
 export interface RestaurantPageEvidence { headings: readonly string[]; text_blocks: readonly string[]; visible_text: string; structured_candidates: readonly CandidateIdentity[]; page_sha256: string; }
-export interface PageCandidateProof { method: 'structured_data' | 'visible_page'; page_sha256: string; candidate: CandidateIdentity; }
+export interface PageCandidateProof { method: 'structured_data' | 'visible_page' | 'structured_data_street' | 'visible_page_street'; page_sha256: string; candidate: CandidateIdentity; }
 const postalAddress = z.object({ streetAddress: z.string().nullable().default(null), addressLocality: z.string().nullable().default(null), addressRegion: z.string().nullable().default(null), postalCode: z.string().nullable().default(null) });
 const restaurant = z.object({ '@type': z.union([z.string(), z.array(z.string())]), name: z.string().min(1), address: z.union([z.string(), postalAddress]).nullable().default(null), telephone: z.string().nullable().default(null), url: z.string().nullable().default(null), servesCuisine: z.union([z.string(), z.array(z.string())]).nullable().default(null) });
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
@@ -99,4 +99,26 @@ export function provePageCandidate(candidate: CandidateIdentity, evidence: Resta
     return ['', '住所', '所在地', '店舗住所', 'address'].includes(prefix.replace(name, ''));
   });
   return bound ? { method: 'visible_page', page_sha256: evidence.page_sha256, candidate: { ...candidate, category: null, phone: null, external_source: null, external_id: null } } : null;
+}
+// Address up to the lot number, without postal code and building name. Null when there is no lot number such as "9-3".
+export function streetAddress(value: string | null): string | null {
+  const address = comparableAddress(value); const lot = /[0-9]+(?:-[0-9]+)+/.exec(address);
+  return lot && lot.index > 0 ? address.slice(0, lot.index + lot[0].length) : null;
+}
+// Looser proof, used after provePageCandidate fails: the street address must match, and the names may differ by a prefix or a reading.
+export function provePageCandidateByStreet(candidate: CandidateIdentity, evidence: RestaurantPageEvidence): PageCandidateProof | null {
+  const street = streetAddress(candidate.address); const name = normalizeName(candidate.name); if (!street || [...name].length < 2) return null;
+  if (evidence.structured_candidates.length) {
+    const here = evidence.structured_candidates.filter(page => streetAddress(page.address) === street); const page = here[0];
+    if (here.length !== 1 || !page) return null;
+    const pageName = normalizeName(page.name); if ([...pageName].length < 2 || !(pageName.includes(name) || name.includes(pageName))) return null;
+    return { method: 'structured_data_street', page_sha256: evidence.page_sha256, candidate: page };
+  }
+  if (!evidence.headings.some(heading => pageTextMentionsRestaurantName(candidate.name, heading))) return null;
+  const text = comparableAddress(evidence.visible_text); let found = false;
+  for (let start = text.indexOf(street); start >= 0; start = text.indexOf(street, start + 1)) {
+    // "9-3" must not be the start of another lot such as "9-30" or "9-3-1".
+    if (!/^(?:[0-9]|-[0-9])/.test(text.slice(start + street.length))) { found = true; break; }
+  }
+  return found ? { method: 'visible_page_street', page_sha256: evidence.page_sha256, candidate: { ...candidate, category: null, phone: null, external_source: null, external_id: null } } : null;
 }

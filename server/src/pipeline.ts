@@ -10,7 +10,7 @@ import { canonicalArea } from './geography.js';
 import { ImageCache } from './image-cache.js';
 import { envelopeSchema } from './ingestion.js';
 import type { MessageEnvelope, MessageProcessor, ProcessResult } from './ingestion.js';
-import { candidateForNewShop, dedupeCandidates, replaceWebCandidate, structuredBlockReason, topWebCandidate } from './pipeline-candidates.js';
+import { candidateForNewShop, containedNameCandidates, dedupeCandidates, replaceWebCandidate, structuredBlockReason, topWebCandidate } from './pipeline-candidates.js';
 import type { PipelineCandidate } from './pipeline-candidates.js';
 import { discoveryEvidence, SourceDiscovery } from './pipeline-discovery.js';
 import type { DiscoveryEvidence } from './pipeline-discovery.js';
@@ -142,7 +142,12 @@ export class RestaurantProcessor implements MessageProcessor {
       let pageBlocked: string | null = null;
       if (!chosen && !candidate && !blocked && automatic) {
         const excluded = usingDiscovery ? discovery?.source_urls ?? [] : []; candidate = topWebCandidate(extracted, candidates, usingDiscovery, excluded);
-        if (candidate) [candidate, pageBlocked] = await evidence.verifyPage(extracted, candidate, candidates, excluded);
+        if (candidate) [candidate, pageBlocked] = await evidence.verifyPage(extracted, candidate, candidates, excluded, usingDiscovery ? 'strict' : 'relaxed');
+        else if (!usingDiscovery) {
+          // No exact name match: try candidates whose name contains the posted name, and keep the reason when none can be proved.
+          const contained = containedNameCandidates(extracted, candidates); pageBlocked = contained.reason;
+          for (const item of contained.candidates) { [candidate, pageBlocked] = await evidence.verifyPage(extracted, item, candidates, excluded, 'contained_name'); if (candidate) break; }
+        }
         if (usingDiscovery && candidate) {
           const [shop, matchReason] = await shops.afterConfirmation(extracted, candidate);
           if (shop) { chosen = shop; reason = matchReason; selected = candidate; basis = 'verified_candidate'; }
