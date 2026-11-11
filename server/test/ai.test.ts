@@ -69,6 +69,9 @@ test('model output schemas limit category to master values or null and keep othe
   assert.deepEqual(Object.keys(outputSchemas.message.$defs.ExtractedMention.properties), Object.keys(contract.schemas.message.$defs.ExtractedMention.properties));
   assert.deepEqual(outputSchemas.images, contract.schemas.images);
   for (const prompt of [contract.prompts.extraction, contract.prompts.image_extraction, contract.prompts.search, contract.prompts.image_search, contract.prompts.source_discovery]) { assert.ok(prompt.includes('末尾のカテゴリー一覧から1つ選びます')); assert.ok(!prompt.includes('簡潔な料理ジャンル')); }
+  // An unreadable source must go to review, not be ignored.
+  assert.ok(contract.prompts.source_discovery.includes('判断できない場合は対象外にせず、is_restaurant_message=true、mentions=[]、ignore_reason=nullにし、確認できなかった理由をunresolved_reasonに書きます'));
+  assert.ok(!contract.prompts.source_discovery.includes('判断できない場合も同じです'));
 });
 
 test('model accounting preserves estimates and retries without claiming current API prices', () => {
