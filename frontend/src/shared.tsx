@@ -2,6 +2,7 @@ import { Dialog } from '@astryxdesign/core/Dialog';
 import { DialogHeader } from '@astryxdesign/core/Dialog';
 import { Layout, LayoutContent, LayoutFooter } from '@astryxdesign/core/Layout';
 import { Button } from '@astryxdesign/core/Button';
+import { HStack } from '@astryxdesign/core/HStack';
 import { Skeleton as AstryxSkeleton } from '@astryxdesign/core/Skeleton';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Link as AstryxLink } from '@astryxdesign/core/Link';
@@ -80,9 +81,13 @@ export function Skeleton({ full = true }: { full?: boolean }): ReactNode {
   return <div className={full ? 'react-skeleton fullscreen' : 'react-skeleton'} role="status" aria-label="読み込み中"><div className="skeleton-inner"><div className="skeleton-header"><AstryxSkeleton className="sk" style={{ width: 160, height: 28 }} /></div><AstryxSkeleton className="sk sk-search" /><div className="skeleton-heading"><AstryxSkeleton className="sk" /></div><div className="skeleton-cards">{Array.from({ length: 6 }, (_, i) => <div className="skeleton-card" key={i}><AstryxSkeleton className="sk sk-photo" /><div className="sk-copy"><AstryxSkeleton className="sk" /><AstryxSkeleton className="sk" /><AstryxSkeleton className="sk" /></div></div>)}</div></div></div>;
 }
 // titleHidden: no title bar; the title still names the dialog and a close button floats over the content.
-export function Modal({ children, title, close, detail = false, titleHidden = false, footer }: { children: ReactNode; title: string; close: () => void; detail?: boolean; titleHidden?: boolean; footer?: ReactNode }): ReactNode {
-  const onOpenChange = (open: boolean): void => { if (!open) close(); };
-  return <Dialog isOpen onOpenChange={onOpenChange} padding={0} maxHeight="var(--sheet-max-height)" className={`sheet ${detail ? 'detail-sheet' : 'filter-sheet'}${titleHidden ? ' sheet-untitled' : ''}`} aria-label={title}>{titleHidden && <Button className="sheet-close" variant="secondary" label="閉じる" icon={<Icon name="close" />} isIconOnly onClick={close} />}<Layout className="sheet-layout" padding={4} header={titleHidden ? undefined : <DialogHeader title={title} onOpenChange={onOpenChange} />} content={<LayoutContent className="sheet-body" isScrollable padding={0}>{children}</LayoutContent>} footer={footer && <LayoutFooter>{footer}</LayoutFooter>} /></Dialog>;
+// unsaved: closing asks in place first, so Escape or a backdrop click cannot drop the input.
+export function Modal({ children, title, close, detail = false, titleHidden = false, unsaved = false, footer }: { children: ReactNode; title: string; close: () => void; detail?: boolean; titleHidden?: boolean; unsaved?: boolean; footer?: ReactNode }): ReactNode {
+  const [asking, setAsking] = useState(false);
+  useEffect(() => { if (!unsaved) setAsking(false); }, [unsaved]);
+  const requestClose = (): void => { if (unsaved) setAsking(true); else close(); };
+  const onOpenChange = (open: boolean): void => { if (!open) requestClose(); };
+  return <Dialog isOpen onOpenChange={onOpenChange} padding={0} maxHeight="var(--sheet-max-height)" className={`sheet ${detail ? 'detail-sheet' : 'filter-sheet'}${titleHidden ? ' sheet-untitled' : ''}`} aria-label={title}>{titleHidden && <Button className="sheet-close" variant="secondary" label="閉じる" icon={<Icon name="close" />} isIconOnly onClick={requestClose} />}<Layout className="sheet-layout" padding={4} header={titleHidden ? undefined : <DialogHeader title={title} onOpenChange={onOpenChange} />} content={<LayoutContent className="sheet-body" isScrollable padding={0}>{children}{asking && <div className="sheet-unsaved"><Banner status="warning" title="保存していない入力があります" endContent={<HStack gap={2}><Button variant="ghost" size="sm" label="編集に戻る" onClick={() => setAsking(false)} /><Button variant="destructive" size="sm" label="破棄して閉じる" onClick={close} /></HStack>} /></div>}</LayoutContent>} footer={footer && <LayoutFooter>{footer}</LayoutFooter>} /></Dialog>;
 }
 export function Stars({ rating }: { rating: number | null }): ReactNode {
   return <span className="rating" aria-label={rating ? `評価 ${rating}点（5点満点）` : '未評価'}>{rating ? <span className="stars" aria-hidden="true">{Array.from({ length: 5 }, (_, index) => <span key={index} className={index < rating ? 'is-selected' : ''}>★</span>)}</span> : '未評価'}</span>;

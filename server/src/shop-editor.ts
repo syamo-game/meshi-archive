@@ -45,7 +45,9 @@ export class ShopEditor {
     await this.database.transaction(async connection => {
       const shop = await this.shops.find(id, true, connection);
       if (shop.id !== id) throw new AppError(409, '店舗が統合されています。統合先の店舗を開き直してください。');
-      const current = values(shop);
+      // The form is filled from the detail view, which hides a shop URL that repeats the posted link.
+      const shown = await this.shops.detail(id, true, connection);
+      const current = { ...values(shop), url: shown.canonical_url ?? '' };
       const draft = { ...input };
       let expected = originalVersion;
       if (originalVersion !== shop.version) {
@@ -77,8 +79,9 @@ export class ShopEditor {
       const unchangedCategory = rawCategory === shop.category?.trim();
       const category = normalizedCategory ?? (rawCategory && unchangedCategory ? shop.category : rawCategory);
       if (rawCategory && !unchangedCategory && !normalizedCategory) throw new AppError(422, 'カテゴリは候補から選択してください。');
-      const url = draft.url.trim() ? safeHttpUrl(draft.url) : null;
-      if (draft.url.trim() && !url) throw new AppError(422, 'http:// または https:// で始まる有効なURLを指定してください。');
+      // An untouched URL keeps the stored value, so a hidden URL is not wiped by saving other fields.
+      const url = draft.url === current.url ? shop.canonical_url : draft.url.trim() ? safeHttpUrl(draft.url) : null;
+      if (draft.url !== current.url && draft.url.trim() && !url) throw new AppError(422, 'http:// または https:// で始まる有効なURLを指定してください。');
       const address = z.string().trim().max(2000).parse(draft.address) || null;
       const phone = normalizePhone(z.string().trim().max(64).parse(draft.phone));
       if (phone && phone.length > 32) throw new AppError(422, '電話番号が長すぎます。');

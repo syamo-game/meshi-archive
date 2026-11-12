@@ -38,6 +38,28 @@ test('metadata saves preserve memo whitespace and reject member edits', async ()
   } finally { await database.close(); }
 });
 
+test('saving keeps a shop URL that the edit form hides and still applies URL edits', async () => {
+  const { app, database, admin } = await fixture();
+  try {
+    const stored = 'https://tabelog.com/tokyo/A1313/A131303/123456/';
+    await database.execute('UPDATE shops SET external_source=$1,external_id=$2,canonical_url=$3 WHERE id=$4', ['食べログ', '123456', stored, 1]);
+    await database.execute('UPDATE shop_mentions SET source_url=NULL WHERE shop_id=$1', [1]);
+    await database.execute('INSERT INTO source_assets(message_id,kind,url,fetch_status,created_at) VALUES($1,$2,$3,$4,$5)', ['90000000000000001', 'link', stored + 'dtlmenu/', 'available', new Date().toISOString()]);
+    const url = async (): Promise<string | null | undefined> => (await database.query('SELECT canonical_url FROM shops WHERE id=$1', z.object({ canonical_url: z.string().nullable() }), [1]))[0]?.canonical_url;
+    const save = async (version: number, value: string): Promise<number> => {
+      const body = form(); body.set('expected_version', String(version)); body.set('url', value);
+      return (await app.request('/shop/1/edit', { method: 'POST', headers: { ...headers(admin), 'X-Requested-With': 'XMLHttpRequest' }, body })).status;
+    };
+    // The detail view hides the URL because it repeats the posted link, so the form sends it empty.
+    const shown = detailSchema.parse(await (await app.request('/api/ui/shops/1', { headers: headers(admin) })).json());
+    assert.equal(shown.canonical_url, null);
+    assert.equal(await save(1, ''), 200); assert.equal(await url(), stored);
+    assert.equal(await save(2, 'https://example.com/shop'), 200); assert.match(await url() ?? '', /^https:\/\/example\.com\/shop/);
+    // A URL the form shows can still be cleared.
+    assert.equal(await save(3, ''), 200); assert.equal(await url(), null);
+  } finally { await database.close(); }
+});
+
 test('conflict requires explicit choices and retains a concurrent member memo', async () => {
   const { app, database, admin, viewer } = await fixture();
   try {
