@@ -91,7 +91,9 @@ export class RestaurantAI {
     for (let attempt = 1; attempt <= 3; attempt++) {
       try { return { response: await this.semaphore.run(() => client.responses.create(params, signal ? { signal } : {}), signal), attempts: attempt }; }
       catch (error) {
-        if (!(error instanceof OpenAI.APIError) || !error.status || (error.status !== 429 && (error.status < 500 || error.status >= 600)) || attempt === 3) throw new ExtractionError(`OpenAI request failed: stage=${stage} attempt=${attempt} status=${error instanceof OpenAI.APIError ? error.status : 'transport'} request_id=${error instanceof OpenAI.APIError ? error.requestID : '(none)'}`, { cause: error });
+        // A 429 for missing credits does not clear by waiting, so do not retry it.
+        const quota = error instanceof OpenAI.APIError && error.status === 429 && error.type === 'insufficient_quota';
+        if (!(error instanceof OpenAI.APIError) || !error.status || quota || (error.status !== 429 && (error.status < 500 || error.status >= 600)) || attempt === 3) throw new ExtractionError(`OpenAI request failed: stage=${stage} attempt=${attempt} status=${error instanceof OpenAI.APIError ? error.status : 'transport'} request_id=${error instanceof OpenAI.APIError ? error.requestID : '(none)'}${quota ? ` code=${error.code ?? '(none)'} reason=insufficient_quota` : ''}`, { cause: error });
         const header = Number(error.headers?.get('retry-after')); const seconds = Number.isFinite(header) && header > 0 ? header : 2 ** (attempt - 1);
         console.warn('Retrying OpenAI request', { stage, attempt, status: error.status, delay: Math.min(seconds, 30) }); await delay(Math.min(seconds, 30) * 1000, undefined, signal ? { signal } : {});
       }

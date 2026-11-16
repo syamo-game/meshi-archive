@@ -82,3 +82,29 @@ test('model accounting preserves estimates and retries without claiming current 
   assert.equal(metrics.web_search_calls, 2); assert.equal(metrics.estimated_cost_microusd, 510400); assert.equal(metrics.latency_ms, 15);
 });
 
+
+// A local server stands in for the OpenAI API so the real client and retry loop run.
+async function withOpenAIServer(body: object, run: (requests: () => number) => Promise<void>): Promise<void> {
+  const { createServer } = await import('node:http');
+  let count = 0;
+  const server = createServer((request, response) => { count++; request.resume(); response.writeHead(429, { 'content-type': 'application/json', 'retry-after': '1' }).end(JSON.stringify(body)); });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('Test server has no port');
+  const previous = process.env.OPENAI_BASE_URL; process.env.OPENAI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  try { await run(() => count); }
+  finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; await new Promise<void>(resolve => server.close(() => resolve())); }
+}
+test('exhausted OpenAI credits fail at once without retries', async () => {
+  await withOpenAIServer({ error: { message: 'You have no credits remaining.', type: 'insufficient_quota', param: null, code: 'credit_balance_exhausted' } }, async requests => {
+    const client = new RestaurantAI(readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-ai-fixture');
+    await assert.rejects(client.preflightModels(), /stage=model_preflight attempt=1 status=429 .*code=credit_balance_exhausted reason=insufficient_quota/);
+    assert.equal(requests(), 1);
+  });
+});
+test('ordinary rate limits are still retried three times', async () => {
+  await withOpenAIServer({ error: { message: 'Rate limit reached.', type: 'requests', param: null, code: 'rate_limit_exceeded' } }, async requests => {
+    const client = new RestaurantAI(readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-ai-fixture');
+    await assert.rejects(client.preflightModels(), /stage=model_preflight attempt=3 status=429 request_id=[^ ]+$/);
+    assert.equal(requests(), 3);
+  });
+});
