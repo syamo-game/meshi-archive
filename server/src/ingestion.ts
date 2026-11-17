@@ -8,9 +8,11 @@ const assetSchema = z.strictObject({ kind: z.enum(['link', 'embed', 'image', 'at
 const snowflake = z.string().regex(/^\d{17,20}$/);
 export const envelopeSchema = z.strictObject({ message_id: snowflake, channel_id: snowflake, content: z.string().trim().min(1).max(100000), created_at: z.string().datetime(), assets: z.array(assetSchema), omitted_asset_count: z.number().int().nonnegative() });
 export type MessageEnvelope = z.infer<typeof envelopeSchema>;
+export type ProcessingMode = 'realtime' | 'sync';
 export interface ProcessResult { message_id: string; shop_ids: readonly number[]; pending_mention_ids: readonly number[]; ignored: boolean; }
 export interface MessageProcessor {
-  processMessage(envelope: MessageEnvelope): Promise<ProcessResult>;
+  // mode=sync marks batch work from channel history, where a slower and cheaper AI tier is fine.
+  processMessage(envelope: MessageEnvelope, mode?: ProcessingMode): Promise<ProcessResult>;
   cacheImage(url: string): Promise<void>;
   preflightModels(): Promise<void>;
 }

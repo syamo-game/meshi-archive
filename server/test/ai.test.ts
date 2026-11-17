@@ -108,3 +108,12 @@ test('ordinary rate limits are still retried three times', async () => {
     assert.equal(requests(), 3);
   });
 });
+
+test('flex calls are estimated at half the token price and keep the web search price', () => {
+  // (100*2 + 20*10) * 0.5 tokens + 1 search * 10000
+  assert.equal(estimateCost('gpt-6.1-sol', 100, 20, 1, {}, 'flex'), 10200);
+  assert.equal(estimateCost('gpt-6.1-sol', 100, 20, 1, { FLEX_TOKEN_PRICE_RATIO: '1' }, 'flex'), 10400);
+  const response = { service_tier: 'flex' as const, usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } }, output: [] };
+  assert.equal(callMetrics(response, 'gpt-6.1-sol', 1, 1).estimated_cost_microusd, 1500);
+  assert.equal(callMetrics({ ...response, service_tier: 'default' }, 'gpt-6.1-sol', 1, 1).estimated_cost_microusd, 3000);
+});

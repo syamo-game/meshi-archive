@@ -90,7 +90,7 @@ export async function syncChannelHistory(database: Database, processor: MessageP
     // One failed message must not block the ones after it. It stays failed and the next sync retries it.
     const attempt = async (message: SyncMessage): Promise<void> => {
       try {
-        const response = await processor.processMessage(await acquireMessageEnvelope(message.input, processor));
+        const response = await processor.processMessage(await acquireMessageEnvelope(message.input, processor), 'sync');
         result.processed++; result.registered += response.shop_ids.length; result.pending += response.pending_mention_ids.length; consecutive = 0;
       } catch (error) {
         console.error('History sync message failed', { channelId: channel.id, messageId: message.id, error });
