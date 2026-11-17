@@ -21,6 +21,7 @@ import { existingShopFromImage, imageCandidates, imageMatchesMention, imageVerif
 import { PipelineJournal } from './pipeline-journal.js';
 import { PipelineShops } from './pipeline-shops.js';
 import { findSourceReuse } from './pipeline-source-reuse.js';
+import { attachMissingShopPhotos } from './shop-photos.js';
 import { createCandidateShop, metadataReviewState, newMention, replaceSourceAssets, saveMention, storeCandidates } from './pipeline-storage.js';
 import { mentionRecord, messageRecord } from './records.js';
 import type { ShopRecord } from './records.js';
@@ -48,15 +49,20 @@ export class RestaurantProcessor {
   private readonly ai: RestaurantAI;
   private readonly flexAi: RestaurantAI;
   private readonly images: ImageCache;
-  constructor(private readonly database: Database, private readonly settings: AISettings, directory: string, private readonly cacheDays = 30) { this.ai = new RestaurantAI(settings, directory); this.flexAi = new RestaurantAI(settings, directory, 'flex'); this.images = new ImageCache(directory); z.number().int().min(1).parse(cacheDays); }
+  constructor(private readonly database: Database, private readonly settings: AISettings, private readonly directory: string, private readonly cacheDays = 30) { this.ai = new RestaurantAI(settings, directory); this.flexAi = new RestaurantAI(settings, directory, 'flex'); this.images = new ImageCache(directory); z.number().int().min(1).parse(cacheDays); }
   preflightModels(): Promise<void> { return this.ai.preflightModels(); }
   async cacheImage(url: string): Promise<void> { await this.images.original(url); }
   async processMessage(input: MessageEnvelope, options: ProcessingOptions = {}): Promise<ProcessResult> {
     const envelope = envelopeSchema.parse(input); const journal = new PipelineJournal(this.settings, this.cacheDays);
     try {
-      return await this.database.transaction(async connection => {
-        const result = await this.process(connection, journal, envelope, options); await journal.persist(connection); return result;
+      const result = await this.database.transaction(async connection => {
+        const processed = await this.process(connection, journal, envelope, options); await journal.persist(connection); return processed;
       });
+      // Photos are fetched after the commit so slow image hosts never hold the transaction open.
+      // The message is already saved, so a photo problem is logged and does not mark it failed.
+      try { const photos = await attachMissingShopPhotos(this.database, this.directory, envelope); if (photos.length) console.info('Shop photos attached', { messageId: envelope.message_id, photos }); }
+      catch (error) { console.error('Shop photo attachment failed', { messageId: envelope.message_id, shopIds: result.shop_ids, error }); }
+      return result;
     } catch (error) {
       console.error('Message pipeline failed', { messageId: envelope.message_id, error });
       const failure = error instanceof Error ? error : new Error(String(error)); journal.failure(envelope.message_id, 'message_pipeline', failure);
