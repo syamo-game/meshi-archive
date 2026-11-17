@@ -113,3 +113,36 @@ test('flex processing sends every AI call at the flex tier and normal processing
     });
   } finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; }
 });
+
+test('a restaurant post with no shop name gets clue-search candidates for review, keeping only searched evidence', async () => {
+  const usage = { input_tokens: 10, output_tokens: 5, total_tokens: 15, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } };
+  const message = (text: string): object => ({ type: 'message', id: 'msg_synthetic', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
+  const extraction = { is_restaurant_message: true, ignore_reason: null, unresolved_reason: '店名の記載がない。', mentions: [] };
+  const clues = { is_list_post: false, clues: ['合成町', '合成鍋'], unresolved_reason: null, candidates: [
+    { shop_name: '合成食堂', branch_name: null, area: '東京都中央区', matched_clues: ['写真の看板が一致'], evidence_urls: ['https://shop.example.com/a/#menu'], confidence: 'high', area_matches_post: 'match' },
+    { shop_name: '架空亭', branch_name: null, area: null, matched_clues: ['料理が似ている'], evidence_urls: ['https://not-searched.example.com/'], confidence: 'medium', area_matches_post: 'unknown' },
+  ] };
+  const responses = [
+    { id: 'resp_1', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', output: [message(JSON.stringify(extraction))], usage },
+    { id: 'resp_2', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', output: [{ type: 'web_search_call', id: 'ws_1', status: 'completed', action: { type: 'search', query: '合成町 合成鍋', sources: [{ type: 'url', url: 'https://shop.example.com/a' }] } }, message(JSON.stringify(clues))], usage },
+  ];
+  const { database } = await fixture(); const previous = process.env.OPENAI_BASE_URL; let calls = 0;
+  try {
+    await withJsonServer(() => ({ status: 200, body: responses[Math.min(calls++, 1)] ?? {} }), async (baseUrl, requests) => {
+      process.env.OPENAI_BASE_URL = baseUrl + '/v1';
+      const envelope = envelopeSchema.parse({ message_id: '90000000000000220', channel_id: '123456789012345678', content: '合成町の名店で合成鍋', created_at: '2026-11-17T00:00:00Z', assets: [], omitted_asset_count: 0 });
+      const processor = new RestaurantProcessor(database, readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-image-fixture');
+      const result = await processor.processMessage(envelope, { allowClueSearch: true });
+      assert.equal(result.ignored, false); assert.equal(result.pending_mention_ids.length, 1);
+      assert.equal(requests.length, 2);
+      const searchRequest = z.object({ max_tool_calls: z.number(), tools: z.array(z.object({ type: z.string() })) }).parse(JSON.parse(requests[1]?.body ?? '{}'));
+      assert.equal(searchRequest.max_tool_calls, 3); assert.deepEqual(searchRequest.tools.map(tool => tool.type), ['web_search']);
+      const mention = (await database.query('SELECT * FROM shop_mentions WHERE message_id=$1', mentionRecord, [envelope.message_id]))[0];
+      assert.equal(mention?.review_status, 'pending'); assert.equal(mention?.shop_id, null);
+      assert.match(mention?.confidence_reason ?? '', /手がかり検索: 候補1件。検索で根拠を確認できない候補1件を除外/);
+      const candidates = await database.query('SELECT name,area,evidence_url,provenance,is_verified,verification_reason FROM resolution_candidates WHERE mention_id=$1 ORDER BY rank', z.object({ name: z.string(), area: z.string().nullable(), evidence_url: z.string().nullable(), provenance: z.string(), is_verified: z.union([z.boolean(), z.number()]), verification_reason: z.string().nullable() }), [mention?.id ?? 0]);
+      assert.equal(candidates.length, 1); assert.equal(candidates[0]?.name, '合成食堂'); assert.equal(candidates[0]?.evidence_url, 'https://shop.example.com/a/#menu');
+      assert.equal(candidates[0]?.provenance, 'web_search'); assert.equal(Boolean(candidates[0]?.is_verified), false); assert.match(candidates[0]?.verification_reason ?? '', /確信度=高 \/ 一致: 写真の看板が一致/);
+    });
+  } finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; await database.close(); }
+});
