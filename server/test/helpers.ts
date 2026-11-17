@@ -29,3 +29,23 @@ export function headers(session: IssuedSession): { Cookie: string; 'X-CSRF-Token
   return { Cookie: `${sessionCookie}=${session.token}`, 'X-CSRF-Token': session.session.stored.csrf_token };
 }
 export const versionRow = z.object({ version: z.number() });
+
+// A local HTTP server stands in for an outside API so real clients run against it.
+export interface RecordedRequest { method: string; url: string; body: string; }
+export async function withJsonServer(respond: (request: RecordedRequest) => { status: number; body: object }, run: (baseUrl: string, requests: readonly RecordedRequest[]) => Promise<void>): Promise<void> {
+  const { createServer } = await import('node:http');
+  const requests: RecordedRequest[] = [];
+  const server = createServer((request, response) => {
+    const chunks: Buffer[] = [];
+    request.on('data', (chunk: Buffer) => chunks.push(chunk));
+    request.on('end', () => {
+      const recorded = { method: request.method ?? '', url: request.url ?? '', body: Buffer.concat(chunks).toString('utf8') }; requests.push(recorded);
+      const { status, body } = respond(recorded);
+      response.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+    });
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address(); if (!address || typeof address === 'string') throw new Error('Test server has no port');
+  try { await run(`http://127.0.0.1:${address.port}`, requests); }
+  finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+}

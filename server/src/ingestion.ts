@@ -1,6 +1,8 @@
 import type { Message } from 'discord.js';
 import { z } from 'zod';
 import { safeHttpUrl } from './links.js';
+import { fetchXPost, xPostText, xStatusId } from './x-posts.js';
+import type { XPost } from './x-posts.js';
 
 const assetSchema = z.strictObject({ kind: z.enum(['link', 'embed', 'image', 'attachment']), url: z.string().trim().refine(value => safeHttpUrl(value) !== null, 'Asset URL must use HTTP or HTTPS'), title: z.string().trim().max(2000).nullable().default(null), description: z.string().trim().max(20000).nullable().default(null), mime_type: z.string().trim().max(255).nullable().default(null), is_embed_preview: z.boolean().default(false) }).refine(value => !value.is_embed_preview || value.kind === 'image', 'Only image assets can be embed previews');
 const snowflake = z.string().regex(/^\d{17,20}$/);
@@ -46,8 +48,18 @@ export function buildMessageEnvelope(message: DiscordInput): MessageEnvelope {
   return envelopeSchema.parse({ message_id: message.id, channel_id: message.channelId, content: parts.join('\n') || '[Empty Discord message]', created_at: message.createdAt.toISOString(), assets, omitted_asset_count: Math.max(0, assets.length - 50) });
 }
 const imageHosts = new Set(['pbs.twimg.com', 'media.discordapp.net', 'cdn.discordapp.com', 'images-ext-1.discordapp.net', 'images-ext-2.discordapp.net', 'www.oimachi-tracks.com']);
+// Add the full text of linked X posts. A failed fetch is logged and the post keeps its Discord preview.
+export async function withXPosts(envelope: MessageEnvelope, fetchPost: (id: string) => Promise<XPost> = id => fetchXPost(id)): Promise<MessageEnvelope> {
+  const ids = [...new Set(envelope.assets.filter(asset => asset.kind === 'link' || asset.kind === 'embed').map(asset => xStatusId(asset.url)).filter((id): id is string => id !== null))].slice(0, 3);
+  const blocks: string[] = [];
+  for (const id of ids) {
+    try { blocks.push(xPostText(await fetchPost(id))); }
+    catch (error) { console.error('X post full text unavailable', { messageId: envelope.message_id, postId: id, error }); }
+  }
+  return blocks.length ? envelopeSchema.parse({ ...envelope, content: [envelope.content, ...blocks].join('\n').slice(0, 100000) }) : envelope;
+}
 export async function acquireMessageEnvelope(message: DiscordInput, processor: MessageProcessor): Promise<MessageEnvelope> {
-  const envelope = buildMessageEnvelope(message);
+  const envelope = await withXPosts(buildMessageEnvelope(message));
   for (const asset of envelope.assets) {
     if (asset.kind !== 'image') continue;
     const host = new URL(asset.url).hostname.toLowerCase().replace(/\.$/, '');

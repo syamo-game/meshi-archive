@@ -8,7 +8,7 @@ import { RestaurantProcessor } from '../src/pipeline.js';
 import { pipelineCandidateSchema } from '../src/pipeline-candidates.js';
 import { createCandidateShop, metadataReviewState, newMention, replaceSourceAssets, saveMention, storeCandidates } from '../src/pipeline-storage.js';
 import { candidateRecord, mentionRecord, messageRecord } from '../src/records.js';
-import { fixture } from './helpers.js';
+import { fixture, withJsonServer } from './helpers.js';
 
 test('actual processor reuses one approved source without AI and keeps repeat processing idempotent', async () => {
   const { database } = await fixture();
@@ -68,4 +68,27 @@ test('verified candidate category wins only as a master value and never erases t
       assert.equal((await createCandidateShop(database, extracted, candidate)).category, expected, `case ${index}`);
     }
   } finally { await database.close(); }
+});
+
+test('a post the extraction rules out is ignored without a web search', async () => {
+  const { database } = await fixture();
+  const extraction = { is_restaurant_message: false, ignore_reason: '飲食店への言及ではない雑談です。', unresolved_reason: null, mentions: [] };
+  const responseBody = { id: 'resp_synthetic', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', output: [{ type: 'message', id: 'msg_synthetic', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(extraction), annotations: [] }] }], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } };
+  const previous = process.env.OPENAI_BASE_URL;
+  try {
+    await withJsonServer(() => ({ status: 200, body: responseBody }), async (baseUrl, requests) => {
+      process.env.OPENAI_BASE_URL = baseUrl + '/v1';
+      const link = 'https://x.com/synthetic_user/status/1900000000000000002';
+      const envelope = envelopeSchema.parse({ message_id: '90000000000000200', channel_id: '123456789012345678', content: link + '\n[Embed Description] 合成の雑談です', created_at: '2026-11-17T00:00:00Z', assets: [{ kind: 'link', url: link }, { kind: 'embed', url: link, description: '合成の雑談です' }], omitted_asset_count: 0 });
+      const processor = new RestaurantProcessor(database, readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-image-fixture');
+      const result = await processor.processMessage(envelope, { allowSourceDiscovery: true });
+      assert.equal(result.ignored, true); assert.deepEqual(result.shop_ids, []);
+      assert.equal(requests.length, 1, 'only the extraction call runs');
+      assert.doesNotMatch(requests[0]?.body ?? '', /web_search/);
+      assert.equal((await database.query('SELECT processing_status FROM messages WHERE message_id=$1', z.object({ processing_status: z.string() }), [envelope.message_id]))[0]?.processing_status, 'ignored');
+    });
+  } finally {
+    if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous;
+    await database.close();
+  }
 });
