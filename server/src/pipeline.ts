@@ -92,7 +92,8 @@ export class RestaurantProcessor implements MessageProcessor {
     }
     const extraction = await this.ai.extract(envelope.content).catch(error => { if (error instanceof Error) journal.failure(id, 'message_extraction', error); throw error; }); journal.metrics(id, 'message_extraction', extraction.metrics);
     const fallback = options.fallbackMentions ?? []; let discovery: DiscoveryEvidence | null = null; let discovered: ExtractedMessage | null = null;
-    if (options.allowSourceDiscovery && !extraction.message.mentions.length && !fallback.length) { discovery = discoveryEvidence(envelope); if (discovery) discovered = await new SourceDiscovery(connection, this.ai, journal, id).discover(discovery); }
+    // Web search only helps a post about a restaurant. Do not spend it on posts the extraction already ruled out.
+    if (options.allowSourceDiscovery && extraction.message.is_restaurant_message && !extraction.message.mentions.length && !fallback.length) { discovery = discoveryEvidence(envelope); if (discovery) discovered = await new SourceDiscovery(connection, this.ai, journal, id).discover(discovery); }
     const input = inputEvidenceAssessment(envelope.content, Math.max(envelope.omitted_asset_count, envelope.assets.length - 50), Boolean(discovery?.input_truncated));
     const usingFallback = !extraction.message.mentions.length && fallback.length > 0; const usingDiscovery = Boolean(discovered?.mentions.length); const untrusted = usingFallback || usingDiscovery;
     const context = extraction.message.unresolved_reason || extraction.message.ignore_reason || '新規抽出で店舗名を特定できませんでした。';
