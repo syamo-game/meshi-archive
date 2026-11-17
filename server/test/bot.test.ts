@@ -6,7 +6,7 @@ import { readBotSettings } from '../src/bot.js';
 import { openDatabase } from '../src/db/database.js';
 import type { Database } from '../src/db/database.js';
 import { buildMessageEnvelope } from '../src/ingestion.js';
-import type { DiscordInput, MessageEnvelope, MessageProcessor, ProcessResult } from '../src/ingestion.js';
+import type { DiscordInput, MessageEnvelope, MessageProcessor, ProcessingMode, ProcessResult } from '../src/ingestion.js';
 import { HistorySyncError, lockChannelSync, nextWeeklyRun, syncChannelHistory, syncLockKey, syncReport, weeklySlot } from '../src/sync.js';
 import type { HistorySource, SyncMessage } from '../src/sync.js';
 import { fixture } from './helpers.js';
@@ -63,8 +63,10 @@ function historySource(messages: readonly SyncMessage[], deleted: ReadonlySet<st
 // Stands in for the AI pipeline: chosen messages fail, the others are stored as succeeded.
 class SyncProcessor implements MessageProcessor {
   readonly failing = new Set<string>();
+  readonly modes: (ProcessingMode | undefined)[] = [];
   constructor(private readonly database: Database) {}
-  async processMessage(envelope: MessageEnvelope): Promise<ProcessResult> {
+  async processMessage(envelope: MessageEnvelope, mode?: ProcessingMode): Promise<ProcessResult> {
+    this.modes.push(mode);
     if (this.failing.has(envelope.message_id)) throw new Error('Synthetic pipeline failure: message_id=' + envelope.message_id);
     await this.database.execute("INSERT INTO messages(message_id,channel_id,is_target,processing_status) VALUES($1,$2,$3,'succeeded') ON CONFLICT(message_id) DO UPDATE SET processing_status='succeeded'", [envelope.message_id, envelope.channel_id, true]);
     return { message_id: envelope.message_id, shop_ids: [], pending_mention_ids: [], ignored: false };
@@ -81,6 +83,7 @@ test('history sync passes a failed message, keeps it failed and retries it on th
     const messages = syncMessages(5); const processor = new SyncProcessor(database); const failed = messages[1]?.id ?? ''; processor.failing.add(failed);
     const first = await syncChannelHistory(database, processor, historySource(messages), '523456789012345678', 500, false);
     assert.deepEqual(first, { fetched: 5, processed: 4, registered: 0, pending: 0, skipped: 0, retried: 0, failed: [failed], limit_reached: false });
+    assert.deepEqual(processor.modes, ['sync', 'sync', 'sync', 'sync', 'sync'], 'history sync asks for the cheaper sync mode');
     assert.equal((await database.query('SELECT last_contiguous_message_id FROM sync_states WHERE channel_id=$1', cursorRow, [syncChannel]))[0]?.last_contiguous_message_id, messages[4]?.id);
     const stored = (await database.query('SELECT processing_status,channel_id,fetch_error FROM messages WHERE message_id=$1', syncRow, [failed]))[0];
     assert.equal(stored?.processing_status, 'failed'); assert.equal(stored?.channel_id, syncChannel); assert.match(stored?.fetch_error ?? '', /Synthetic pipeline failure/);

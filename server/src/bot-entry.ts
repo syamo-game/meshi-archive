@@ -16,7 +16,8 @@ const database = openDatabase(process.env.DATABASE_URL || 'sqlite:///meshi.db');
 const days = z.coerce.number().int().min(1).parse(process.env.LOOKUP_CACHE_DAYS ?? 30);
 const processor = new RestaurantProcessor(database, readAISettings(), resolve(process.env.SHOP_IMAGE_CACHE_DIR || '.shop-image-cache'), days);
 const bot = new DiscordBot(values.sync ? { ...settings, weekly: false } : settings, database, {
-  processMessage: envelope => processor.processMessage(envelope, { allowSourceDiscovery: true }),
+  // Source discovery is off: it found a shop in 1 of 46 runs. Channel sync uses the cheaper flex tier.
+  processMessage: (envelope, mode) => processor.processMessage(envelope, { flex: mode === 'sync' }),
   cacheImage: url => processor.cacheImage(url),
   preflightModels: () => processor.preflightModels(),
 });

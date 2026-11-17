@@ -53,16 +53,21 @@ export function completedSearchSources(response: Pick<Response, 'status' | 'para
   return [...result];
 }
 function roundEven(value: number): number { const floor = Math.floor(value); return value - floor === 0.5 ? floor % 2 === 0 ? floor : floor + 1 : Math.round(value); }
-export function estimateCost(model: string, input: number, output: number, searches = 0, environment: NodeJS.ProcessEnv = process.env): number {
+export type ServiceTier = 'default' | 'flex';
+export function estimateCost(model: string, input: number, output: number, searches = 0, environment: NodeJS.ProcessEnv = process.env, tier: ServiceTier = 'default'): number {
   // Preserve the existing estimates; operators can supply actual account prices.
   const defaults: Readonly<Record<string, readonly [number, number]>> = { 'gpt-6.1-sol': [2, 10], 'gpt-5.6-luna': [1, 6], 'gpt-5.6-terra': [2.5, 15] };
   const prefix = model.toUpperCase().replace(/[-.]/g, '_'); const prices = defaults[model] ?? [0, 0];
   const price = (name: string, initial: number): number => z.coerce.number().finite().nonnegative().parse(environment[name] ?? initial);
-  return roundEven(input * price(prefix + '_INPUT_USD_PER_M', prices[0]) + output * price(prefix + '_OUTPUT_USD_PER_M', prices[1]) + searches * price('WEB_SEARCH_USD_PER_1K_CALLS', 10) * 1000);
+  // Flex tokens cost the Batch rate, half the standard rate by default. Web search calls are not discounted.
+  const ratio = tier === 'flex' ? price('FLEX_TOKEN_PRICE_RATIO', 0.5) : 1;
+  return roundEven((input * price(prefix + '_INPUT_USD_PER_M', prices[0]) + output * price(prefix + '_OUTPUT_USD_PER_M', prices[1])) * ratio + searches * price('WEB_SEARCH_USD_PER_1K_CALLS', 10) * 1000);
 }
-export function callMetrics(response: Pick<Response, 'usage' | 'output'>, model: string, elapsed: number, attempts: number, images = 0, search = false, reserve = 500000): ModelCallMetrics {
+export function callMetrics(response: Pick<Response, 'usage' | 'output'> & Partial<Pick<Response, 'service_tier'>>, model: string, elapsed: number, attempts: number, images = 0, search = false, reserve = 500000): ModelCallMetrics {
   const calls = response.output.filter(item => item.type === 'web_search_call'); const input = response.usage?.input_tokens ?? 0; const output = response.usage?.output_tokens ?? 0;
-  return { model, input_tokens: input, output_tokens: output, web_search_calls: calls.filter(item => item.status === 'completed').length + Math.max(0, attempts - 1) * Number(search), image_count: images, latency_ms: Math.floor(elapsed), estimated_cost_microusd: estimateCost(model, input, output, calls.length) + Math.max(0, attempts - 1) * reserve, api_attempts: attempts };
+  // Price by the tier the API says it used, not the one we asked for.
+  const tier: ServiceTier = response.service_tier === 'flex' ? 'flex' : 'default';
+  return { model, input_tokens: input, output_tokens: output, web_search_calls: calls.filter(item => item.status === 'completed').length + Math.max(0, attempts - 1) * Number(search), image_count: images, latency_ms: Math.floor(elapsed), estimated_cost_microusd: estimateCost(model, input, output, calls.length, process.env, tier) + Math.max(0, attempts - 1) * reserve, api_attempts: attempts };
 }
 type ResponseInput = NonNullable<ResponseCreateParamsNonStreaming['input']>;
 type SearchParameters = ResponseCreateParamsNonStreaming & { max_tool_calls: 1 };
@@ -81,7 +86,8 @@ export class RestaurantAI {
   private client: OpenAI | null = null;
   private readonly semaphore: AICallLimiter;
   private readonly images: ImageCache;
-  constructor(private readonly config: AISettings, imageDirectory: string) { this.semaphore = new AICallLimiter(config.AI_MAX_CONCURRENCY); this.images = new ImageCache(imageDirectory); }
+  // tier=flex trades speed for a lower price. Use it only where a slow answer is fine, such as channel sync.
+  constructor(private readonly config: AISettings, imageDirectory: string, private readonly tier: ServiceTier = 'default') { this.semaphore = new AICallLimiter(config.AI_MAX_CONCURRENCY); this.images = new ImageCache(imageDirectory); }
   private getClient(): OpenAI {
     if (!this.config.OPENAI_API_KEY) throw new ExtractionError('OPENAI_API_KEY is not configured');
     this.client ??= new OpenAI({ apiKey: this.config.OPENAI_API_KEY, maxRetries: 0 }); return this.client;
@@ -89,7 +95,10 @@ export class RestaurantAI {
   private async request(params: ResponseCreateParamsNonStreaming, stage: string, signal?: AbortSignal): Promise<{ response: Response; attempts: number }> {
     const client = this.getClient();
     for (let attempt = 1; attempt <= 3; attempt++) {
-      try { return { response: await this.semaphore.run(() => client.responses.create(params, signal ? { signal } : {}), signal), attempts: attempt }; }
+      // Flex answers can take longer, so allow 15 minutes instead of the client default of 10.
+      const request = this.tier === 'flex' ? { ...params, service_tier: 'flex' as const } : params;
+      const options = { ...(signal ? { signal } : {}), ...(this.tier === 'flex' ? { timeout: 15 * 60 * 1000 } : {}) };
+      try { return { response: await this.semaphore.run(() => client.responses.create(request, options), signal), attempts: attempt }; }
       catch (error) {
         // A 429 for missing credits does not clear by waiting, so do not retry it.
         const quota = error instanceof OpenAI.APIError && error.status === 429 && error.type === 'insufficient_quota';

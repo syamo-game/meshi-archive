@@ -9,7 +9,7 @@ import { assessMentionEvidence, evidenceReviewError, imageEvidenceAssessment, in
 import { canonicalArea } from './geography.js';
 import { ImageCache } from './image-cache.js';
 import { envelopeSchema } from './ingestion.js';
-import type { MessageEnvelope, MessageProcessor, ProcessResult } from './ingestion.js';
+import type { MessageEnvelope, ProcessResult } from './ingestion.js';
 import { candidateForNewShop, containedNameCandidates, dedupeCandidates, replaceWebCandidate, structuredBlockReason, topWebCandidate } from './pipeline-candidates.js';
 import type { PipelineCandidate } from './pipeline-candidates.js';
 import { discoveryEvidence, SourceDiscovery } from './pipeline-discovery.js';
@@ -29,7 +29,8 @@ import { normalizeExternalIdentity, normalizeUrlIdentity } from './resolution.js
 import { externalIdentity } from './shop-creation.js';
 import { identifySourceUrl } from './source-identity.js';
 
-export interface ProcessingOptions { allowSourceDiscovery?: boolean; allowImageFallback?: boolean; fallbackMentions?: readonly ExtractedMention[]; }
+// flex=true sends the AI calls at the cheaper, slower flex tier (used by channel sync).
+export interface ProcessingOptions { allowSourceDiscovery?: boolean; flex?: boolean; allowImageFallback?: boolean; fallbackMentions?: readonly ExtractedMention[]; }
 export function sourceUrls(envelope: MessageEnvelope): readonly [string | null, string | null, boolean] {
   let source: string | null = null; const canonical = new Map<string, string>();
   for (const asset of envelope.assets) {
@@ -43,10 +44,12 @@ export function sourceUrls(envelope: MessageEnvelope): readonly [string | null, 
   }
   return [source, canonical.size === 1 ? [...canonical.values()][0] ?? null : null, canonical.size > 1];
 }
-export class RestaurantProcessor implements MessageProcessor {
+// The bot wraps this class to map its processing mode to ProcessingOptions, so it does not implement MessageProcessor itself.
+export class RestaurantProcessor {
   private readonly ai: RestaurantAI;
+  private readonly flexAi: RestaurantAI;
   private readonly images: ImageCache;
-  constructor(private readonly database: Database, private readonly settings: AISettings, private readonly directory: string, private readonly cacheDays = 30) { this.ai = new RestaurantAI(settings, directory); this.images = new ImageCache(directory); z.number().int().min(1).parse(cacheDays); }
+  constructor(private readonly database: Database, private readonly settings: AISettings, private readonly directory: string, private readonly cacheDays = 30) { this.ai = new RestaurantAI(settings, directory); this.flexAi = new RestaurantAI(settings, directory, 'flex'); this.images = new ImageCache(directory); z.number().int().min(1).parse(cacheDays); }
   preflightModels(): Promise<void> { return this.ai.preflightModels(); }
   async cacheImage(url: string): Promise<void> { await this.images.original(url); }
   async processMessage(input: MessageEnvelope, options: ProcessingOptions = {}): Promise<ProcessResult> {
@@ -78,6 +81,7 @@ export class RestaurantProcessor implements MessageProcessor {
     return { message_id: id, shop_ids: mentions.map(mention => mention.shop_id).filter((shop): shop is number => shop !== null), pending_mention_ids: mentions.filter(mention => mention.review_status === 'pending').map(mention => mention.id), ignored };
   }
   private async process(connection: Executor, journal: PipelineJournal, envelope: MessageEnvelope, options: ProcessingOptions): Promise<ProcessResult> {
+    const ai = options.flex ? this.flexAi : this.ai;
     const id = envelope.message_id; const lock = connection.dialect === 'postgres' ? ' FOR UPDATE' : '';
     await connection.execute("INSERT INTO messages(message_id,channel_id,content,source_created_at,is_target,processing_status) VALUES($1,$2,$3,$4,$5,'pending') ON CONFLICT(message_id) DO NOTHING", [id, envelope.channel_id, envelope.content, envelope.created_at, true]);
     const existing = (await connection.query('SELECT * FROM messages WHERE message_id=$1' + lock, messageRecord, [id]))[0];
@@ -96,10 +100,10 @@ export class RestaurantProcessor implements MessageProcessor {
       await saveMention(connection, { ...newMention(id, 0, extracted, url, 'source_identity_reuse'), shop_id: reuse.shop.id, resolution_status: 'resolved', review_status: 'approved', metadata_review_status: metadata, metadata_difference_type: difference, resolution_method: 'automatic', resolution_basis: 'source_reuse', reused_from_mention_id: reuse.mention.id, difference_type: null, reviewed_at: now, metadata_reviewed_at: metadata === 'approved' ? now : null });
       return this.finish(connection, id);
     }
-    const extraction = await this.ai.extract(envelope.content).catch(error => { if (error instanceof Error) journal.failure(id, 'message_extraction', error); throw error; }); journal.metrics(id, 'message_extraction', extraction.metrics);
+    const extraction = await ai.extract(envelope.content).catch(error => { if (error instanceof Error) journal.failure(id, 'message_extraction', error); throw error; }); journal.metrics(id, 'message_extraction', extraction.metrics);
     const fallback = options.fallbackMentions ?? []; let discovery: DiscoveryEvidence | null = null; let discovered: ExtractedMessage | null = null;
     // Web search only helps a post about a restaurant. Do not spend it on posts the extraction already ruled out.
-    if (options.allowSourceDiscovery && extraction.message.is_restaurant_message && !extraction.message.mentions.length && !fallback.length) { discovery = discoveryEvidence(envelope); if (discovery) discovered = await new SourceDiscovery(connection, this.ai, journal, id).discover(discovery); }
+    if (options.allowSourceDiscovery && extraction.message.is_restaurant_message && !extraction.message.mentions.length && !fallback.length) { discovery = discoveryEvidence(envelope); if (discovery) discovered = await new SourceDiscovery(connection, ai, journal, id).discover(discovery); }
     const input = inputEvidenceAssessment(envelope.content, Math.max(envelope.omitted_asset_count, envelope.assets.length - 50), Boolean(discovery?.input_truncated));
     const usingFallback = !extraction.message.mentions.length && fallback.length > 0; const usingDiscovery = Boolean(discovered?.mentions.length); const untrusted = usingFallback || usingDiscovery;
     const context = extraction.message.unresolved_reason || extraction.message.ignore_reason || '新規抽出で店舗名を特定できませんでした。';
@@ -108,11 +112,11 @@ export class RestaurantProcessor implements MessageProcessor {
     const eventContext = imageEvidenceAssessment('unknown', envelope.content, extraction.message.unresolved_reason || extraction.message.ignore_reason || '').codes.includes('event_excluded');
     if (!extraction.message.is_restaurant_message && !discovered?.is_restaurant_message && !mentions.length && !input.codes.length && !eventContext) return this.finish(connection, id, true);
     const imageUrls = options.allowImageFallback !== false && !discovered ? [...new Set(envelope.assets.filter(asset => asset.kind === 'image' && ['cdn.discordapp.com', 'media.discordapp.net', 'images-ext-1.discordapp.net', 'images-ext-2.discordapp.net'].includes(new URL(asset.url).hostname.toLowerCase())).map(asset => asset.url))] : [];
-    const [source, canonicalHint, ambiguousAssets] = sourceUrls(envelope); const evidence = new PipelineEvidence(connection, this.ai, journal, id); const shops = new PipelineShops(connection); const events = new PipelineEvents(connection, shops, evidence, journal, envelope);
+    const [source, canonicalHint, ambiguousAssets] = sourceUrls(envelope); const evidence = new PipelineEvidence(connection, ai, journal, id); const shops = new PipelineShops(connection); const events = new PipelineEvents(connection, shops, evidence, journal, envelope);
     if (!mentions.length) {
       const reasons = [discovered?.unresolved_reason || extraction.message.unresolved_reason || '飲食店への言及ですが、投稿から店舗名を特定できませんでした。', ...input.reasons];
       if (ambiguousAssets) reasons.push('複数の店舗ID付きURLと投稿内店舗の対応を一意に確認できない'); const reason = reasons.join(' / ');
-      if (imageUrls.length) await processImageOnly(connection, this.ai, journal, envelope, imageUrls, source, reason, !ambiguousAssets, input);
+      if (imageUrls.length) await processImageOnly(connection, ai, journal, envelope, imageUrls, source, reason, !ambiguousAssets, input);
       else {
         const mention = extractedMentionSchema.parse({ shop_name: '（店舗名未特定）', needs_review: true, confidence_reason: [...reason].slice(0, 2000).join(''), subject_kind: eventContext ? 'event' : null });
         if (eventContext) await events.process(mention, input, 0, source, 'responses_structured');
@@ -164,7 +168,7 @@ export class RestaurantProcessor implements MessageProcessor {
       }
       let imageReason: string | null = null; let imageAssessment = { codes: [] as ReturnType<typeof imageEvidenceAssessment>['codes'], reasons: [] as readonly string[] };
       if (!chosen && !candidate && !blocked && imageUrls.length && mentions.length === 1 && !untrusted && automatic) {
-        imageResult ??= await analyzeImage(this.ai, journal, id, imageUrls); imageAssessment = imageEvidenceAssessment(imageResult.clues.subject_kind);
+        imageResult ??= await analyzeImage(ai, journal, id, imageUrls); imageAssessment = imageEvidenceAssessment(imageResult.clues.subject_kind);
         if (imageAssessment.codes.includes('event_excluded')) { await events.process({ ...extracted, subject_kind: 'event', event_origin: imageResult.clues.event_origin }, input, occurrence, source, 'responses_vision'); continue; }
         const imageAutomatic = imageUrls.length === 1 && !imageAssessment.codes.length; imageReason = [imageResult.clues.reason, ...imageAssessment.reasons, ...(imageUrls.length !== 1 ? ['複数画像の対応関係を検証できないため自動確定しない'] : [])].join(' / ');
         const firstImage = imageUrls[0]; if (!firstImage) throw new Error('Image URL disappeared during processing'); candidates = dedupeCandidates([...candidates, ...imageCandidates(imageResult, firstImage)]); const image = singleImageCandidate(candidates);

@@ -92,3 +92,24 @@ test('a post the extraction rules out is ignored without a web search', async ()
     await database.close();
   }
 });
+
+test('flex processing sends every AI call at the flex tier and normal processing does not', async () => {
+  const extraction = { is_restaurant_message: false, ignore_reason: '合成の対象外です。', unresolved_reason: null, mentions: [] };
+  const responseBody = { id: 'resp_synthetic', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', service_tier: 'flex', output: [{ type: 'message', id: 'msg_synthetic', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(extraction), annotations: [] }] }], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } };
+  const previous = process.env.OPENAI_BASE_URL;
+  try {
+    await withJsonServer(() => ({ status: 200, body: responseBody }), async (baseUrl, requests) => {
+      process.env.OPENAI_BASE_URL = baseUrl + '/v1';
+      for (const [messageId, flex] of [['90000000000000210', true], ['90000000000000211', false]] as const) {
+        const { database } = await fixture();
+        try {
+          const envelope = envelopeSchema.parse({ message_id: messageId, channel_id: '123456789012345678', content: '合成の雑談です', created_at: '2026-11-17T00:00:00Z', assets: [], omitted_asset_count: 0 });
+          const processor = new RestaurantProcessor(database, readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-image-fixture');
+          assert.equal((await processor.processMessage(envelope, { flex })).ignored, true);
+        } finally { await database.close(); }
+      }
+      const tiers = requests.map(request => z.object({ service_tier: z.string().optional() }).parse(JSON.parse(request.body)).service_tier ?? null);
+      assert.deepEqual(tiers, ['flex', null]);
+    });
+  } finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; }
+});
