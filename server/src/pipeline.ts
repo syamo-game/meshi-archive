@@ -16,6 +16,7 @@ import { discoveryEvidence, SourceDiscovery } from './pipeline-discovery.js';
 import type { DiscoveryEvidence } from './pipeline-discovery.js';
 import { PipelineEvents } from './pipeline-events.js';
 import { candidateVerificationUrls, PipelineEvidence } from './pipeline-evidence.js';
+import { searchClues } from './pipeline-clues.js';
 import { analyzeImage, processImageOnly } from './pipeline-image-processing.js';
 import { existingShopFromImage, imageCandidates, imageMatchesMention, imageVerificationUrls, singleImageCandidate, structuredCandidateFromImage } from './pipeline-images.js';
 import { PipelineJournal } from './pipeline-journal.js';
@@ -30,7 +31,8 @@ import { externalIdentity } from './shop-creation.js';
 import { identifySourceUrl } from './source-identity.js';
 
 // flex=true sends the AI calls at the cheaper, slower flex tier (used by channel sync).
-export interface ProcessingOptions { allowSourceDiscovery?: boolean; flex?: boolean; allowImageFallback?: boolean; fallbackMentions?: readonly ExtractedMention[]; }
+// allowClueSearch=true searches for the shop of a restaurant post that names none (results go to review).
+export interface ProcessingOptions { allowSourceDiscovery?: boolean; allowClueSearch?: boolean; flex?: boolean; allowImageFallback?: boolean; fallbackMentions?: readonly ExtractedMention[]; }
 export function sourceUrls(envelope: MessageEnvelope): readonly [string | null, string | null, boolean] {
   let source: string | null = null; const canonical = new Map<string, string>();
   for (const asset of envelope.assets) {
@@ -120,7 +122,13 @@ export class RestaurantProcessor {
       else {
         const mention = extractedMentionSchema.parse({ shop_name: '（店舗名未特定）', needs_review: true, confidence_reason: [...reason].slice(0, 2000).join(''), subject_kind: eventContext ? 'event' : null });
         if (eventContext) await events.process(mention, input, 0, source, 'responses_structured');
-        else await saveMention(connection, { ...newMention(id, 0, mention, source, discovered ? 'responses_source_discovery' : 'responses_structured'), resolution_status: 'not_found', metadata_difference_type: null, difference_type: 'extraction_not_found', extraction_error: evidenceReviewError(input) || reason, confidence_reason: reason });
+        else {
+          // A restaurant post with no shop name: look for the shop from its text and photos, and show candidates in review.
+          const clues = options.allowClueSearch && extraction.message.is_restaurant_message ? await searchClues(ai, journal, envelope) : null;
+          const detail = [...(clues ? `${reason} / ${clues.note}` : reason)].slice(0, 2000).join('');
+          const saved = await saveMention(connection, { ...newMention(id, 0, { ...mention, confidence_reason: detail }, source, discovered ? 'responses_source_discovery' : 'responses_structured'), resolution_status: 'not_found', metadata_difference_type: null, difference_type: 'extraction_not_found', extraction_error: evidenceReviewError(input) || reason, confidence_reason: detail });
+          if (clues?.candidates.length) await storeCandidates(connection, saved, mention, clues.candidates, null);
+        }
       }
       return this.finish(connection, id);
     }

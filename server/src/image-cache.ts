@@ -94,9 +94,9 @@ export class ImageCache {
     const output = await sharp(bytes, { limitInputPixels: maxImagePixels, animated: false }).rotate().resize(960, 540, { fit: 'cover', position: 'centre' }).flatten({ background: '#ffffff' }).webp({ quality: 84, effort: 6 }).toBuffer();
     await writeImageFile(path, output); return output;
   }
-  async aiImages(sources: readonly string[]): Promise<readonly string[]> {
+  async aiImages(sources: readonly string[], limit = 2): Promise<readonly string[]> {
     const images: string[] = [];
-    for (const source of sources.slice(0, 2)) {
+    for (const source of sources.slice(0, limit)) {
       const bytes = await readFile(sourceImagePath(source, this.directory)); await validateSource(bytes);
       const output = await sharp(bytes, { limitInputPixels: maxImagePixels, animated: false }).rotate().resize(2048, 2048, { fit: 'inside', withoutEnlargement: true }).flatten({ background: '#ffffff' }).jpeg({ quality: 90 }).toBuffer();
       images.push('data:image/jpeg;base64,' + output.toString('base64'));

@@ -4,15 +4,15 @@ import OpenAI from 'openai';
 import type { Response, ResponseCreateParamsNonStreaming } from 'openai/resources/responses/responses';
 import { z } from 'zod';
 import contract from '../data/ai-contract.json' with { type: 'json' };
-import { candidateSearchContextSchema, extractedMessageSchema, imageCluesSchema, requireExtractionEvidence, searchCandidateSetSchema } from './ai-models.js';
-import type { CandidateSearchContext, CandidateSearchResult, ExtractedMention, ExtractionCallResult, ImageAnalysisResult, ModelCallMetrics } from './ai-models.js';
+import { candidateSearchContextSchema, clueSearchSchema, extractedMessageSchema, imageCluesSchema, requireExtractionEvidence, searchCandidateSetSchema } from './ai-models.js';
+import type { CandidateSearchContext, CandidateSearchResult, ClueSearchResult, ExtractedMention, ExtractionCallResult, ImageAnalysisResult, ModelCallMetrics } from './ai-models.js';
 import { canonicalArea } from './geography.js';
 import { categories, categoryInstructions } from './categories.js';
 import { ImageCache, publicAddress } from './image-cache.js';
 import { safeHttpUrl } from './links.js';
 
 const effort = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
-const settings = z.object({ OPENAI_API_KEY: z.string().default(''), EXTRACTION_MODEL: z.string().min(1).default('gpt-6.1-sol'), RESOLUTION_MODEL: z.string().min(1).default('gpt-6.1-sol'), EXTRACTION_REASONING_EFFORT: effort.default('high'), RESOLUTION_REASONING_EFFORT: effort.default('high'), AI_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(2) });
+const settings = z.object({ OPENAI_API_KEY: z.string().default(''), EXTRACTION_MODEL: z.string().min(1).default('gpt-6.1-sol'), RESOLUTION_MODEL: z.string().min(1).default('gpt-6.1-sol'), EXTRACTION_REASONING_EFFORT: effort.default('high'), RESOLUTION_REASONING_EFFORT: effort.default('high'), CLUE_SEARCH_REASONING_EFFORT: effort.default('medium'), AI_MAX_CONCURRENCY: z.coerce.number().int().min(1).max(100).default(2) });
 export type AISettings = z.infer<typeof settings>;
 export class ExtractionError extends Error { constructor(message: string, options?: ErrorOptions) { super(message, options); this.name = 'ExtractionError'; } }
 export function readAISettings(environment: NodeJS.ProcessEnv = process.env): AISettings {
@@ -49,6 +49,22 @@ export function completedSearchSources(response: Pick<Response, 'status' | 'para
     const host = new URL(value).hostname.replace(/^\[|\]$/g, '');
     if (isIP(host) && !publicAddress(host)) throw new ExtractionError(`Web search returned a non-public source: stage=${stage}`);
     result.add(value);
+  }
+  return [...result];
+}
+// Every URL the completed searches looked at, for calls that may search more than once.
+export function searchSources(response: Pick<Response, 'status' | 'output'>, stage: string): readonly string[] {
+  if (response.status !== 'completed') throw new ExtractionError(`Web search response did not complete: stage=${stage} status=${response.status}`);
+  const result = new Set<string>();
+  for (const call of response.output) {
+    if (call.type !== 'web_search_call' || call.status !== 'completed') continue;
+    const urls = call.action.type === 'search' ? (call.action.sources ?? []).map(source => source.url) : call.action.type === 'open_page' ? [call.action.url] : [];
+    for (const value of urls) {
+      if (typeof value !== 'string' || !safeHttpUrl(value)) throw new ExtractionError(`Web search returned an invalid source URL: stage=${stage}`);
+      const host = new URL(value).hostname.replace(/^\[|\]$/g, '');
+      if (isIP(host) && !publicAddress(host)) throw new ExtractionError(`Web search returned a non-public source: stage=${stage}`);
+      result.add(value);
+    }
   }
   return [...result];
 }
@@ -151,6 +167,16 @@ export class RestaurantAI {
     const { response, attempts } = await this.request(params, 'candidate_search', signal); const sources = completedSearchSources(response, 'candidate_search'); const candidates = this.parse(response, searchCandidateSetSchema, 'candidate_search');
     if (candidates.candidates.length && !sources.length) throw new ExtractionError('Candidate search returned candidates without web sources');
     return { candidates, metrics: callMetrics(response, this.config.RESOLUTION_MODEL, performance.now() - started, attempts, images.length, true), source_urls: sources };
+  }
+  // Find the shop of a post that names none, from its text and up to four photos, with up to three web searches.
+  async clueSearch(text: string, imageSources: readonly string[], signal?: AbortSignal): Promise<ClueSearchResult> {
+    if (!text.trim()) throw new ExtractionError('Cannot search clues for an empty message'); const started = performance.now();
+    const images = await this.images.aiImages(imageSources, 4);
+    const base = this.parameters(this.config.RESOLUTION_MODEL, this.config.CLUE_SEARCH_REASONING_EFFORT, contract.prompts.clue_search, responseInput(`${text.trim()}\n\n添付写真: ${images.length}枚`, images), 'clue_search');
+    const params: ResponseCreateParamsNonStreaming & { max_tool_calls: number } = { ...base, tools: [{ type: 'web_search' }], include: ['web_search_call.action.sources'], tool_choice: 'required', max_tool_calls: 3, parallel_tool_calls: false, prompt_cache_key: `meshi:${contract.versions.clue}:clue` };
+    const { response, attempts } = await this.request(params, 'clue_search', signal);
+    const search = this.parse(response, clueSearchSchema, 'clue_search');
+    return { search, metrics: callMetrics(response, this.config.RESOLUTION_MODEL, performance.now() - started, attempts, images.length, true), source_urls: searchSources(response, 'clue_search') };
   }
   async analyzeImages(mention: ExtractedMention | null, urls: readonly string[], signal?: AbortSignal): Promise<ImageAnalysisResult> {
     const selected = urls.slice(0, 2); if (!selected.length) throw new ExtractionError('Image analysis requires at least one image');

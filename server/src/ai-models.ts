@@ -27,3 +27,13 @@ export interface ImageAnalysisResult { clues: ImageClues; metrics: ModelCallMetr
 export function requireExtractionEvidence(message: ExtractedMessage): ExtractedMessage {
   return { ...message, mentions: message.mentions.map(mention => mention.identity_evidence === null || mention.subject_kind === null ? { ...mention, identity_evidence: mention.identity_evidence ?? 'unknown', subject_kind: mention.subject_kind ?? 'unknown', needs_review: true } : mention) };
 }
+// Clue search: shops found from the post's text and photos when the post names none.
+export const clueCandidateSchema = z.strictObject({
+  shop_name: z.string().trim().min(1).max(500), branch_name: z.string().trim().max(255).nullable(), area: z.string().trim().max(255).nullable(),
+  matched_clues: z.array(z.string().trim().min(1).max(500)).min(1).max(10), evidence_urls: z.array(z.string().trim().max(2048)).max(5),
+  confidence: z.enum(['high', 'medium', 'low']), area_matches_post: z.enum(['match', 'conflict', 'unknown']),
+});
+export type ClueCandidate = z.infer<typeof clueCandidateSchema>;
+export const clueSearchSchema = z.strictObject({ is_list_post: z.boolean(), clues: z.array(z.string().trim().min(1).max(500)).max(20), candidates: z.array(clueCandidateSchema).max(10), unresolved_reason: z.string().trim().max(2000).nullable() });
+export type ClueSearch = z.infer<typeof clueSearchSchema>;
+export interface ClueSearchResult { search: ClueSearch; metrics: ModelCallMetrics; source_urls: readonly string[]; }
