@@ -249,7 +249,8 @@ jobs:
           cp "$COMPOSE_FILE" "$backup_dir/docker-compose.prod.yml"
           chmod 600 "$backup_dir/production.env" "$backup_dir/docker-compose.prod.yml"
 
-          db_identity="$(docker compose -f "$COMPOSE_FILE" exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT current_database(), system_identifier::text FROM pg_control_system()"' < /dev/null)"
+          # The cluster ID is the same from any database, so read it from the one the app uses (POSTGRES_DB may not exist).
+          db_identity="$(docker compose -f "$COMPOSE_FILE" exec -T -e APP_DATABASE_NAME="$app_database" db sh -c 'psql -U "$POSTGRES_USER" -d "$APP_DATABASE_NAME" -Atqc "SELECT current_database(), system_identifier::text FROM pg_control_system()"' < /dev/null)"
           IFS='|' read -r _bootstrap_database db_cluster_id <<< "$db_identity"
           if [ -z "$db_cluster_id" ]; then
             echo "Database cluster identity is unavailable" >&2
