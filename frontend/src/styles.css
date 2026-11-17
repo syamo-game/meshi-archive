@@ -170,6 +170,9 @@ body:has(dialog[open]) { overflow: hidden; }
 
 .card-actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; gap: 6px; margin-left: auto; flex-shrink: 0; }
 .card-footer { flex-wrap: wrap; row-gap: 8px; }
+/* On one line the rating takes the spare space, so the buttons keep their size. When the buttons wrap, they fill the row. */
+.card-footer .rating { flex: 999 1 auto; }
+.card-footer .card-actions { flex: 1 1 auto; }
 .source-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; min-width: 44px; padding: 0 12px; border-radius: 24px; border: 0; background: var(--action-soft); color: var(--action); box-shadow: none; font-size: 12px; font-weight: 500; }
 .source-link svg { width: 13px; height: 13px; }
 .detail-source { padding-inline: 18px; border-radius: 12px; }
