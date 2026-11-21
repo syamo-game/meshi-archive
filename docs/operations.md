@@ -43,9 +43,7 @@ npm run ops -- evaluate --limit 10 --concurrency 2
 
 `npm run sync`は設定済みチャンネルの履歴を1回取得します。AIの呼び出しとDB更新を行います。毎週の自動同期は`WEEKLY_SYNC_ENABLED=true`で有効になり、月曜04:00（Asia/Tokyo）に実行します。
 
-AIはAnthropic Claude APIで呼び出します。Claude Consoleで発行したAPIキーを`ANTHROPIC_API_KEY`に設定します。履歴同期（週次・`sync`メンション・`npm run sync`）の呼び出しも、Botへのメンションと同じ通常の料金で処理します。以前はOpenAIのFlex処理でトークン単価を半分にしていましたが、Anthropicには応答を待つ呼び出しで使える同等の割引がありません。そのため、同期のトークン単価は以前の2倍です。Web検索の料金は変わりません。
-
-クレジット残高が不足すると、APIは400（credit balance is too low）を返します。この場合は再試行せず、その投稿を`failed`にします。管理者はClaude Consoleで残高と利用上限を確認します。
+AI呼び出しはAnthropic Claude APIへ送ります。APIキーはClaude Consoleで発行した`ANTHROPIC_API_KEY`です。履歴同期（週次・`sync`メンション・`npm run sync`）もBotへのメンションと同じ通常の処理区分で送ります。OpenAIのFlex処理に当たる、同期で使える割安な区分はないため、同期のトークン単価は以前の倍になります。クレジット残高が不足すると400（credit balance is too low）が返り、再試行せずにその投稿を`failed`にします。Claude Consoleで残高と利用上限を確認し、次回の同期で再試行します。
 
 処理に失敗した投稿は`failed`として記録し、同期は次の投稿へ進みます。失敗した投稿は次回の同期で先に再試行します。3件続けて失敗した場合は障害とみなして同期を停止します。Discordから削除されていた投稿は対象外にします。週次同期の結果と失敗は、Botが管理者（`ADMIN_USER_ID`）へダイレクトメッセージで通知します。同じチャンネルの同期はDBロックで重複実行を防ぎます。
 
