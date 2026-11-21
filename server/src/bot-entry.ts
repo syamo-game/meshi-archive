@@ -17,6 +17,7 @@ const days = z.coerce.number().int().min(1).parse(process.env.LOOKUP_CACHE_DAYS 
 const processor = new RestaurantProcessor(database, readAISettings(), resolve(process.env.SHOP_IMAGE_CACHE_DIR || '.shop-image-cache'), days);
 const bot = new DiscordBot(values.sync ? { ...settings, weekly: false } : settings, database, {
   // Source discovery is off: it found a shop in 1 of 46 runs. Clue search takes its place for restaurant posts with no shop name.
+  // Sync uses the standard price too. The only discount, the Batch API, returns results hours later, and each post must be finished before the next.
   processMessage: envelope => processor.processMessage(envelope, { allowClueSearch: true }),
   cacheImage: url => processor.cacheImage(url),
   preflightModels: () => processor.preflightModels(),
