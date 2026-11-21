@@ -94,7 +94,7 @@ test('a post the extraction rules out is ignored without a web search', async ()
 });
 
 test('processing never sends a service tier the Anthropic API does not accept', async () => {
-  // OpenAI's flex tier has no Anthropic equivalent; sync and mention runs send the same request.
+  // Sync and mention runs send the same request; the Messages API has no discounted tier for calls that wait for the answer.
   const extraction = { is_restaurant_message: false, ignore_reason: '合成の対象外です。', unresolved_reason: null, mentions: [] };
   const responseBody = anthropicMessage([{ type: 'text', text: JSON.stringify(extraction) }]);
   const previous = process.env.ANTHROPIC_BASE_URL;
