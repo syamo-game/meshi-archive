@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { setImmediate } from 'node:timers/promises';
 import { test } from 'node:test';
-import type { Response, ResponseFunctionWebSearch } from 'openai/resources/responses/responses';
+import type { Message } from '@anthropic-ai/sdk/resources/messages/messages';
 import { z } from 'zod';
 import contract from '../data/ai-contract.json' with { type: 'json' };
-import { AICallLimiter, callMetrics, completedSearchSources, estimateCost, outputSchemas, readAISettings, RestaurantAI } from '../src/ai.js';
+import { AICallLimiter, callMetrics, completedSearchSources, estimateCost, outputSchemas, readAISettings, RestaurantAI, searchSources, wireSchema } from '../src/ai.js';
 import { categories } from '../src/categories.js';
 import { extractedMentionSchema, extractedMessageSchema, requireExtractionEvidence } from '../src/ai-models.js';
 import { assessMentionEvidence, containsEvidenceName, eventOriginQuotesMatch, imageEvidenceAssessment, inputEvidenceAssessment } from '../src/extraction-safety.js';
@@ -21,17 +21,25 @@ test('extraction evidence and event safeguards match 269 original Python cases',
   for (const item of reference.origins) assert.equal(eventOriginQuotesMatch(item.input), item.expected, JSON.stringify(item.input));
 });
 
-function searchResponse(calls: ResponseFunctionWebSearch[]): Pick<Response, 'status' | 'parallel_tool_calls' | 'output'> & { max_tool_calls: number } { return { status: 'completed', max_tool_calls: 1, parallel_tool_calls: false, output: calls }; }
-const completed: ResponseFunctionWebSearch = { id: 'synthetic-search', type: 'web_search_call', status: 'completed', action: { type: 'search', sources: [{ type: 'url', url: 'https://example.com/shop' }, { type: 'url', url: 'https://example.com/shop' }] } };
+type Block = Message['content'][number];
+const direct = { type: 'direct' } as const;
+const use = (id: string): Block => ({ type: 'server_tool_use', id, name: 'web_search', input: { query: 'synthetic' }, caller: direct });
+const found = (id: string, urls: readonly string[]): Block => ({ type: 'web_search_tool_result', tool_use_id: id, caller: direct, content: urls.map(url => ({ type: 'web_search_result', url, title: 'synthetic', encrypted_content: 'synthetic', page_age: null })) });
+const failed = (id: string, code: 'max_uses_exceeded' | 'unavailable'): Block => ({ type: 'web_search_tool_result', tool_use_id: id, caller: direct, content: { type: 'web_search_tool_result_error', error_code: code } });
+const usage = (searches: number, input = 100, output = 20): Message['usage'] => ({ input_tokens: input, output_tokens: output, cache_creation_input_tokens: null, cache_read_input_tokens: null, cache_creation: null, inference_geo: null, server_tool_use: { web_search_requests: searches, web_fetch_requests: 0 }, service_tier: 'standard' } as Message['usage']);
+function searchResponse(content: Block[], billed = 1): Pick<Message, 'content' | 'usage'> { return { content, usage: usage(billed) }; }
 test('web search requires one completed bounded call and real public source URLs', () => {
-  assert.deepEqual(completedSearchSources(searchResponse([completed]), 'test'), ['https://example.com/shop']);
-  assert.deepEqual(completedSearchSources(searchResponse([{ ...completed, action: { type: 'open_page', url: 'https://example.com/shop' } }]), 'test'), ['https://example.com/shop']);
-  assert.throws(() => completedSearchSources(searchResponse([]), 'test'), /exactly once/);
-  assert.throws(() => completedSearchSources(searchResponse([completed, completed]), 'test'), /exactly once/);
-  assert.throws(() => completedSearchSources({ ...searchResponse([completed]), max_tool_calls: 2 }, 'test'), /configuration/);
-  assert.throws(() => completedSearchSources({ ...searchResponse([completed]), parallel_tool_calls: true }, 'test'), /configuration/);
-  assert.throws(() => completedSearchSources(searchResponse([{ ...completed, action: { type: 'open_page', url: 'http://127.0.0.1/internal' } }]), 'test'), /non-public/);
-  assert.throws(() => completedSearchSources(searchResponse([{ ...completed, action: { type: 'open_page', url: 'https://name:secret@example.com/' } }]), 'test'), /invalid source/);
+  assert.deepEqual(completedSearchSources(searchResponse([use('a'), found('a', ['https://example.com/shop', 'https://example.com/shop'])]), 'test'), ['https://example.com/shop']);
+  // A follow-up past max_uses only returns max_uses_exceeded and is not a second search.
+  assert.deepEqual(completedSearchSources(searchResponse([use('a'), found('a', ['https://example.com/shop']), use('b'), failed('b', 'max_uses_exceeded')]), 'test'), ['https://example.com/shop']);
+  assert.throws(() => completedSearchSources(searchResponse([], 0), 'test'), /exactly once/);
+  assert.throws(() => completedSearchSources(searchResponse([use('a'), found('a', ['https://example.com/a']), use('b'), found('b', ['https://example.com/b'])], 2), 'test'), /exactly once/);
+  assert.throws(() => completedSearchSources(searchResponse([use('a'), failed('a', 'unavailable')], 1), 'test'), /exactly once/);
+  assert.throws(() => completedSearchSources(searchResponse([use('a')], 1), 'test'), /exactly once/);
+  assert.throws(() => completedSearchSources(searchResponse([use('a'), found('a', ['https://example.com/shop'])], 2), 'test'), /usage count/);
+  assert.throws(() => completedSearchSources(searchResponse([use('a'), found('a', ['http://127.0.0.1/internal'])]), 'test'), /non-public/);
+  assert.throws(() => completedSearchSources(searchResponse([use('a'), found('a', ['https://name:secret@example.com/'])]), 'test'), /invalid source/);
+  assert.deepEqual(searchSources(searchResponse([use('a'), found('a', ['https://example.com/a']), use('b'), failed('b', 'unavailable'), use('c'), found('c', ['https://example.com/b', 'https://example.com/a'])], 3), 'test'), ['https://example.com/a', 'https://example.com/b']);
 });
 
 test('structured extraction rejects invalid shapes and marks missing evidence for review', () => {
@@ -52,12 +60,12 @@ test('AI limiter caps real asynchronous work and releases cancelled queue entrie
   await assert.rejects(second, /cancelled/); gate.resolve(); await first; assert.equal(await single.run(async () => 42), 42);
 });
 
-test('AI settings keep existing models and fail without a configured key before network access', async () => {
-  const settings = readAISettings({}); assert.equal(settings.EXTRACTION_MODEL, 'gpt-6.1-sol'); assert.equal(settings.RESOLUTION_REASONING_EFFORT, 'high');
+test('AI settings default to Claude models and fail without a configured key before network access', async () => {
+  const settings = readAISettings({}); assert.equal(settings.EXTRACTION_MODEL, 'claude-sonnet-5-5'); assert.equal(settings.RESOLUTION_MODEL, 'claude-opus-5-5'); assert.equal(settings.RESOLUTION_REASONING_EFFORT, 'high');
   assert.throws(() => readAISettings({ AI_MAX_CONCURRENCY: 'invalid' }), /AI_MAX_CONCURRENCY/);
   const client = new RestaurantAI(settings, '.local/no-ai-fixture');
   await assert.rejects(client.extract(''), /empty message/);
-  await assert.rejects(client.extract('テスト食堂'), error => error instanceof Error && error.message === 'OPENAI_API_KEY is not configured');
+  await assert.rejects(client.extract('テスト食堂'), error => error instanceof Error && error.message === 'ANTHROPIC_API_KEY is not configured');
 });
 
 test('model output schemas limit category to master values or null and keep other fields', () => {
@@ -75,45 +83,54 @@ test('model output schemas limit category to master values or null and keep othe
 });
 
 test('model accounting preserves estimates and retries without claiming current API prices', () => {
-  assert.equal(estimateCost('gpt-6.1-sol', 100, 20, 1, {}), 10400);
+  assert.equal(estimateCost('claude-sonnet-5-5', 100, 20, 1, {}), 10400);
+  assert.equal(estimateCost('claude-opus-5-5', 100, 20, 0, {}), 800);
   assert.equal(estimateCost('synthetic', 1, 0, 0, { SYNTHETIC_INPUT_USD_PER_M: '2.5' }), 2);
-  const response: Pick<Response, 'usage' | 'output'> = { usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } }, output: [completed] };
-  const metrics = callMetrics(response, 'gpt-6.1-sol', 15.9, 2, 1, true);
+  const metrics = callMetrics({ usage: usage(1) }, 'claude-sonnet-5-5', 15.9, 2, 1, true);
   assert.equal(metrics.web_search_calls, 2); assert.equal(metrics.estimated_cost_microusd, 510400); assert.equal(metrics.latency_ms, 15);
+  // Cached prompt tokens are still input tokens.
+  assert.equal(callMetrics({ usage: { ...usage(0), cache_creation_input_tokens: 5, cache_read_input_tokens: 7 } }, 'claude-sonnet-5-5', 1, 1).input_tokens, 112);
+});
+
+test('wire schemas stay within the API compile limits and drop only keywords zod still checks', () => {
+  const unions = (node: unknown): number => Array.isArray(node) ? node.reduce((sum: number, item: unknown) => sum + unions(item), 0) : node && typeof node === 'object' ? Number('anyOf' in node) + Object.values(node).reduce((sum: number, item: unknown) => sum + unions(item), 0) : 0;
+  for (const name of ['message', 'candidates', 'images', 'preflight', 'clue_search'] as const) {
+    const schema = wireSchema(name); const serialized = JSON.stringify(schema);
+    assert.ok(unions(schema) <= 16, `${name} has ${unions(schema)} union fields`);
+    for (const keyword of ['"maxLength"', '"minLength"', '"maxItems"']) assert.ok(!serialized.includes(keyword), `${name} still sends ${keyword}`);
+  }
+  const mention = z.object({ $defs: z.object({ ExtractedMention: z.object({ properties: z.record(z.string(), z.object({ anyOf: z.array(z.unknown()).optional(), enum: z.array(z.string()).optional() })) }) }) }).parse(wireSchema('message')).$defs.ExtractedMention.properties;
+  for (const field of ['subject_kind', 'identity_evidence', 'operating_status']) { assert.equal(mention[field]?.anyOf, undefined); assert.ok(mention[field]?.enum?.includes('unknown')); }
+  assert.ok(mention.branch_name?.anyOf, 'nullable text keeps null');
+  assert.ok(mention.category?.anyOf, 'category keeps null because it has no unknown value');
+  const category = z.object({ anyOf: z.tuple([z.object({ enum: z.array(z.string()) }), z.object({ type: z.literal('null') })]) }).parse(mention.category);
+  assert.deepEqual(category.anyOf[0].enum, [...categories], 'the category list must reach the API as an enum');
 });
 
 
-// A local server stands in for the OpenAI API so the real client and retry loop run.
-async function withOpenAIServer(body: object, run: (requests: () => number) => Promise<void>): Promise<void> {
+// A local server stands in for the Anthropic API so the real client and retry loop run.
+async function withAnthropicServer(status: number, body: object, run: (requests: () => number) => Promise<void>): Promise<void> {
   const { createServer } = await import('node:http');
   let count = 0;
-  const server = createServer((request, response) => { count++; request.resume(); response.writeHead(429, { 'content-type': 'application/json', 'retry-after': '1' }).end(JSON.stringify(body)); });
+  const server = createServer((request, response) => { count++; request.resume(); response.writeHead(status, { 'content-type': 'application/json', 'retry-after': '1', 'request-id': 'req_synthetic' }).end(JSON.stringify(body)); });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Test server has no port');
-  const previous = process.env.OPENAI_BASE_URL; process.env.OPENAI_BASE_URL = `http://127.0.0.1:${address.port}/v1`;
+  const previous = process.env.ANTHROPIC_BASE_URL; process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${address.port}`;
   try { await run(() => count); }
-  finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; await new Promise<void>(resolve => server.close(() => resolve())); }
+  finally { if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = previous; await new Promise<void>(resolve => server.close(() => resolve())); }
 }
-test('exhausted OpenAI credits fail at once without retries', async () => {
-  await withOpenAIServer({ error: { message: 'You have no credits remaining.', type: 'insufficient_quota', param: null, code: 'credit_balance_exhausted' } }, async requests => {
-    const client = new RestaurantAI(readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-ai-fixture');
-    await assert.rejects(client.preflightModels(), /stage=model_preflight attempt=1 status=429 .*code=credit_balance_exhausted reason=insufficient_quota/);
+test('a low credit balance fails at once without retries and keeps the API message', async () => {
+  await withAnthropicServer(400, { type: 'error', error: { type: 'invalid_request_error', message: 'Your credit balance is too low to access the Anthropic API.' } }, async requests => {
+    const client = new RestaurantAI(readAISettings({ ANTHROPIC_API_KEY: 'test-key' }), '.local/no-ai-fixture');
+    await assert.rejects(client.preflightModels(), /stage=model_preflight attempt=1 status=400 request_id=req_synthetic error=.*credit balance is too low/);
     assert.equal(requests(), 1);
   });
 });
 test('ordinary rate limits are still retried three times', async () => {
-  await withOpenAIServer({ error: { message: 'Rate limit reached.', type: 'requests', param: null, code: 'rate_limit_exceeded' } }, async requests => {
-    const client = new RestaurantAI(readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-ai-fixture');
-    await assert.rejects(client.preflightModels(), /stage=model_preflight attempt=3 status=429 request_id=[^ ]+$/);
+  await withAnthropicServer(429, { type: 'error', error: { type: 'rate_limit_error', message: 'Rate limit reached.' } }, async requests => {
+    const client = new RestaurantAI(readAISettings({ ANTHROPIC_API_KEY: 'test-key' }), '.local/no-ai-fixture');
+    await assert.rejects(client.preflightModels(), /stage=model_preflight attempt=3 status=429 request_id=req_synthetic /);
     assert.equal(requests(), 3);
   });
 });
 
-test('flex calls are estimated at half the token price and keep the web search price', () => {
-  // (100*2 + 20*10) * 0.5 tokens + 1 search * 10000
-  assert.equal(estimateCost('gpt-6.1-sol', 100, 20, 1, {}, 'flex'), 10200);
-  assert.equal(estimateCost('gpt-6.1-sol', 100, 20, 1, { FLEX_TOKEN_PRICE_RATIO: '1' }, 'flex'), 10400);
-  const response = { service_tier: 'flex' as const, usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } }, output: [] };
-  assert.equal(callMetrics(response, 'gpt-6.1-sol', 1, 1).estimated_cost_microusd, 1500);
-  assert.equal(callMetrics({ ...response, service_tier: 'default' }, 'gpt-6.1-sol', 1, 1).estimated_cost_microusd, 3000);
-});

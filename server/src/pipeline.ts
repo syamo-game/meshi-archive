@@ -30,9 +30,8 @@ import { normalizeExternalIdentity, normalizeUrlIdentity } from './resolution.js
 import { externalIdentity } from './shop-creation.js';
 import { identifySourceUrl } from './source-identity.js';
 
-// flex=true sends the AI calls at the cheaper, slower flex tier (used by channel sync).
 // allowClueSearch=true searches for the shop of a restaurant post that names none (results go to review).
-export interface ProcessingOptions { allowSourceDiscovery?: boolean; allowClueSearch?: boolean; flex?: boolean; allowImageFallback?: boolean; fallbackMentions?: readonly ExtractedMention[]; }
+export interface ProcessingOptions { allowSourceDiscovery?: boolean; allowClueSearch?: boolean; allowImageFallback?: boolean; fallbackMentions?: readonly ExtractedMention[]; }
 export function sourceUrls(envelope: MessageEnvelope): readonly [string | null, string | null, boolean] {
   let source: string | null = null; const canonical = new Map<string, string>();
   for (const asset of envelope.assets) {
@@ -49,9 +48,8 @@ export function sourceUrls(envelope: MessageEnvelope): readonly [string | null, 
 // The bot wraps this class to map its processing mode to ProcessingOptions, so it does not implement MessageProcessor itself.
 export class RestaurantProcessor {
   private readonly ai: RestaurantAI;
-  private readonly flexAi: RestaurantAI;
   private readonly images: ImageCache;
-  constructor(private readonly database: Database, private readonly settings: AISettings, private readonly directory: string, private readonly cacheDays = 30) { this.ai = new RestaurantAI(settings, directory); this.flexAi = new RestaurantAI(settings, directory, 'flex'); this.images = new ImageCache(directory); z.number().int().min(1).parse(cacheDays); }
+  constructor(private readonly database: Database, private readonly settings: AISettings, private readonly directory: string, private readonly cacheDays = 30) { this.ai = new RestaurantAI(settings, directory); this.images = new ImageCache(directory); z.number().int().min(1).parse(cacheDays); }
   preflightModels(): Promise<void> { return this.ai.preflightModels(); }
   async cacheImage(url: string): Promise<void> { await this.images.original(url); }
   async processMessage(input: MessageEnvelope, options: ProcessingOptions = {}): Promise<ProcessResult> {
@@ -83,7 +81,7 @@ export class RestaurantProcessor {
     return { message_id: id, shop_ids: mentions.map(mention => mention.shop_id).filter((shop): shop is number => shop !== null), pending_mention_ids: mentions.filter(mention => mention.review_status === 'pending').map(mention => mention.id), ignored };
   }
   private async process(connection: Executor, journal: PipelineJournal, envelope: MessageEnvelope, options: ProcessingOptions): Promise<ProcessResult> {
-    const ai = options.flex ? this.flexAi : this.ai;
+    const ai = this.ai;
     const id = envelope.message_id; const lock = connection.dialect === 'postgres' ? ' FOR UPDATE' : '';
     await connection.execute("INSERT INTO messages(message_id,channel_id,content,source_created_at,is_target,processing_status) VALUES($1,$2,$3,$4,$5,'pending') ON CONFLICT(message_id) DO NOTHING", [id, envelope.channel_id, envelope.content, envelope.created_at, true]);
     const existing = (await connection.query('SELECT * FROM messages WHERE message_id=$1' + lock, messageRecord, [id]))[0];

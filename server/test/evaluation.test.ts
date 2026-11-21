@@ -48,7 +48,7 @@ test('failed evaluation leaves canonical shops and mentions unchanged and preser
   try {
     await database.execute("UPDATE messages SET content='店舗01の紹介' WHERE message_id=$1", [id]);
     const before = await loadEvaluation(database, id);
-    await assert.rejects(new MessageEvaluator(database, readAISettings({}), '.local/no-image-fixture').evaluate(id), /OPENAI_API_KEY/);
+    await assert.rejects(new MessageEvaluator(database, readAISettings({}), '.local/no-image-fixture').evaluate(id), /ANTHROPIC_API_KEY/);
     const after = await loadEvaluation(database, id);
     assert.deepEqual(after.shops, before.shops); assert.deepEqual(after.mentions, before.mentions);
     assert.equal((await database.query('SELECT * FROM messages WHERE message_id=$1', messageRecord, [id]))[0]?.processing_status, 'failed');

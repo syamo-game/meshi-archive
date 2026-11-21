@@ -68,7 +68,7 @@ npm start
 
 ## Botを起動する
 
-Discord投稿を取り込む場合は、`.env`に`DISCORD_TOKEN`と`OPENAI_API_KEY`、対象の`DISCORD_GUILD_ID`と`DISCORD_CHANNEL_ID`を設定し、別のターミナルで起動します。
+Discord投稿を取り込む場合は、`.env`に`DISCORD_TOKEN`と`ANTHROPIC_API_KEY`、対象の`DISCORD_GUILD_ID`と`DISCORD_CHANNEL_ID`を設定し、別のターミナルで起動します。
 
 ```sh
 npm run bot

@@ -8,7 +8,7 @@ import { RestaurantProcessor } from '../src/pipeline.js';
 import { pipelineCandidateSchema } from '../src/pipeline-candidates.js';
 import { createCandidateShop, metadataReviewState, newMention, replaceSourceAssets, saveMention, storeCandidates } from '../src/pipeline-storage.js';
 import { candidateRecord, mentionRecord, messageRecord } from '../src/records.js';
-import { fixture, withJsonServer } from './helpers.js';
+import { anthropicMessage, fixture, withJsonServer } from './helpers.js';
 
 test('actual processor reuses one approved source without AI and keeps repeat processing idempotent', async () => {
   const { database } = await fixture();
@@ -33,8 +33,8 @@ test('actual processing failure retains message, source assets and stage records
   try {
     const processor = new RestaurantProcessor(database, readAISettings({}), '.local/no-image-fixture');
     const envelope = envelopeSchema.parse({ message_id: '90000000000000101', channel_id: '123456789012345678', content: '架空食堂に行きました', created_at: '2026-10-18T00:00:00Z', assets: [{ kind: 'link', url: 'https://example.com/shop' }], omitted_asset_count: 0 });
-    await assert.rejects(processor.processMessage(envelope), /OPENAI_API_KEY/);
-    const message = (await database.query('SELECT * FROM messages WHERE message_id=$1', messageRecord, [envelope.message_id]))[0]; assert.equal(message?.processing_status, 'failed'); assert.match(message?.fetch_error ?? '', /OPENAI_API_KEY/);
+    await assert.rejects(processor.processMessage(envelope), /ANTHROPIC_API_KEY/);
+    const message = (await database.query('SELECT * FROM messages WHERE message_id=$1', messageRecord, [envelope.message_id]))[0]; assert.equal(message?.processing_status, 'failed'); assert.match(message?.fetch_error ?? '', /ANTHROPIC_API_KEY/);
     assert.equal((await database.query('SELECT * FROM shop_mentions WHERE message_id=$1', mentionRecord, [envelope.message_id])).length, 0);
     assert.equal((await database.query('SELECT url FROM source_assets WHERE message_id=$1', z.object({ url: z.string() }), [envelope.message_id]))[0]?.url, 'https://example.com/shop');
     const stages = await database.query('SELECT stage FROM processing_runs WHERE message_id=$1 ORDER BY id', z.object({ stage: z.string() }), [envelope.message_id]); assert.deepEqual(stages.map(row => row.stage), ['message_extraction', 'message_pipeline']);
@@ -73,14 +73,14 @@ test('verified candidate category wins only as a master value and never erases t
 test('a post the extraction rules out is ignored without a web search', async () => {
   const { database } = await fixture();
   const extraction = { is_restaurant_message: false, ignore_reason: '飲食店への言及ではない雑談です。', unresolved_reason: null, mentions: [] };
-  const responseBody = { id: 'resp_synthetic', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', output: [{ type: 'message', id: 'msg_synthetic', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(extraction), annotations: [] }] }], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } };
-  const previous = process.env.OPENAI_BASE_URL;
+  const responseBody = anthropicMessage([{ type: 'text', text: JSON.stringify(extraction) }]);
+  const previous = process.env.ANTHROPIC_BASE_URL;
   try {
     await withJsonServer(() => ({ status: 200, body: responseBody }), async (baseUrl, requests) => {
-      process.env.OPENAI_BASE_URL = baseUrl + '/v1';
+      process.env.ANTHROPIC_BASE_URL = baseUrl;
       const link = 'https://x.com/synthetic_user/status/1900000000000000002';
       const envelope = envelopeSchema.parse({ message_id: '90000000000000200', channel_id: '123456789012345678', content: link + '\n[Embed Description] 合成の雑談です', created_at: '2026-11-17T00:00:00Z', assets: [{ kind: 'link', url: link }, { kind: 'embed', url: link, description: '合成の雑談です' }], omitted_asset_count: 0 });
-      const processor = new RestaurantProcessor(database, readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-image-fixture');
+      const processor = new RestaurantProcessor(database, readAISettings({ ANTHROPIC_API_KEY: 'test-key' }), '.local/no-image-fixture');
       const result = await processor.processMessage(envelope, { allowSourceDiscovery: true });
       assert.equal(result.ignored, true); assert.deepEqual(result.shop_ids, []);
       assert.equal(requests.length, 1, 'only the extraction call runs');
@@ -88,55 +88,59 @@ test('a post the extraction rules out is ignored without a web search', async ()
       assert.equal((await database.query('SELECT processing_status FROM messages WHERE message_id=$1', z.object({ processing_status: z.string() }), [envelope.message_id]))[0]?.processing_status, 'ignored');
     });
   } finally {
-    if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous;
+    if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = previous;
     await database.close();
   }
 });
 
-test('flex processing sends every AI call at the flex tier and normal processing does not', async () => {
+test('processing never sends a service tier the Anthropic API does not accept', async () => {
+  // OpenAI's flex tier has no Anthropic equivalent; sync and mention runs send the same request.
   const extraction = { is_restaurant_message: false, ignore_reason: '合成の対象外です。', unresolved_reason: null, mentions: [] };
-  const responseBody = { id: 'resp_synthetic', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', service_tier: 'flex', output: [{ type: 'message', id: 'msg_synthetic', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify(extraction), annotations: [] }] }], usage: { input_tokens: 10, output_tokens: 5, total_tokens: 15, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } } };
-  const previous = process.env.OPENAI_BASE_URL;
+  const responseBody = anthropicMessage([{ type: 'text', text: JSON.stringify(extraction) }]);
+  const previous = process.env.ANTHROPIC_BASE_URL;
   try {
     await withJsonServer(() => ({ status: 200, body: responseBody }), async (baseUrl, requests) => {
-      process.env.OPENAI_BASE_URL = baseUrl + '/v1';
-      for (const [messageId, flex] of [['90000000000000210', true], ['90000000000000211', false]] as const) {
+      process.env.ANTHROPIC_BASE_URL = baseUrl;
+      for (const messageId of ['90000000000000210', '90000000000000211']) {
         const { database } = await fixture();
         try {
           const envelope = envelopeSchema.parse({ message_id: messageId, channel_id: '123456789012345678', content: '合成の雑談です', created_at: '2026-11-17T00:00:00Z', assets: [], omitted_asset_count: 0 });
-          const processor = new RestaurantProcessor(database, readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-image-fixture');
-          assert.equal((await processor.processMessage(envelope, { flex })).ignored, true);
+          const processor = new RestaurantProcessor(database, readAISettings({ ANTHROPIC_API_KEY: 'test-key' }), '.local/no-image-fixture');
+          assert.equal((await processor.processMessage(envelope)).ignored, true);
         } finally { await database.close(); }
       }
       const tiers = requests.map(request => z.object({ service_tier: z.string().optional() }).parse(JSON.parse(request.body)).service_tier ?? null);
-      assert.deepEqual(tiers, ['flex', null]);
+      assert.deepEqual(tiers, [null, null]);
+      assert.ok(requests.every(request => request.url.endsWith('/v1/messages')));
     });
-  } finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; }
+  } finally { if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = previous; }
 });
 
 test('a restaurant post with no shop name gets clue-search candidates for review, keeping only searched evidence', async () => {
-  const usage = { input_tokens: 10, output_tokens: 5, total_tokens: 15, input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 } };
-  const message = (text: string): object => ({ type: 'message', id: 'msg_synthetic', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text, annotations: [] }] });
   const extraction = { is_restaurant_message: true, ignore_reason: null, unresolved_reason: '店名の記載がない。', mentions: [] };
   const clues = { is_list_post: false, clues: ['合成町', '合成鍋'], unresolved_reason: null, candidates: [
     { shop_name: '合成食堂', branch_name: null, area: '東京都中央区', matched_clues: ['写真の看板が一致'], evidence_urls: ['https://shop.example.com/a/#menu'], confidence: 'high', area_matches_post: 'match' },
     { shop_name: '架空亭', branch_name: null, area: null, matched_clues: ['料理が似ている'], evidence_urls: ['https://not-searched.example.com/'], confidence: 'medium', area_matches_post: 'unknown' },
   ] };
   const responses = [
-    { id: 'resp_1', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', output: [message(JSON.stringify(extraction))], usage },
-    { id: 'resp_2', object: 'response', created_at: 0, model: 'synthetic', status: 'completed', output: [{ type: 'web_search_call', id: 'ws_1', status: 'completed', action: { type: 'search', query: '合成町 合成鍋', sources: [{ type: 'url', url: 'https://shop.example.com/a' }] } }, message(JSON.stringify(clues))], usage },
+    anthropicMessage([{ type: 'text', text: JSON.stringify(extraction) }]),
+    anthropicMessage([
+      { type: 'server_tool_use', id: 'srvtoolu_1', name: 'web_search', input: { query: '合成町 合成鍋' }, caller: { type: 'direct' } },
+      { type: 'web_search_tool_result', tool_use_id: 'srvtoolu_1', caller: { type: 'direct' }, content: [{ type: 'web_search_result', url: 'https://shop.example.com/a', title: '合成食堂', encrypted_content: 'synthetic', page_age: null }] },
+      { type: 'text', text: JSON.stringify(clues) },
+    ], 1),
   ];
-  const { database } = await fixture(); const previous = process.env.OPENAI_BASE_URL; let calls = 0;
+  const { database } = await fixture(); const previous = process.env.ANTHROPIC_BASE_URL; let calls = 0;
   try {
     await withJsonServer(() => ({ status: 200, body: responses[Math.min(calls++, 1)] ?? {} }), async (baseUrl, requests) => {
-      process.env.OPENAI_BASE_URL = baseUrl + '/v1';
+      process.env.ANTHROPIC_BASE_URL = baseUrl;
       const envelope = envelopeSchema.parse({ message_id: '90000000000000220', channel_id: '123456789012345678', content: '合成町の名店で合成鍋', created_at: '2026-11-17T00:00:00Z', assets: [], omitted_asset_count: 0 });
-      const processor = new RestaurantProcessor(database, readAISettings({ OPENAI_API_KEY: 'test-key' }), '.local/no-image-fixture');
+      const processor = new RestaurantProcessor(database, readAISettings({ ANTHROPIC_API_KEY: 'test-key' }), '.local/no-image-fixture');
       const result = await processor.processMessage(envelope, { allowClueSearch: true });
       assert.equal(result.ignored, false); assert.equal(result.pending_mention_ids.length, 1);
       assert.equal(requests.length, 2);
-      const searchRequest = z.object({ max_tool_calls: z.number(), tools: z.array(z.object({ type: z.string() })) }).parse(JSON.parse(requests[1]?.body ?? '{}'));
-      assert.equal(searchRequest.max_tool_calls, 3); assert.deepEqual(searchRequest.tools.map(tool => tool.type), ['web_search']);
+      const searchRequest = z.object({ tools: z.array(z.object({ type: z.string(), max_uses: z.number() })) }).parse(JSON.parse(requests[1]?.body ?? '{}'));
+      assert.deepEqual(searchRequest.tools.map(tool => [tool.type, tool.max_uses]), [['web_search_20250305', 3]]);
       const mention = (await database.query('SELECT * FROM shop_mentions WHERE message_id=$1', mentionRecord, [envelope.message_id]))[0];
       assert.equal(mention?.review_status, 'pending'); assert.equal(mention?.shop_id, null);
       assert.match(mention?.confidence_reason ?? '', /手がかり検索: 候補1件。検索で根拠を確認できない候補1件を除外/);
@@ -144,5 +148,5 @@ test('a restaurant post with no shop name gets clue-search candidates for review
       assert.equal(candidates.length, 1); assert.equal(candidates[0]?.name, '合成食堂'); assert.equal(candidates[0]?.evidence_url, 'https://shop.example.com/a/#menu');
       assert.equal(candidates[0]?.provenance, 'web_search'); assert.equal(Boolean(candidates[0]?.is_verified), false); assert.match(candidates[0]?.verification_reason ?? '', /確信度=高 \/ 一致: 写真の看板が一致/);
     });
-  } finally { if (previous === undefined) delete process.env.OPENAI_BASE_URL; else process.env.OPENAI_BASE_URL = previous; await database.close(); }
+  } finally { if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = previous; await database.close(); }
 });
