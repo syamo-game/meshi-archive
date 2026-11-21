@@ -45,7 +45,7 @@ export function sourceUrls(envelope: MessageEnvelope): readonly [string | null, 
   }
   return [source, canonical.size === 1 ? [...canonical.values()][0] ?? null : null, canonical.size > 1];
 }
-// The bot wraps this class to map its processing mode to ProcessingOptions, so it does not implement MessageProcessor itself.
+// The bot wraps this class to pass its ProcessingOptions, so it does not implement MessageProcessor itself.
 export class RestaurantProcessor {
   private readonly ai: RestaurantAI;
   private readonly images: ImageCache;
