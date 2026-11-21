@@ -9,7 +9,7 @@ Discord
   └─ Discord Bot
       ├─ 投稿、埋め込み、リンク、添付メタデータを保存
       ├─ 承認済みの同一出典なら店舗との対応を再利用
-      ├─ OpenAI Responses APIで店舗への言及を抽出
+      ├─ Anthropic Claude APIで店舗への言及を抽出
       ├─ JSON-LDとWeb検索から候補を収集
       └─ 強い一致根拠がない言及をデータ確認へ送る
 

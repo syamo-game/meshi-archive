@@ -49,3 +49,9 @@ export async function withJsonServer(respond: (request: RecordedRequest) => { st
   try { await run(`http://127.0.0.1:${address.port}`, requests); }
   finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 }
+
+// A synthetic Anthropic Messages API response with the given content blocks.
+export function anthropicMessage(content: readonly object[], searches = 0): object {
+  return { id: 'msg_synthetic', type: 'message', role: 'assistant', model: 'synthetic', content, stop_reason: 'end_turn', stop_sequence: null,
+    usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: null, cache_read_input_tokens: null, server_tool_use: searches ? { web_search_requests: searches, web_fetch_requests: 0 } : null } };
+}

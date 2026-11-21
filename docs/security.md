@@ -25,12 +25,12 @@ Discord OAuthで本人を確認し、設定またはDBに登録された利用�
 
 ## BotとAI
 
-Botには`DISCORD_TOKEN`、`ADMIN_USER_ID`、`OPENAI_API_KEY`が必要です。履歴同期には`DISCORD_CHANNEL_ID`を設定します。
+Botには`DISCORD_TOKEN`、`ADMIN_USER_ID`、`ANTHROPIC_API_KEY`が必要です。履歴同期には`DISCORD_CHANNEL_ID`を設定します。
 
 | 設定 | 既定値 |
 | --- | --- |
-| `EXTRACTION_MODEL` | `gpt-6.1-sol` |
-| `RESOLUTION_MODEL` | `gpt-6.1-sol` |
+| `EXTRACTION_MODEL` | `claude-sonnet-5-5` |
+| `RESOLUTION_MODEL` | `claude-opus-5-5` |
 | `EXTRACTION_REASONING_EFFORT` | `high` |
 | `RESOLUTION_REASONING_EFFORT` | `high` |
 | `AI_MAX_CONCURRENCY` | `2` |
