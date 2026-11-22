@@ -5,7 +5,7 @@ import type { ContentBlock, ImageBlockParam, Message, MessageCreateParamsNonStre
 import { z } from 'zod';
 import contract from '../data/ai-contract.json' with { type: 'json' };
 import { candidateSearchContextSchema, clueSearchSchema, extractedMessageSchema, imageCluesSchema, requireExtractionEvidence, searchCandidateSetSchema } from './ai-models.js';
-import type { CandidateSearchContext, CandidateSearchResult, ClueSearchResult, ExtractedMention, ExtractionCallResult, ImageAnalysisResult, ModelCallMetrics } from './ai-models.js';
+import type { AreaChoice, AreaRefinementResult, CandidateSearchContext, CandidateSearchResult, ClueSearchResult, ExtractedMention, ExtractionCallResult, ImageAnalysisResult, ModelCallMetrics } from './ai-models.js';
 import { canonicalArea } from './geography.js';
 import { categories, categoryInstructions } from './categories.js';
 import { ImageCache, publicAddress } from './image-cache.js';
@@ -215,6 +215,18 @@ export class RestaurantAI {
     const { response, attempts } = await this.request(params, 'clue_search', signal);
     const search = this.parse(response, clueSearchSchema, 'clue_search');
     return { search, metrics: callMetrics(response, this.config.RESOLUTION_MODEL, performance.now() - started, attempts, images.length, true), source_urls: searchSources(response, 'clue_search') };
+  }
+  // Pick the master area nearest to a shop address. The schema lists only the given choices, so the answer is always one of them or unknown.
+  async nearestArea(address: string, choices: readonly AreaChoice[], signal?: AbortSignal): Promise<AreaRefinementResult> {
+    const [first, ...rest] = choices.map(choice => choice.value); if (!first || !address.trim()) throw new ExtractionError(`Area refinement needs an address and choices: address=${address} choices=${choices.length}`);
+    const values = [first, ...rest, 'unknown'] as const; const started = performance.now();
+    // The reason comes first so the model reasons before it commits to an area.
+    const schema = { type: 'object', additionalProperties: false, required: ['reason', 'area'], properties: { reason: { type: 'string', description: '判断の根拠。300文字以内。' }, area: { type: 'string', enum: values } } };
+    const input = [`住所: ${address.trim()}`, '候補:', ...choices.map(choice => `- ${choice.value}（${choice.label}）`)].join('\n');
+    const params: MessageCreateParamsNonStreaming = { model: this.config.EXTRACTION_MODEL, system: contract.prompts.area_refinement, messages: [{ role: 'user', content: input }], max_tokens: 16000, output_config: { effort: this.config.EXTRACTION_REASONING_EFFORT, format: { type: 'json_schema', schema } } };
+    const { response, attempts } = await this.request(params, 'area_refinement', signal);
+    const answer = this.parse(response, z.strictObject({ reason: z.string().trim().min(1).max(2000), area: z.enum(values) }), 'area_refinement');
+    return { area: answer.area === 'unknown' ? null : answer.area, reason: answer.reason, metrics: callMetrics(response, this.config.EXTRACTION_MODEL, performance.now() - started, attempts) };
   }
   async analyzeImages(mention: ExtractedMention | null, urls: readonly string[], signal?: AbortSignal): Promise<ImageAnalysisResult> {
     const selected = urls.slice(0, 2); if (!selected.length) throw new ExtractionError('Image analysis requires at least one image');

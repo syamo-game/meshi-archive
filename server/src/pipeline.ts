@@ -19,6 +19,7 @@ import { candidateVerificationUrls, PipelineEvidence } from './pipeline-evidence
 import { searchClues } from './pipeline-clues.js';
 import { analyzeImage, processImageOnly } from './pipeline-image-processing.js';
 import { existingShopFromImage, imageCandidates, imageMatchesMention, imageVerificationUrls, singleImageCandidate, structuredCandidateFromImage } from './pipeline-images.js';
+import { refineShopArea } from './pipeline-area.js';
 import { PipelineJournal } from './pipeline-journal.js';
 import { PipelineShops } from './pipeline-shops.js';
 import { findSourceReuse } from './pipeline-source-reuse.js';
@@ -190,11 +191,12 @@ export class RestaurantProcessor {
       if (!chosen && !candidate && !blocked && pageBlocked) blocked = pageBlocked;
       const categoryEvidence = chosen ? chosen.category : candidate?.is_verified ? candidate.category || extracted.category : extracted.category;
       if (!chosen && candidate) { chosen = await createCandidateShop(connection, extracted, candidate); basis = candidate.provenance === 'image' ? 'image_evidence' : 'verified_candidate'; }
+      let areaNote: string | null = null; if (chosen) [chosen, areaNote] = await refineShopArea(connection, ai, journal, id, chosen);
       const [metadata, difference] = metadataReviewState(chosen ? chosen.area : extracted.area, chosen ? chosen.category : extracted.category, categoryEvidence); const reasons = [extracted.confidence_reason];
       if (ambiguousAssets) reasons.push('複数の店舗ID付きURLと投稿内店舗の対応を一意に確認できない'); reason = blocked || reason; if (reason) reasons.push(reason);
       if (candidate) { reasons.push(candidate.verification_reason || '検証済み候補で確定'); candidates = candidate.provenance === 'web_search' && candidate.is_verified ? replaceWebCandidate(candidates, candidate) : dedupeCandidates([candidate, ...candidates]); }
-      if (searchReason) reasons.push('Web検索未解決: ' + searchReason); if (imageReason) reasons.push('画像補助: ' + imageReason);
-      if (difference === 'unknown_category') reasons.push('未知カテゴリ: ' + categoryEvidence); if (difference === 'unknown_area') reasons.push('未知エリア: ' + (chosen ? chosen.area : extracted.area));
+      if (searchReason) reasons.push('Web検索未解決: ' + searchReason); if (imageReason) reasons.push('画像補助: ' + imageReason); if (areaNote) reasons.push(areaNote);
+      if (difference === 'unknown_category') reasons.push('未知カテゴリ: ' + categoryEvidence); if (difference === 'unknown_area') reasons.push('未知エリア: ' + (chosen ? chosen.area : extracted.area)); if (difference === 'ward_only_area') reasons.push('エリアが区のみ: ' + (chosen ? chosen.area : extracted.area));
       const now = new Date().toISOString(); const row = await saveMention(connection, { ...newMention(id, occurrence, extracted, url, extractionSource), shop_id: chosen?.id ?? null, resolution_status: chosen ? 'resolved' : 'ambiguous', review_status: chosen ? 'approved' : 'pending', metadata_review_status: metadata, metadata_difference_type: difference, resolution_method: chosen ? 'automatic' : null, resolution_basis: basis, difference_type: imageAssessment.codes.length ? 'evidence_review' : chosen ? null : 'new_ambiguous', extraction_error: evidenceReviewError(imageAssessment), confidence_reason: reasons.join(' / '), reviewed_at: chosen ? now : null, metadata_reviewed_at: metadata === 'approved' ? now : null });
       await storeCandidates(connection, row, extracted, candidates, candidate || selected);
     }
