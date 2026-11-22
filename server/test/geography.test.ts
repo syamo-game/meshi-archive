@@ -42,3 +42,9 @@ test('filter areas restore municipality hierarchy while keeping counted leaves',
   assert.equal(areaMatches('北海道札幌市中央区', '北海道札幌市'), true);
   assert.equal(areaMatches('神田', '東京都江東区'), false);
 });
+
+test('Harumi is a selectable Chuo area and posts naming it resolve to it', async () => {
+  const { areaLabel, canonicalArea } = await import('../src/geography.js');
+  for (const value of ['晴海', '東京都中央区晴海', '中央区/晴海']) assert.equal(canonicalArea(value), '東京都中央区 / 晴海', value);
+  assert.equal(areaLabel('東京都中央区 / 晴海', true), '中央区・晴海');
+});
