@@ -48,3 +48,30 @@ test('Harumi is a selectable Chuo area and posts naming it resolve to it', async
   for (const value of ['晴海', '東京都中央区晴海', '中央区/晴海']) assert.equal(canonicalArea(value), '東京都中央区 / 晴海', value);
   assert.equal(areaLabel('東京都中央区 / 晴海', true), '中央区・晴海');
 });
+
+test('a Tokyo ward alone goes to metadata review, while its stations and other cities pass', async () => {
+  const { wardOnlyArea } = await import('../src/geography.js');
+  const { metadataReviewState } = await import('../src/pipeline-storage.js');
+  assert.deepEqual(metadataReviewState('東京都中央区', '居酒屋'), ['pending', 'ward_only_area']);
+  assert.deepEqual(metadataReviewState('東京都江東区', '居酒屋'), ['pending', 'ward_only_area']);
+  for (const area of ['月島', '東京都中央区 / 晴海', '東京都三鷹市', '京都府京都市東山区']) {
+    assert.equal(wardOnlyArea(area), false, area);
+    assert.deepEqual(metadataReviewState(area, '居酒屋'), ['approved', null], area);
+  }
+});
+
+test('every master area except multi-municipality islands has an address mapping', async () => {
+  const { areas } = await import('../src/geography.js');
+  const { areaMunicipality } = await import('../src/region-master.js');
+  assert.deepEqual([...areas.keys()].filter(area => areaMunicipality(area) === null), ['五島列島']);
+});
+
+test('a ward or city area becomes the finer area its address names', async () => {
+  const { refineAreaByAddress } = await import('../src/candidate-geography.js');
+  assert.equal(refineAreaByAddress('東京都中央区', '東京都中央区晴海5丁目6番7'), '東京都中央区 / 晴海');
+  assert.equal(refineAreaByAddress('東京都中央区', '東京都中央区月島3-1-1'), '月島');
+  assert.equal(refineAreaByAddress('東京都江東区', '東京都江東区豊洲6-5-1'), '豊洲');
+  assert.equal(refineAreaByAddress('東京都中央区', '東京都港区芝浦1-1'), '東京都中央区');
+  assert.equal(refineAreaByAddress('東京都江東区', null), '東京都江東区');
+  assert.equal(refineAreaByAddress('月島', '東京都中央区晴海5丁目'), '月島');
+});

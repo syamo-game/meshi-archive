@@ -27,6 +27,8 @@ export interface ModelCallMetrics { model: string; input_tokens: number; output_
 export interface ExtractionCallResult { message: ExtractedMessage; metrics: ModelCallMetrics; source_urls: readonly string[]; }
 export interface CandidateSearchResult { candidates: SearchCandidateSet; metrics: ModelCallMetrics; source_urls: readonly string[]; }
 export interface ImageAnalysisResult { clues: ImageClues; metrics: ModelCallMetrics; }
+export interface AreaChoice { value: string; label: string; }
+export interface AreaRefinementResult { area: string | null; reason: string; metrics: ModelCallMetrics; }
 export function requireExtractionEvidence(message: ExtractedMessage): ExtractedMessage {
   return { ...message, mentions: message.mentions.map(mention => mention.identity_evidence === null || mention.subject_kind === null ? { ...mention, identity_evidence: mention.identity_evidence ?? 'unknown', subject_kind: mention.subject_kind ?? 'unknown', needs_review: true } : mention) };
 }

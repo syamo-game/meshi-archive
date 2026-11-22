@@ -141,6 +141,12 @@ export function candidateCanonicalArea(candidate: CandidateIdentity): string | n
   if (!candidate.address) return null; const area = areaFromAddress(candidate.address);
   return area && candidateAddressPreciselyMatchesArea(area, candidate.address) && (!candidate.area || candidateAreaContextMatches(area, candidate.area)) ? area : null;
 }
+// The shop's address usually names the town inside the city or ward, so a finer master area found there replaces the coarse one.
+export function refineAreaByAddress(area: string | null, address: string | null): string | null {
+  if (!area || !address || !areaIsMunicipality(area)) return area;
+  const precise = areaFromAddress(address); const municipality = areaMunicipality(area);
+  return precise && municipality && !areaIsMunicipality(precise) && areaMunicipality(precise)?.code === municipality.code && candidateAddressPreciselyMatchesArea(precise, address) ? precise : area;
+}
 export function effectiveCandidateArea(mention: ExtractedMention, candidate: CandidateIdentity): string | null {
   const area = canonicalArea(mention.area); if (area && !areaIsMunicipality(area)) return area;
   const selected = candidateCanonicalArea(candidate); return selected && (!mention.area || candidateAreaContextMatches(selected, mention.area)) ? selected : null;
