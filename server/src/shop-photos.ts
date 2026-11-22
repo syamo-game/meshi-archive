@@ -6,7 +6,7 @@ import { imageHosts, storeUploadedImage } from './images.js';
 import type { MessageEnvelope } from './ingestion.js';
 import { safeHttpUrl } from './links.js';
 
-export type PhotoSource = 'post_image' | 'shop_page_og_image';
+export type PhotoSource = 'chosen_post_image' | 'post_image' | 'shop_page_og_image';
 export interface PhotoFetchers { postImage(url: string): Promise<Uint8Array>; page(url: string): Promise<{ html: string; final_url: string }>; pageImage(url: string): Promise<Uint8Array>; }
 export interface AttachedPhoto { shop_id: number; source: PhotoSource; url: string; }
 const defaultFetchers: PhotoFetchers = {
@@ -38,18 +38,20 @@ function postImageUrl(envelope: MessageEnvelope): string | null {
   return null;
 }
 
-// Give each shop this post resolved a photo when it has none: the post's own image when the post names one shop,
-// otherwise the share image on the shop's page. A shop with no usable image stays without one and the reason is logged.
-export async function attachMissingShopPhotos(database: Database, directory: string, envelope: MessageEnvelope, fetchers: PhotoFetchers = defaultFetchers): Promise<AttachedPhoto[]> {
+// Give each shop this post resolved a photo when it has none. The post photo the extraction chose for the shop comes first.
+// Without a choice, the post's own image is used when the post names one shop. Otherwise the share image on the shop's page is used.
+// cardPhotos maps a shop ID to the chosen photo URL, or to null when none of the post's photos suits the card.
+// A shop with no usable image stays without one and the reason is logged.
+export async function attachMissingShopPhotos(database: Database, directory: string, envelope: MessageEnvelope, cardPhotos: ReadonlyMap<number, string | null>, fetchers: PhotoFetchers = defaultFetchers): Promise<AttachedPhoto[]> {
   const resolved = await database.query("SELECT DISTINCT shop_id FROM shop_mentions WHERE message_id=$1 AND review_status='approved' AND shop_id IS NOT NULL", z.object({ shop_id: z.number().int() }), [envelope.message_id]);
   if (!resolved.length) return [];
   const ids = resolved.map(row => row.shop_id);
   const shops = await database.query(`SELECT id,canonical_url FROM shops WHERE image_key IS NULL AND id IN (${ids.map((_, index) => '$' + (index + 1)).join(',')}) ORDER BY id`, shopRow, ids);
   const postImage = resolved.length === 1 ? postImageUrl(envelope) : null; const attached: AttachedPhoto[] = [];
   for (const shop of shops) {
-    const tried: string[] = [];
+    const tried: string[] = []; const chosen = cardPhotos.get(shop.id);
     const sources: (() => Promise<{ source: PhotoSource; url: string; bytes: Uint8Array } | null>)[] = [
-      async () => postImage ? { source: 'post_image', url: postImage, bytes: await fetchers.postImage(postImage) } : null,
+      async () => chosen ? { source: 'chosen_post_image', url: chosen, bytes: await fetchers.postImage(chosen) } : chosen === undefined && postImage ? { source: 'post_image', url: postImage, bytes: await fetchers.postImage(postImage) } : null,
       async () => {
         if (!shop.canonical_url) return null;
         const page = await fetchers.page(shop.canonical_url); const image = pageShareImage(page.html, page.final_url);
@@ -70,7 +72,7 @@ export async function attachMissingShopPhotos(database: Database, directory: str
         console.error('Shop photo source failed', { messageId: envelope.message_id, shopId: shop.id, canonicalUrl: shop.canonical_url, error });
       }
     }
-    if (!attached.some(item => item.shop_id === shop.id)) console.warn('Shop photo not found', { messageId: envelope.message_id, shopId: shop.id, canonicalUrl: shop.canonical_url, postImage, tried });
+    if (!attached.some(item => item.shop_id === shop.id)) console.warn('Shop photo not found', { messageId: envelope.message_id, shopId: shop.id, canonicalUrl: shop.canonical_url, postImage, chosenPhoto: chosen, tried });
   }
   return attached;
 }

@@ -50,6 +50,8 @@ export function buildMessageEnvelope(message: DiscordInput): MessageEnvelope {
   return envelopeSchema.parse({ message_id: message.id, channel_id: message.channelId, content: parts.join('\n') || '[Empty Discord message]', created_at: message.createdAt.toISOString(), assets, omitted_asset_count: Math.max(0, assets.length - 50) });
 }
 const imageHosts = new Set(['pbs.twimg.com', 'media.discordapp.net', 'cdn.discordapp.com', 'images-ext-1.discordapp.net', 'images-ext-2.discordapp.net', 'www.oimachi-tracks.com']);
+// How many of a post's photos processing reads to find the shop and pick its card photo.
+export const maxPostPhotos = 10;
 // Add the full text of linked X posts. A failed fetch is logged and the post keeps its Discord preview.
 // The same X photo appears with different size or format parameters, so compare by its path.
 function xMediaKey(url: string): string { const parsed = new URL(url); return parsed.hostname === 'pbs.twimg.com' ? parsed.pathname.replace(/\.(jpg|jpeg|png|webp)$/i, '') : url; }
@@ -57,14 +59,15 @@ export async function withXPosts(envelope: MessageEnvelope, fetchPost: (id: stri
   const ids = [...new Set(envelope.assets.filter(asset => asset.kind === 'link' || asset.kind === 'embed').map(asset => xStatusId(asset.url)).filter((id): id is string => id !== null))].slice(0, 3);
   const blocks: string[] = []; const photos: string[] = [];
   for (const id of ids) {
-    try { const post = await fetchPost(id); blocks.push(xPostText(post)); photos.push(...post.photo_urls, ...(post.quoted?.photo_urls ?? [])); }
+    // The quoted post's photos show that post's own shops, so only the linked post's photos are kept.
+    try { const post = await fetchPost(id); blocks.push(xPostText(post)); photos.push(...post.photo_urls); }
     catch (error) { console.error('X post full text unavailable', { messageId: envelope.message_id, postId: id, error }); }
   }
   if (!blocks.length) return envelope;
   // X photos are part of the linked post, like Discord's own preview image, so they are marked as embed previews.
-  // Keep at most 8 so list posts with 20 photos do not download them all.
+  // Keep only as many as processing reads, so list posts with 20 photos do not download them all.
   const known = new Set(envelope.assets.filter(asset => asset.kind === 'image').map(asset => xMediaKey(asset.url)));
-  const added = [...new Set(photos)].filter(url => !known.has(xMediaKey(url))).slice(0, 8).map(url => ({ kind: 'image' as const, url, is_embed_preview: true }));
+  const added = [...new Set(photos)].filter(url => !known.has(xMediaKey(url))).slice(0, maxPostPhotos).map(url => ({ kind: 'image' as const, url, is_embed_preview: true }));
   return envelopeSchema.parse({ ...envelope, content: [envelope.content, ...blocks].join('\n').slice(0, 100000), assets: [...envelope.assets, ...added], omitted_asset_count: Math.max(0, envelope.assets.length + added.length - 50) });
 }
 export async function acquireMessageEnvelope(message: DiscordInput, processor: MessageProcessor): Promise<MessageEnvelope> {

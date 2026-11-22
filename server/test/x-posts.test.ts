@@ -39,15 +39,26 @@ test('a failed X request raises with its status and leaves the message unchanged
   });
 });
 
-test('X photos are added once as embed previews, at most eight', async () => {
+test('X photos are added once as embed previews, at most ten', async () => {
   const many = { ...post, photos: Array.from({ length: 12 }, (_, index) => ({ url: `https://pbs.twimg.com/media/synthetic${index}.jpg` })), quoted_tweet: undefined };
   await withJsonServer(() => ({ status: 200, body: many }), async baseUrl => {
     const link = 'https://x.com/synthetic_user/status/1900000000000000001';
     const envelope = envelopeSchema.parse({ message_id: '90000000000000001', channel_id: '123456789012345678', content: link, created_at: '2026-11-17T00:00:00Z', assets: [{ kind: 'link', url: link }, { kind: 'embed', url: link }, { kind: 'image', url: 'https://pbs.twimg.com/media/synthetic0?format=webp&name=large', is_embed_preview: true }], omitted_asset_count: 0 });
     const enriched = await withXPosts(envelope, id => fetchXPost(id, baseUrl + '/tweet-result'));
     const images = enriched.assets.filter(asset => asset.kind === 'image');
-    assert.equal(images.length, 9, 'the Discord preview plus 8 new photos');
+    assert.equal(images.length, 11, 'the Discord preview plus 10 new photos');
     assert.ok(images.every(asset => asset.is_embed_preview));
     assert.equal(images.filter(asset => asset.url.includes('synthetic0')).length, 1, 'the photo Discord already showed is not added again');
+  });
+});
+
+test('photos of a quoted post are not added, because they show the quoted post\'s own shops', async () => {
+  const quoting = { ...post, photos: [{ url: 'https://pbs.twimg.com/media/own.jpg' }], quoted_tweet: { id_str: '1900000000000000000', text: 'おすすめ4選', photos: [{ url: 'https://pbs.twimg.com/media/quoted.jpg' }] } };
+  await withJsonServer(() => ({ status: 200, body: quoting }), async baseUrl => {
+    const link = 'https://x.com/synthetic_user/status/1900000000000000001';
+    const envelope = envelopeSchema.parse({ message_id: '90000000000000001', channel_id: '123456789012345678', content: link, created_at: '2026-11-17T00:00:00Z', assets: [{ kind: 'link', url: link }], omitted_asset_count: 0 });
+    const enriched = await withXPosts(envelope, id => fetchXPost(id, baseUrl + '/tweet-result'));
+    assert.deepEqual(enriched.assets.filter(asset => asset.kind === 'image').map(asset => asset.url), ['https://pbs.twimg.com/media/own.jpg']);
+    assert.match(enriched.content, /\[X Quoted Post\][^\n]*\nおすすめ4選/, 'the quoted text is still kept for reading');
   });
 });

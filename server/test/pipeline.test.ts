@@ -150,3 +150,33 @@ test('a restaurant post with no shop name gets clue-search candidates for review
     });
   } finally { if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = previous; await database.close(); }
 });
+
+test('a post is read with its numbered photos, and a shop named only in a photo is registered like a named one', async () => {
+  const { mkdir, mkdtemp, rm, writeFile } = await import('node:fs/promises');
+  const { dirname, join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const sharp = (await import('sharp')).default;
+  const { sourceImagePath } = await import('../src/image-cache.js');
+  const photo = 'https://pbs.twimg.com/media/synthetic-screenshot.jpg';
+  // The photo shows the name of fixture shop 5 (木場); the text names no shop.
+  const extraction = { is_restaurant_message: true, ignore_reason: null, unresolved_reason: null, mentions: [{ shop_name: '店舗05', branch_name: null, area: '木場', category: null, source_url: null, needs_review: false, confidence_reason: '写真1の店舗ページ画面に店名がある', subject_kind: 'restaurant', identity_evidence: 'explicit', name_evidence: '店舗05 木場/和食', branch_evidence: null, operating_status: 'unknown', operating_status_evidence: null, event_origin: null, name_photo: 1, card_photo: 0 }] };
+  const { database } = await fixture(); const directory = await mkdtemp(join(tmpdir(), 'meshi-photo-pipeline-')); const previous = process.env.ANTHROPIC_BASE_URL;
+  try {
+    const cached = sourceImagePath(photo, directory); await mkdir(dirname(cached), { recursive: true });
+    await writeFile(cached, await sharp({ create: { width: 64, height: 48, channels: 3, background: '#c08040' } }).jpeg().toBuffer());
+    await withJsonServer(() => ({ status: 200, body: anthropicMessage([{ type: 'text', text: JSON.stringify(extraction) }]) }), async (baseUrl, requests) => {
+      process.env.ANTHROPIC_BASE_URL = baseUrl;
+      const envelope = envelopeSchema.parse({ message_id: '90000000000000230', channel_id: '123456789012345678', content: '木場の町寿司 本当においしい', created_at: '2026-11-17T00:00:00Z', assets: [{ kind: 'image', url: photo, is_embed_preview: true }], omitted_asset_count: 0 });
+      const processor = new RestaurantProcessor(database, readAISettings({ ANTHROPIC_API_KEY: 'test-key' }), directory);
+      const result = await processor.processMessage(envelope);
+      assert.equal(requests.length, 1, 'the existing shop matched, so no web search ran');
+      const body = z.object({ system: z.union([z.string(), z.array(z.object({ text: z.string() }))]), messages: z.array(z.object({ content: z.array(z.object({ type: z.string(), text: z.string().optional() })) })) }).parse(JSON.parse(requests[0]?.body ?? '{}'));
+      const system = typeof body.system === 'string' ? body.system : body.system.map(block => block.text).join('');
+      assert.match(system, /「写真1」「写真2」のように番号/, 'the photo extraction prompt is used');
+      assert.deepEqual(body.messages[0]?.content.map(block => block.type === 'text' ? block.text?.startsWith('写真') ? block.text : 'post' : block.type), ['post', '写真1', 'image']);
+      assert.deepEqual(result.shop_ids, [5]); assert.deepEqual(result.pending_mention_ids, []);
+      const mention = (await database.query('SELECT * FROM shop_mentions WHERE message_id=$1', mentionRecord, [envelope.message_id]))[0];
+      assert.equal(mention?.review_status, 'approved'); assert.equal(mention?.resolution_basis, 'existing_shop'); assert.equal(mention?.extraction_error, null);
+    });
+  } finally { if (previous === undefined) delete process.env.ANTHROPIC_BASE_URL; else process.env.ANTHROPIC_BASE_URL = previous; await database.close(); await rm(directory, { recursive: true, force: true }); }
+});
