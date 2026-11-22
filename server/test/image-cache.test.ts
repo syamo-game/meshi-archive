@@ -22,6 +22,11 @@ test('image URLs and resolved addresses reject private or unapproved destination
   assert.equal(publicAddress('1.1.1.1'), true); assert.equal(publicAddress('2606:4700:4700::1111'), true);
 });
 
+test('sharp keeps no image cache in memory', () => {
+  const cache = sharp.cache();
+  assert.equal(cache.memory.max, 0); assert.equal(cache.files.max, 0); assert.equal(cache.items.max, 0);
+});
+
 test('saved originals survive rotating Discord signatures and AI uses only saved files', async () => {
   const temporary = await directory();
   try {

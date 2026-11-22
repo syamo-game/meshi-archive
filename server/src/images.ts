@@ -5,6 +5,10 @@ import sharp from 'sharp';
 import { AppError } from './errors.js';
 import { safeHttpUrl } from './links.js';
 
+// Each photo is read once and saved to disk, so sharp's in-memory cache never helps.
+// It only holds memory that the small server needs for the bot and the database.
+sharp.cache(false);
+
 export const maxImageBytes = 20 * 1024 * 1024;
 export const maxImagePixels = 40_000_000;
 export interface UploadedImage { key: string; path: string; }

@@ -23,6 +23,9 @@ WORKDIR /app
 ENV APP_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=8000
+# glibc gives each image thread its own memory pool and keeps freed memory there.
+# Two pools keep a 10-photo post from pushing the bot near the server's memory limit.
+ENV MALLOC_ARENA_MAX=2
 COPY docker-compose.prod.yml ./docker-compose.prod.yml
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
