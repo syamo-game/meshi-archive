@@ -15,6 +15,11 @@ export function canonicalArea(value: string | null): string | null {
   const candidates = master.candidates[normalized.replace(/\s+/gu, '')];
   return candidates?.length === 1 ? candidates[0] ?? null : null;
 }
+// Station and town areas are the stored grain inside Tokyo's 23 wards, so a ward alone is too coarse to approve automatically.
+export function wardOnlyArea(value: string | null): boolean {
+  const area = areas.get(canonicalArea(value) ?? '');
+  return area !== undefined && area.value === area.municipality && /^東京都.+区$/u.test(area.value);
+}
 export function areaLabel(value: string | null, card = false): string {
   if (!value) return '';
   const area = areas.get(canonicalArea(value) ?? value);

@@ -1,6 +1,6 @@
 import type { Executor } from './db/database.js';
 import { AppError } from './errors.js';
-import { areas, canonicalArea, canonicalCategory } from './geography.js';
+import { areas, canonicalArea, canonicalCategory, wardOnlyArea } from './geography.js';
 import { candidateRecord, mentionRecord, shopRecord } from './records.js';
 import type { CandidateRecord, MentionRecord, ShopRecord } from './records.js';
 import { mentionExactIdentity } from './review-groups.js';
@@ -60,7 +60,7 @@ export function reusableResolutionBasis(mention: MentionRecord, target: ShopReco
   return strong.size === 1 && strong.has(target.id) ? 'verified_candidate' : null;
 }
 export function metadataAssessment(shop: ShopRecord, mention: MentionRecord): Pick<MentionRecord, 'metadata_review_status' | 'metadata_difference_type' | 'metadata_reviewed_at'> {
-  const reason = !shop.area ? mention.extracted_area && !canonicalArea(mention.extracted_area) ? 'unknown_area' : 'missing_area' : !canonicalArea(shop.area) ? 'unknown_area' : !shop.category ? 'missing_category' : !canonicalCategory(shop.category) ? 'unknown_category' : null;
+  const reason = !shop.area ? mention.extracted_area && !canonicalArea(mention.extracted_area) ? 'unknown_area' : 'missing_area' : !canonicalArea(shop.area) ? 'unknown_area' : wardOnlyArea(shop.area) ? 'ward_only_area' : !shop.category ? 'missing_category' : !canonicalCategory(shop.category) ? 'unknown_category' : null;
   return { metadata_review_status: reason ? 'pending' : 'approved', metadata_difference_type: reason, metadata_reviewed_at: reason ? null : new Date().toISOString() };
 }
 export async function autoResolvePending(connection: Executor, sourceId: number, target: ShopRecord): Promise<readonly number[]> {
@@ -72,7 +72,7 @@ export async function autoResolvePending(connection: Executor, sourceId: number,
   const current = await load(); const resolved: number[] = [];
   for (const mention of locked) {
     const basis = reusableResolutionBasis(mention, target, current); if (!basis) continue;
-    const now = new Date().toISOString(); const metadata = canonicalArea(target.area) && canonicalCategory(target.category) ? { metadata_review_status: 'approved', metadata_difference_type: null, metadata_reviewed_at: now } : mention.metadata_review_status === 'deferred' ? mention : metadataAssessment(target, { ...mention, extracted_area: null });
+    const now = new Date().toISOString(); const metadata = canonicalArea(target.area) && !wardOnlyArea(target.area) && canonicalCategory(target.category) ? { metadata_review_status: 'approved', metadata_difference_type: null, metadata_reviewed_at: now } : mention.metadata_review_status === 'deferred' ? mention : metadataAssessment(target, { ...mention, extracted_area: null });
     const changed = await connection.execute("UPDATE shop_mentions SET shop_id=$3,resolution_status='resolved',review_status='approved',resolution_method='automatic',resolution_basis=$4,reused_from_mention_id=$5,reviewed_at=$6,metadata_review_status=$7,metadata_difference_type=$8,metadata_reviewed_at=$9,version=version+1 WHERE id=$1 AND version=$2 AND review_status='pending'", [mention.id, mention.version, target.id, basis, sourceId, now, metadata.metadata_review_status, metadata.metadata_difference_type, metadata.metadata_reviewed_at]);
     if (changed !== 1) throw new AppError(409, '関連する確認項目が更新されています。再確認してください。');
     await connection.execute("INSERT INTO review_events(mention_id,scope,action,previous_shop_id,selected_shop_id,note,created_at) VALUES($1,'identity','auto_reuse_approved_identity',$2,$3,$4,$5)", [mention.id, mention.shop_id, target.id, `basis=${basis}; reused_from_mention_id=${sourceId}`, now]);

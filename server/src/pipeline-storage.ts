@@ -1,7 +1,7 @@
 import type { ExtractedMention } from './ai-models.js';
-import { candidateMatchesArea, nameWithBranch } from './candidate-geography.js';
+import { candidateMatchesArea, nameWithBranch, refineAreaByAddress } from './candidate-geography.js';
 import type { Executor } from './db/database.js';
-import { areas, canonicalArea } from './geography.js';
+import { areas, canonicalArea, wardOnlyArea } from './geography.js';
 import { canonicalCategory, categoryFromEvidence } from './categories.js';
 import type { MessageEnvelope } from './ingestion.js';
 import { candidateIdentities } from './pipeline-candidates.js';
@@ -16,6 +16,7 @@ import { sourceAssetFingerprint, sourceAssetIdentity } from './source-identity.j
 export function metadataReviewState(area: string | null, category: string | null, categoryEvidence: string | null = category): readonly [MentionRecord['metadata_review_status'], string | null] {
   if (!area) return ['pending', 'missing_area'];
   if (!canonicalArea(area)) return ['pending', 'unknown_area'];
+  if (wardOnlyArea(area)) return ['pending', 'ward_only_area'];
   if (!category) return ['pending', categoryEvidence && !canonicalCategory(categoryEvidence) ? 'unknown_category' : 'missing_category'];
   if (!canonicalCategory(category)) return ['pending', 'unknown_category'];
   return ['approved', null];
@@ -38,7 +39,7 @@ export async function createCandidateShop(connection: Executor, mention: Extract
   const now = new Date().toISOString(); const mentionArea = canonicalArea(mention.area); const candidateArea = canonicalArea(candidate.area);
   if (candidate.is_verified && identitiesConflict(candidateIdentities(candidate))) throw new Error('Candidate external identities conflict within one service');
   if (candidate.is_verified && mentionArea && candidate.area?.trim() && !candidateMatchesArea(mentionArea, candidate)) throw new Error(`Verified candidate area conflicts with the mention: mention_area=${mention.area}, candidate_area=${candidate.area}`);
-  const area = mentionArea && areas.has(mentionArea) ? mentionArea : candidate.is_verified && candidateArea && areas.has(candidateArea) ? candidateArea : null;
+  const area = refineAreaByAddress(mentionArea && areas.has(mentionArea) ? mentionArea : candidate.is_verified && candidateArea && areas.has(candidateArea) ? candidateArea : null, candidate.is_verified ? candidate.address : null);
   const rawCategory = candidate.is_verified ? candidate.category || mention.category : mention.category;
   // A verified candidate wins only when it gives a master value. Otherwise keep the extracted one.
   const category = (candidate.is_verified ? categoryFromEvidence(candidate.category) : null) ?? canonicalCategory(mention.category);
