@@ -85,6 +85,10 @@ function imageBlock(image: string): ImageBlockParam {
   return { type: 'image', source: { type: 'base64', media_type: mediaType, data: match[2] ?? '' } };
 }
 function messageInput(text: string, images: readonly string[]): MessageInput { return images.length ? [{ type: 'text', text }, ...images.map(imageBlock)] : text; }
+// Each photo gets a "写真N" label so the answer can point to one by number.
+function numberedPhotos(text: string, images: readonly string[]): MessageInput {
+  return images.length ? [{ type: 'text', text }, ...images.flatMap((image, index): (TextBlockParam | ImageBlockParam)[] => [{ type: 'text', text: `写真${index + 1}` }, imageBlock(image)])] : text;
+}
 function webSearch(maxUses: number): WebSearchTool20250305 { return { type: 'web_search_20250305', name: 'web_search', max_uses: maxUses }; }
 // The model may only answer a category with a master value or null.
 const categoryChoice = { anyOf: [{ type: 'string', enum: [...categories] }, { type: 'null' }], title: 'Category' };
@@ -187,9 +191,13 @@ export class RestaurantAI {
   }
   async extract(text: string, images: readonly string[] = [], signal?: AbortSignal): Promise<ExtractionCallResult> {
     if (!text.trim()) throw new ExtractionError('Cannot extract an empty message'); const started = performance.now();
-    const params = this.parameters(this.config.EXTRACTION_MODEL, this.config.EXTRACTION_REASONING_EFFORT, images.length ? contract.prompts.image_extraction : contract.prompts.extraction, messageInput(text.trim(), images), 'message');
+    const params = this.parameters(this.config.EXTRACTION_MODEL, this.config.EXTRACTION_REASONING_EFFORT, images.length ? contract.prompts.image_extraction : contract.prompts.extraction, numberedPhotos(text.trim(), images), 'message');
     const { response, attempts } = await this.request(params, 'message_extraction', signal);
-    return { message: requireExtractionEvidence(this.parse(response, extractedMessageSchema, 'message_extraction')), metrics: callMetrics(response, this.config.EXTRACTION_MODEL, performance.now() - started, attempts, images.length), source_urls: [] };
+    const message = requireExtractionEvidence(this.parse(response, extractedMessageSchema, 'message_extraction'));
+    // A photo number must point to a photo that was sent.
+    const outOfRange = message.mentions.flatMap((mention, index) => [[`mentions.${index}.name_photo`, mention.name_photo], [`mentions.${index}.card_photo`, mention.card_photo]] as const).filter(([, number]) => number > images.length);
+    if (outOfRange.length) throw new ExtractionError(`Model output did not match the contract: stage=message_extraction photos=${images.length} fields=${outOfRange.map(([field, number]) => `${field}=${number}`).join(',')}`);
+    return { message, metrics: callMetrics(response, this.config.EXTRACTION_MODEL, performance.now() - started, attempts, images.length), source_urls: [] };
   }
   async discover(text: string, signal?: AbortSignal): Promise<ExtractionCallResult> {
     if (!text.trim()) throw new ExtractionError('Cannot discover restaurants from empty source evidence'); const started = performance.now();

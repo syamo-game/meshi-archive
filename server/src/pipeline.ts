@@ -8,7 +8,7 @@ import type { Database, Executor } from './db/database.js';
 import { assessMentionEvidence, evidenceReviewError, imageEvidenceAssessment, inputEvidenceAssessment, operatingStatusNote } from './extraction-safety.js';
 import { canonicalArea } from './geography.js';
 import { ImageCache } from './image-cache.js';
-import { envelopeSchema } from './ingestion.js';
+import { envelopeSchema, maxPostPhotos } from './ingestion.js';
 import type { MessageEnvelope, ProcessResult } from './ingestion.js';
 import { candidateForNewShop, containedNameCandidates, dedupeCandidates, replaceWebCandidate, structuredBlockReason, topWebCandidate } from './pipeline-candidates.js';
 import type { PipelineCandidate } from './pipeline-candidates.js';
@@ -16,7 +16,7 @@ import { discoveryEvidence, SourceDiscovery } from './pipeline-discovery.js';
 import type { DiscoveryEvidence } from './pipeline-discovery.js';
 import { PipelineEvents } from './pipeline-events.js';
 import { candidateVerificationUrls, PipelineEvidence } from './pipeline-evidence.js';
-import { searchClues } from './pipeline-clues.js';
+import { cluePhotos, searchClues } from './pipeline-clues.js';
 import { analyzeImage, processImageOnly } from './pipeline-image-processing.js';
 import { existingShopFromImage, imageCandidates, imageMatchesMention, imageVerificationUrls, singleImageCandidate, structuredCandidateFromImage } from './pipeline-images.js';
 import { refineShopArea } from './pipeline-area.js';
@@ -55,13 +55,15 @@ export class RestaurantProcessor {
   async cacheImage(url: string): Promise<void> { await this.images.original(url); }
   async processMessage(input: MessageEnvelope, options: ProcessingOptions = {}): Promise<ProcessResult> {
     const envelope = envelopeSchema.parse(input); const journal = new PipelineJournal(this.settings, this.cacheDays);
+    // Card photos the extraction chose, by shop ID. null means none of the post's photos suits the card.
+    const cardPhotos = new Map<number, string | null>();
     try {
       const result = await this.database.transaction(async connection => {
-        const processed = await this.process(connection, journal, envelope, options); await journal.persist(connection); return processed;
+        cardPhotos.clear(); const processed = await this.process(connection, journal, envelope, options, cardPhotos); await journal.persist(connection); return processed;
       });
       // Photos are fetched after the commit so slow image hosts never hold the transaction open.
       // The message is already saved, so a photo problem is logged and does not mark it failed.
-      try { const photos = await attachMissingShopPhotos(this.database, this.directory, envelope); if (photos.length) console.info('Shop photos attached', { messageId: envelope.message_id, photos }); }
+      try { const photos = await attachMissingShopPhotos(this.database, this.directory, envelope, cardPhotos); if (photos.length) console.info('Shop photos attached', { messageId: envelope.message_id, photos }); }
       catch (error) { console.error('Shop photo attachment failed', { messageId: envelope.message_id, shopIds: result.shop_ids, error }); }
       return result;
     } catch (error) {
@@ -81,7 +83,7 @@ export class RestaurantProcessor {
     const mentions = await connection.query('SELECT * FROM shop_mentions WHERE message_id=$1 ORDER BY occurrence_index', mentionRecord, [id]);
     return { message_id: id, shop_ids: mentions.map(mention => mention.shop_id).filter((shop): shop is number => shop !== null), pending_mention_ids: mentions.filter(mention => mention.review_status === 'pending').map(mention => mention.id), ignored };
   }
-  private async process(connection: Executor, journal: PipelineJournal, envelope: MessageEnvelope, options: ProcessingOptions): Promise<ProcessResult> {
+  private async process(connection: Executor, journal: PipelineJournal, envelope: MessageEnvelope, options: ProcessingOptions, cardPhotos: Map<number, string | null>): Promise<ProcessResult> {
     const ai = this.ai;
     const id = envelope.message_id; const lock = connection.dialect === 'postgres' ? ' FOR UPDATE' : '';
     await connection.execute("INSERT INTO messages(message_id,channel_id,content,source_created_at,is_target,processing_status) VALUES($1,$2,$3,$4,$5,'pending') ON CONFLICT(message_id) DO NOTHING", [id, envelope.channel_id, envelope.content, envelope.created_at, true]);
@@ -101,7 +103,9 @@ export class RestaurantProcessor {
       await saveMention(connection, { ...newMention(id, 0, extracted, url, 'source_identity_reuse'), shop_id: reuse.shop.id, resolution_status: 'resolved', review_status: 'approved', metadata_review_status: metadata, metadata_difference_type: difference, resolution_method: 'automatic', resolution_basis: 'source_reuse', reused_from_mention_id: reuse.mention.id, difference_type: null, reviewed_at: now, metadata_reviewed_at: metadata === 'approved' ? now : null });
       return this.finish(connection, id);
     }
-    const extraction = await ai.extract(envelope.content).catch(error => { if (error instanceof Error) journal.failure(id, 'message_extraction', error); throw error; }); journal.metrics(id, 'message_extraction', extraction.metrics);
+    // Read the post with its photos, so a shop named only in a photo is found and each shop can get a card photo.
+    const photos = cluePhotos(envelope).slice(0, maxPostPhotos);
+    const extraction = await this.images.aiImages(photos, maxPostPhotos).then(images => ai.extract(envelope.content, images)).catch(error => { if (error instanceof Error) journal.failure(id, 'message_extraction', error); throw error; }); journal.metrics(id, 'message_extraction', extraction.metrics);
     const fallback = options.fallbackMentions ?? []; let discovery: DiscoveryEvidence | null = null; let discovered: ExtractedMessage | null = null;
     // Web search only helps a post about a restaurant. Do not spend it on posts the extraction already ruled out.
     if (options.allowSourceDiscovery && extraction.message.is_restaurant_message && !extraction.message.mentions.length && !fallback.length) { discovery = discoveryEvidence(envelope); if (discovery) discovered = await new SourceDiscovery(connection, ai, journal, id).discover(discovery); }
@@ -134,7 +138,7 @@ export class RestaurantProcessor {
     let imageResult: ImageAnalysisResult | null = null;
     for (const [occurrence, original] of mentions.entries()) {
       const note = operatingStatusNote(original); const extracted = note ? { ...original, confidence_reason: original.confidence_reason + ' / ' + note } : original;
-      const assessment = assessMentionEvidence(extracted, envelope.content, input, usingDiscovery && extracted.source_url !== null); const url = usingDiscovery ? extracted.source_url : source; const extractionSource = usingFallback ? 'legacy_hint' : usingDiscovery ? 'responses_source_discovery' : 'responses_structured';
+      const assessment = assessMentionEvidence(extracted, envelope.content, input, usingDiscovery && extracted.source_url !== null, usingFallback || usingDiscovery ? 0 : photos.length); const url = usingDiscovery ? extracted.source_url : source; const extractionSource = usingFallback ? 'legacy_hint' : usingDiscovery ? 'responses_source_discovery' : 'responses_structured';
       if (assessment.codes.includes('event_excluded')) { await events.process(extracted, input, occurrence, url, usingDiscovery ? 'responses_source_discovery' : 'responses_structured'); continue; }
       if (assessment.codes.length) { await saveMention(connection, { ...newMention(id, occurrence, extracted, url, extractionSource), difference_type: 'evidence_review', extraction_error: evidenceReviewError(assessment), confidence_reason: [...[extracted.confidence_reason, ...assessment.reasons].join(' / ')].slice(0, 2000).join(''), metadata_reviewed_at: null }); continue; }
       const automatic = !ambiguousAssets && (!usingDiscovery || extracted.source_url !== null);
@@ -199,6 +203,7 @@ export class RestaurantProcessor {
       if (difference === 'unknown_category') reasons.push('未知カテゴリ: ' + categoryEvidence); if (difference === 'unknown_area') reasons.push('未知エリア: ' + (chosen ? chosen.area : extracted.area)); if (difference === 'ward_only_area') reasons.push('エリアが区のみ: ' + (chosen ? chosen.area : extracted.area));
       const now = new Date().toISOString(); const row = await saveMention(connection, { ...newMention(id, occurrence, extracted, url, extractionSource), shop_id: chosen?.id ?? null, resolution_status: chosen ? 'resolved' : 'ambiguous', review_status: chosen ? 'approved' : 'pending', metadata_review_status: metadata, metadata_difference_type: difference, resolution_method: chosen ? 'automatic' : null, resolution_basis: basis, difference_type: imageAssessment.codes.length ? 'evidence_review' : chosen ? null : 'new_ambiguous', extraction_error: evidenceReviewError(imageAssessment), confidence_reason: reasons.join(' / '), reviewed_at: chosen ? now : null, metadata_reviewed_at: metadata === 'approved' ? now : null });
       await storeCandidates(connection, row, extracted, candidates, candidate || selected);
+      if (chosen && photos.length && !untrusted && !cardPhotos.has(chosen.id)) cardPhotos.set(chosen.id, photos[extracted.card_photo - 1] ?? null);
     }
     return this.finish(connection, id);
   }

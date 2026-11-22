@@ -44,7 +44,7 @@ test('a one-shop post uses its own image and stores a real photo file', async ()
   const calls: string[] = [];
   const fetchers: PhotoFetchers = { postImage: async url => { calls.push('post:' + url); return photo('#a03010'); }, page: async url => { calls.push('page:' + url); throw new Error('page must not be read'); }, pageImage: async url => { calls.push('pageImage:' + url); throw new Error('page image must not be read'); } };
   try {
-    const attached = await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://jf.x.com/images/preview/1' }, { kind: 'image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]), fetchers);
+    const attached = await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://jf.x.com/images/preview/1' }, { kind: 'image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]), new Map(), fetchers);
     assert.deepEqual(attached, [{ shop_id: ids[0], source: 'post_image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]);
     assert.deepEqual(calls, ['post:https://pbs.twimg.com/media/synthetic.jpg'], 'hosts outside the image allowlist are skipped');
     const row = (await database.query('SELECT image_key,version FROM shops WHERE id=$1', imageKey, [ids[0]]))[0];
@@ -62,11 +62,38 @@ test('a multi-shop post uses each shop page share image and keeps photos already
     pageImage: async url => { calls.push('pageImage:' + url); return photo('#3060a0'); },
   };
   try {
-    const attached = await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]), fetchers);
+    const attached = await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]), new Map(), fetchers);
     assert.deepEqual(attached, [{ shop_id: ids[0], source: 'shop_page_og_image', url: 'https://a.example.com/a.jpg' }]);
     assert.deepEqual(calls, ['page:https://a.example.com/', 'pageImage:https://a.example.com/a.jpg', 'page:https://b.example.com/']);
     const rows = await database.query('SELECT image_key,version FROM shops ORDER BY id', imageKey);
     assert.ok(rows[0]?.image_key); assert.equal(rows[1]?.image_key, null); assert.deepEqual(rows[2], { image_key: 'existing', version: 1 });
+  } finally { await database.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('each shop of a multi-shop post gets the post photo chosen for its card', async () => {
+  const { database, directory, ids } = await setup([{ name: '合成E', url: 'https://e.example.com/' }, { name: '合成F', url: 'https://f.example.com/' }]);
+  const calls: string[] = [];
+  const fetchers: PhotoFetchers = { postImage: async url => { calls.push('post:' + url); return photo('#20a040'); }, page: async url => { calls.push('page:' + url); throw new Error('page must not be read'); }, pageImage: async url => { calls.push('pageImage:' + url); throw new Error('page image must not be read'); } };
+  const first = 'https://pbs.twimg.com/media/synthetic1.jpg'; const second = 'https://pbs.twimg.com/media/synthetic2.jpg';
+  try {
+    const attached = await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: first }, { kind: 'image', url: second }]), new Map([[ids[0] ?? 0, second], [ids[1] ?? 0, first]]), fetchers);
+    assert.deepEqual(attached, [{ shop_id: ids[0], source: 'chosen_post_image', url: second }, { shop_id: ids[1], source: 'chosen_post_image', url: first }]);
+    assert.deepEqual(calls, ['post:' + second, 'post:' + first]);
+  } finally { await database.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test('when no post photo suits the card, the shop page image is used instead of the first post photo', async () => {
+  const { database, directory, ids } = await setup([{ name: '合成G', url: 'https://g.example.com/' }]);
+  const calls: string[] = [];
+  const fetchers: PhotoFetchers = {
+    postImage: async url => { calls.push('post:' + url); throw new Error('a photo judged unfit must not be used'); },
+    page: async url => { calls.push('page:' + url); return { html: '<meta property="og:image" content="https://g.example.com/g.jpg">', final_url: url }; },
+    pageImage: async url => { calls.push('pageImage:' + url); return photo('#a0a020'); },
+  };
+  try {
+    const attached = await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://pbs.twimg.com/media/screenshot.jpg' }]), new Map([[ids[0] ?? 0, null]]), fetchers);
+    assert.deepEqual(attached, [{ shop_id: ids[0], source: 'shop_page_og_image', url: 'https://g.example.com/g.jpg' }]);
+    assert.deepEqual(calls, ['page:https://g.example.com/', 'pageImage:https://g.example.com/g.jpg']);
   } finally { await database.close(); await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -78,7 +105,7 @@ test('a broken post image falls through to the shop page, and an invalid image f
     pageImage: async () => new TextEncoder().encode('not an image'),
   };
   try {
-    assert.deepEqual(await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]), fetchers), []);
+    assert.deepEqual(await attachMissingShopPhotos(database, directory, envelope([{ kind: 'image', url: 'https://pbs.twimg.com/media/synthetic.jpg' }]), new Map(), fetchers), []);
     assert.equal((await database.query('SELECT image_key,version FROM shops WHERE id=$1', imageKey, [ids[0]]))[0]?.image_key, null);
   } finally { await database.close(); await rm(directory, { recursive: true, force: true }); }
 });

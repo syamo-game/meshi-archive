@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { maxPostPhotos } from './ingestion.js';
 import { safeHttpUrl } from './links.js';
 import { identitySchema } from './resolution.js';
 
@@ -7,8 +8,10 @@ export const identityEvidence = z.enum(['explicit', 'ambiguous', 'author_only', 
 export const operatingStatus = z.enum(['open', 'closed', 'event_ended', 'unknown']);
 const text = (maximum: number): z.ZodDefault<z.ZodNullable<z.ZodString>> => z.string().trim().max(maximum).nullable().default(null);
 const optionalText = (maximum: number) => text(maximum).transform(value => value || null);
+// The number of a photo sent with the post (1 is the first). 0 means no photo, so the field never needs null.
+const photoNumber = z.number().int().min(0).max(maxPostPhotos).default(0);
 export const eventOriginSchema = z.strictObject({ shop_name: z.string().trim().min(1).max(500), branch_name: text(255), area: text(255), is_unique: z.boolean().default(false), relation_evidence: z.string().trim().min(1).max(2000), permanent_evidence: z.string().trim().min(1).max(2000), relation_source_url: text(2048), permanent_source_url: text(2048) });
-export const extractedMentionSchema = z.strictObject({ shop_name: z.string().trim().min(1).max(500), branch_name: optionalText(255), area: optionalText(255), category: optionalText(255), source_url: optionalText(2048).refine(value => value === null || safeHttpUrl(value) !== null, 'Source URL must use HTTP or HTTPS without credentials'), needs_review: z.boolean(), confidence_reason: z.string().trim().min(1).max(2000), subject_kind: subjectKind.nullable().default(null), identity_evidence: identityEvidence.nullable().default(null), name_evidence: text(2000), branch_evidence: text(2000), operating_status: operatingStatus.nullable().default(null), operating_status_evidence: text(2000), event_origin: eventOriginSchema.nullable().default(null) });
+export const extractedMentionSchema = z.strictObject({ shop_name: z.string().trim().min(1).max(500), branch_name: optionalText(255), area: optionalText(255), category: optionalText(255), source_url: optionalText(2048).refine(value => value === null || safeHttpUrl(value) !== null, 'Source URL must use HTTP or HTTPS without credentials'), needs_review: z.boolean(), confidence_reason: z.string().trim().min(1).max(2000), subject_kind: subjectKind.nullable().default(null), identity_evidence: identityEvidence.nullable().default(null), name_evidence: text(2000), branch_evidence: text(2000), operating_status: operatingStatus.nullable().default(null), operating_status_evidence: text(2000), event_origin: eventOriginSchema.nullable().default(null), name_photo: photoNumber, card_photo: photoNumber });
 export type ExtractedMention = z.infer<typeof extractedMentionSchema>;
 export const extractedMessageSchema = z.strictObject({ is_restaurant_message: z.boolean(), ignore_reason: text(2000), unresolved_reason: text(2000), mentions: z.array(extractedMentionSchema).max(30) }).refine(value => value.is_restaurant_message || (!value.mentions.length && !value.unresolved_reason), 'Ignored messages cannot have mentions or an unresolved reason');
 export type ExtractedMessage = z.infer<typeof extractedMessageSchema>;

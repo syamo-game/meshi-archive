@@ -21,6 +21,28 @@ test('extraction evidence and event safeguards match 269 original Python cases',
   for (const item of reference.origins) assert.equal(eventOriginQuotesMatch(item.input), item.expected, JSON.stringify(item.input));
 });
 
+test('a shop named only in a quoted post goes to review, and a name read from a sent photo is accepted', () => {
+  const content = ['https://x.com/synthetic_user/status/1900000000000000001', '[X Post Full Text] id=1900000000000000001 author=Synthetic (@synthetic_user)', '中目黒の町寿司 本当においしい', '[X Post Photos] 1', '[X Quoted Post] id=1900000000000000000 author=Other (@other_user)', 'おすすめ4選', '📍合成酒場 / 代官山'].join('\n');
+  const mention = (values: Partial<z.input<typeof extractedMentionSchema>>) => extractedMentionSchema.parse({ shop_name: '合成酒場', needs_review: false, confidence_reason: 'synthetic', subject_kind: 'restaurant', identity_evidence: 'explicit', name_evidence: '合成酒場', ...values });
+  const quoted = assessMentionEvidence(mention({}), content);
+  assert.deepEqual(quoted.codes, ['quoted_only']); assert.match(quoted.reasons.join(), /引用元の投稿にしかありません/);
+  // The same name in the post's own text is fine.
+  assert.deepEqual(assessMentionEvidence(mention({}), content.replace('中目黒の町寿司', '合成酒場に行った')).codes, []);
+  // A name read from photo 1 counts only when that photo was sent.
+  const photo = mention({ shop_name: '合成寿司', name_evidence: '合成寿司（ごうせいずし） 中目黒駅/寿司', name_photo: 1 });
+  assert.deepEqual(assessMentionEvidence(photo, content, undefined, false, 1).codes, []);
+  assert.deepEqual(assessMentionEvidence(photo, content).codes, ['name_ungrounded']);
+  assert.deepEqual(assessMentionEvidence({ ...photo, name_evidence: '別の店' }, content, undefined, false, 1).codes, ['name_ungrounded'], 'the quote must still contain the name');
+});
+
+test('the photo prompt keeps every rule of the text prompt, since it reads every post that has photos', () => {
+  const rules = (prompt: string): string[] => prompt.split('\n').filter(line => line.startsWith('- '));
+  const photo = rules(contract.prompts.image_extraction);
+  // These two say "本文または画像" in the photo prompt instead of "本文".
+  const reworded = rules(contract.prompts.extraction).filter(rule => !photo.includes(rule)).map(rule => rule.slice(0, 20));
+  assert.deepEqual(reworded, ['- 催事の出店元常設店を入力本文で特定で', '- identity_evidenceは']);
+});
+
 type Block = Message['content'][number];
 const direct = { type: 'direct' } as const;
 const use = (id: string): Block => ({ type: 'server_tool_use', id, name: 'web_search', input: { query: 'synthetic' }, caller: direct });

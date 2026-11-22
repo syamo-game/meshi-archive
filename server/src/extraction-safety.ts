@@ -1,13 +1,24 @@
 import type { ExtractedMention, ImageClues } from './ai-models.js';
 import { casefold, escapeRegex } from './text.js';
 
-export type EvidenceCode = 'input_incomplete' | 'identity_unclear' | 'name_ungrounded' | 'branch_ungrounded' | 'non_store_subject' | 'event_excluded';
+export type EvidenceCode = 'input_incomplete' | 'identity_unclear' | 'name_ungrounded' | 'quoted_only' | 'branch_ungrounded' | 'non_store_subject' | 'event_excluded';
 export interface EvidenceAssessment { codes: readonly EvidenceCode[]; reasons: readonly string[]; }
 const empty: EvidenceAssessment = { codes: [], reasons: [] };
 const authorLine = /^\[Embed Author\]|^\[Embed Title\].*(?:@|\bon [Xx]\b)/;
 const nameCharacters = '0-9a-zぁ-んァ-ヶ一-龠ー';
 function normalized(value: string): string { return casefold(value.normalize('NFKC')).replace(/\s+/gu, ' ').trim(); }
 function nonAuthorContent(content: string): string { return content.split(/\r\n|[\n\r\u0085\u2028\u2029]/).filter(line => !authorLine.test(line.trim()) && !line.trimStart().startsWith('[Attachment]')).join('\n'); }
+// The post's own words: the text without the quoted posts that linked X posts carry.
+// A quoted block runs from its [X Quoted Post] line to the next linked post, or to the end.
+export function withoutQuotedPosts(content: string): string {
+  let quoted = false; const kept: string[] = [];
+  for (const line of content.split(/\r\n|[\n\r\u0085\u2028\u2029]/)) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('[X Quoted Post]')) quoted = true; else if (trimmed.startsWith('[X Post Full Text]')) quoted = false;
+    if (!quoted) kept.push(line);
+  }
+  return kept.join('\n');
+}
 function unique(codes: readonly EvidenceCode[], reasons: readonly string[]): EvidenceAssessment { return { codes: [...new Set(codes)], reasons: [...new Set(reasons)] }; }
 const nonStoreReason = (subject: 'event' | 'product'): string => subject === 'event' ? '催事は登録対象外です。出店元の常設店舗を特定できないため、会場や仮設支店は登録しません。' : '商品への言及を常設店舗として自動登録しません。販売店との関係を確認してください。';
 export function sourceRequiresFreshExtraction(content: string): boolean { return /商品名|舟盛り|催事|物産展|期間限定|ポップアップ|pop.?up|出店|閉店|営業終了/i.test(content); }
@@ -35,16 +46,23 @@ export function inputEvidenceAssessment(content: string, omittedAssets = 0, sour
   if (sourceTruncated) reasons.push('出典の本文または件数が検索入力の上限を超えています。');
   return { codes: reasons.length ? ['input_incomplete'] : [], reasons };
 }
-export function assessMentionEvidence(mention: ExtractedMention, content: string, input: EvidenceAssessment = empty, sourceGrounded = false): EvidenceAssessment {
+// photoCount is how many of the post's photos the extraction read; a name may come from one of them.
+export function assessMentionEvidence(mention: ExtractedMention, content: string, input: EvidenceAssessment = empty, sourceGrounded = false, photoCount = 0): EvidenceAssessment {
   const codes = [...input.codes]; const reasons = [...input.reasons];
   let subject = mention.subject_kind === 'product' || mention.subject_kind === 'event' ? mention.subject_kind : explicitNonStoreSubject(mention.shop_name, content);
   if (subject === 'event' && mention.subject_kind === 'restaurant' && mention.identity_evidence === 'explicit' && mention.name_evidence && normalized(content).includes(normalized(mention.name_evidence)) && /常設|実店舗|本店|店舗所在地|営業時間/.test(mention.name_evidence) && explicitNonStoreSubject(mention.shop_name, mention.name_evidence) === null) subject = null;
   if (subject) { codes.push('non_store_subject'); if (subject === 'event') codes.push('event_excluded'); reasons.push(nonStoreReason(subject)); }
   if (['ambiguous', 'author_only', 'unknown'].includes(mention.identity_evidence ?? '') || mention.subject_kind === 'unknown') { codes.push('identity_unclear'); reasons.push('店名の根拠が曖昧か投稿者名だけです。対象店舗を確認してください。'); }
   if (mention.identity_evidence === 'explicit' && !sourceGrounded) {
-    const source = normalized(nonAuthorContent(content)); const evidence = mention.name_evidence ?? '';
-    if (!evidence || !source.includes(normalized(evidence)) || !containsEvidenceName(mention.shop_name, evidence)) { codes.push('name_ungrounded'); reasons.push('店名を裏付ける引用を投稿本文で確認できません。音写や推測で確定しません。'); }
-    if (mention.branch_name) { const branch = mention.branch_evidence ?? ''; if (!branch || !source.includes(normalized(branch)) || !containsEvidenceName(mention.branch_name, branch)) { codes.push('branch_ungrounded'); reasons.push('支店を裏付ける引用がありません。所在地だけから支店名を補いません。'); } }
+    const source = normalized(nonAuthorContent(content)); const own = normalized(nonAuthorContent(withoutQuotedPosts(content))); const evidence = mention.name_evidence ?? '';
+    const quotes = (text: string): boolean => Boolean(evidence) && text.includes(normalized(evidence)) && containsEvidenceName(mention.shop_name, evidence);
+    // A name read from one of the post's photos cannot be quoted from the text. It is still registered only after a shop page confirms it.
+    const fromPhoto = mention.name_photo >= 1 && mention.name_photo <= photoCount && Boolean(evidence) && containsEvidenceName(mention.shop_name, evidence);
+    if (!quotes(own) && !fromPhoto) {
+      if (quotes(source)) { codes.push('quoted_only'); reasons.push('店名が引用元の投稿にしかありません。この投稿が紹介している店か確認してください。'); }
+      else { codes.push('name_ungrounded'); reasons.push('店名を裏付ける引用を投稿本文で確認できません。音写や推測で確定しません。'); }
+    }
+    if (mention.branch_name) { const branch = mention.branch_evidence ?? ''; if (!branch || !(source.includes(normalized(branch)) || fromPhoto) || !containsEvidenceName(mention.branch_name, branch)) { codes.push('branch_ungrounded'); reasons.push('支店を裏付ける引用がありません。所在地だけから支店名を補いません。'); } }
   }
   return unique(codes, reasons);
 }
